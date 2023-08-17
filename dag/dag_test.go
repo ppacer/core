@@ -10,7 +10,7 @@ type EmptyTask struct {
 }
 
 func (et EmptyTask) Id() string { return et.TaskId }
-func (et EmptyTask) Execute()   { fmt.Println(et.TaskId) }
+func (et EmptyTask) Execute()   { fmt.Println(et.TaskId); fmt.Println("crap") }
 
 func TestDag(t *testing.T) {
 	start := Node{Task: EmptyTask{"start"}}
@@ -19,7 +19,7 @@ func TestDag(t *testing.T) {
 
 	dagAttr := Attr{Id: "mock_dag", Schedule: "5 * * * *"}
 	dag := New(dagAttr, &start)
-	//fmt.Println(dag)
+	fmt.Println(dag)
 
 	if dag.Attr.Id != "mock_dag" {
 		t.Errorf("Expected Id 'mock_dag', got: %s\n", dag.Attr.Id)

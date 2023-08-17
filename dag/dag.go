@@ -5,14 +5,8 @@ import (
 	"strings"
 )
 
-type Task interface {
-	Id() string
-	Execute()
-	// TODO...
-}
-
 type Attr struct {
-	Id       string
+	Id       Id
 	Schedule string
 }
 
@@ -21,8 +15,8 @@ type Dag struct {
 	Root *Node
 }
 
-func New(attr Attr, root *Node) *Dag {
-	return &Dag{
+func New(attr Attr, root *Node) Dag {
+	return Dag{
 		Attr: attr,
 		Root: root,
 	}
@@ -54,7 +48,6 @@ func (n *Node) stringRec(s *strings.Builder, depth int) string {
 	if depth > 0 {
 		depth++
 	}
-
 	addSpaces(s, depth*indent)
 	s.WriteString(fmt.Sprintf("-%s\n", n.Task.Id()))
 	for _, ch := range n.Children {

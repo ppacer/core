@@ -28,7 +28,7 @@ func main() {
 	log.Info().Msgf("Start Scheduler v%s on :%d...", cfg.AppVersion, cfg.Port)
 	lasErr := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), nil)
 	if lasErr != nil {
-		log.Panic().Err(lasErr).Msgf("Cannot start the server")
+		log.Panic().Err(lasErr).Msg("Cannot start the server")
 	}
 }
 
