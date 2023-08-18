@@ -7,15 +7,9 @@ import (
 )
 
 func TestParsingMetaASTs(t *testing.T) {
-	wd, err := os.Getwd()
+	astMap, err := getASTMapWd()
 	if err != nil {
-		t.Errorf("Could not get working dir: %s", err.Error())
-	}
-	cfg := packagesConfigDefault()
-	cfg.Dir = wd
-	astMap, err := ParsePackagesASTs(cfg)
-	if err != nil {
-		t.Errorf("Could not parse project pacakges: %s", err.Error())
+		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
 
 	if len(astMap) != 1 {
@@ -45,4 +39,14 @@ func BenchmarkParsingProjectASTs(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ParsePackagesASTs(cfg)
 	}
+}
+
+func getASTMapWd() (map[string]PackageASTs, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	cfg := packagesConfigDefault()
+	cfg.Dir = wd
+	return ParsePackagesASTs(cfg)
 }

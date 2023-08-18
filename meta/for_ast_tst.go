@@ -10,3 +10,10 @@ type PointTest struct {
 func (pt PointTest) String() string {
 	return fmt.Sprintf("Point(%d, %d)", pt.X, pt.Y)
 }
+
+func (pt *PointTest) EmptyMethod() {
+}
+
+func (pt PointTest) privateMethod() int {
+	return 42
+}
