@@ -1,52 +1,36 @@
 package meta
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestParsingMetaASTs(t *testing.T) {
-	astMap, err := getASTMapWd()
+	astMap, err := ParsePackagesASTs()
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
 
-	if len(astMap) != 1 {
-		t.Errorf("Expected ASTs for 1 module - meta, got: %d modules", len(astMap))
+	if _, metaExists := astMap["meta"]; !metaExists {
+		t.Error("Expected <meta> package to exist in Packages ASTs map, but it does not")
 	}
 
-	for pkg := range astMap {
-		if len(astMap[pkg].FileToAST) < 2 {
-			t.Errorf("Expected at least two file ASTs in meta module, got: %d", len(astMap[pkg].FileToAST))
-		}
-		for file, astFile := range astMap[pkg].FileToAST {
-			if len(astFile.Decls) == 0 {
-				t.Errorf("Expected at least one top-level declaration at each file in meta module. This is not true for %s", file)
-			}
+	if len(astMap) < 2 {
+		t.Errorf("Expected more then 1 package - meta, got: %d modules", len(astMap))
+	}
+
+	astMeta := astMap["meta"]
+	if len(astMeta.FileToASTs) < 2 {
+		t.Errorf("Expected at least two file ASTs in meta module, got: %d", len(astMeta.FileToASTs))
+	}
+	for file, astFile := range astMeta.FileToASTs {
+		if len(astFile.Decls) == 0 {
+			t.Errorf("Expected at least one top-level declaration at each file in meta module. This is not true for %s", file)
 		}
 	}
 }
 
 func BenchmarkParsingProjectASTs(b *testing.B) {
-	wd, err := os.Getwd()
-	if err != nil {
-		b.Errorf("Could not get working dir: %s", err.Error())
-	}
-	cfg := packagesConfigDefault()
-	cfg.Dir = filepath.Dir(wd)
-
 	for i := 0; i < b.N; i++ {
-		ParsePackagesASTs(cfg)
+		ParsePackagesASTs()
 	}
-}
-
-func getASTMapWd() (map[string]PackageASTs, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	cfg := packagesConfigDefault()
-	cfg.Dir = wd
-	return ParsePackagesASTs(cfg)
 }

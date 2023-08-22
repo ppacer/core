@@ -6,7 +6,7 @@ import (
 )
 
 func TestFindMethodBodySource(t *testing.T) {
-	astMap, err := getASTMapWd()
+	astMap, err := ParsePackagesASTs()
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -35,7 +35,7 @@ func TestFindMethodBodySource(t *testing.T) {
 }
 
 func TestFindMethodBodySourcePrivate(t *testing.T) {
-	astMap, err := getASTMapWd()
+	astMap, err := ParsePackagesASTs()
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -61,7 +61,7 @@ func TestFindMethodBodySourcePrivate(t *testing.T) {
 }
 
 func TestFindMethodBodySourceOnPointer(t *testing.T) {
-	astMap, err := getASTMapWd()
+	astMap, err := ParsePackagesASTs()
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -85,7 +85,7 @@ func TestFindMethodBodySourceOnPointer(t *testing.T) {
 }
 
 func TestFindMethodBodySourceNotExist(t *testing.T) {
-	astMap, err := getASTMapWd()
+	astMap, err := ParsePackagesASTs()
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}

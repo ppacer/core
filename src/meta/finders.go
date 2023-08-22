@@ -15,13 +15,13 @@ var ErrMethodNotFound = errors.New("method not found in ASTs")
 // given type or method does not exist in given ASTs map, then non nil error would be returned.
 func MethodBodySource(astMap map[string]PackageASTs, typeName, methodName string) (*ast.BlockStmt, string, error) {
 	for pkg := range astMap {
-		for fileName, astFile := range astMap[pkg].FileToAST {
+		for fileName, astFile := range astMap[pkg].FileToASTs {
 			funcDecl := findMethodInAST(astFile, typeName, methodName)
 			if funcDecl == nil {
 				continue
 			}
 			var buf bytes.Buffer
-			err := printer.Fprint(&buf, astMap[pkg].Package.Fset, funcDecl.Body)
+			err := printer.Fprint(&buf, astMap[pkg].Fset, funcDecl.Body)
 			if err != nil {
 				log.Error().Err(err).Msgf("Error while printing source code for %s.%s method from %s", typeName, methodName, fileName)
 				return nil, "", err
