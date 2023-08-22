@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"go_shed/version"
+	"go_shed/src/version"
 	"os"
 	"strings"
 	"time"

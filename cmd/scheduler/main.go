@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"go_shed/dag"
+	"go_shed/src/dag"
 	"net/http"
 	"os"
 	"sync"
