@@ -103,4 +103,54 @@ func TestJointTasksExecSourcesBroad(t *testing.T) {
 	}
 }
 
-// TODO: tests for hashing
+// It's exactly the same as aTask to test hashing
+type aTaskCopy struct{}
+
+func (at aTaskCopy) Id() string { return "A" }
+func (at aTaskCopy) Execute()   { fmt.Println("A") }
+
+func TestNodeHashesForSimilarNodes(t *testing.T) {
+	n1 := Node{Task: aTask{}}
+	n2 := Node{Task: aTaskCopy{}}
+	h1 := n1.Hash()
+	h2 := n2.Hash()
+
+	if h1 != h2 {
+		t.Errorf("Expected equal hashes, but got %s for aTask and %s for aTaskCopy."+
+			"Source for aTask.Execute: %s, source for aTaskCopy.Execute: %s",
+			h1, h2, TaskExecuteSource(n1.Task), TaskExecuteSource(n2.Task))
+	}
+}
+
+// It's exactly the same as aTask but differes in one char in Execute implementation.
+type aTaskWithSpace struct{}
+
+func (at aTaskWithSpace) Id() string { return "A" }
+func (at aTaskWithSpace) Execute()   { fmt.Println("A ") }
+
+func TestNodeAlmostTheSame(t *testing.T) {
+	n1 := Node{Task: aTask{}}
+	n2 := Node{Task: aTaskWithSpace{}}
+	h1 := n1.Hash()
+	h2 := n2.Hash()
+
+	if h1 == h2 {
+		t.Error("Expected different hashes for aTask and aTaskWithSpace but got the same")
+	}
+}
+
+type aTaskDifferentId struct{}
+
+func (at aTaskDifferentId) Id() string { return "Not A" }
+func (at aTaskDifferentId) Execute()   { fmt.Println("A ") }
+
+func TestNodeTheSameExecute(t *testing.T) {
+	n1 := Node{Task: aTask{}}
+	n2 := Node{Task: aTaskDifferentId{}}
+	h1 := n1.Hash()
+	h2 := n2.Hash()
+
+	if h1 == h2 {
+		t.Error("Expected different hashes for aTask and aTaskWithSpace but got the same")
+	}
+}
