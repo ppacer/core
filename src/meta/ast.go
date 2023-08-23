@@ -11,6 +11,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Packages ASTs map built on embedded Go source files. It's built on init.
+var PackagesASTsMap map[string]PackageASTs
+
+func init() {
+	astMap, err := ParsePackagesASTs()
+	if err != nil {
+		log.Panic().Err(err).Msg("Could not parse packages ASTs map on embedded files")
+	}
+	PackagesASTsMap = astMap
+	log.Info().Msgf("meta.PackagesASTsMap is set for %d packages", len(astMap))
+}
+
 // PackageASTs represents single Go package metadata with FileToAST field which
 // is a mapping from package file name to its parsed AST.
 type PackageASTs struct {
