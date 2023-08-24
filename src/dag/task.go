@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const MAX_RECURSION = 10000
+
 // Task represents single step in DAG which is going to be scheduled and executed via executors.
 type Task interface {
 	Id() string
@@ -62,6 +64,30 @@ func (dn *Node) joinTasksExecSources(data []byte) []byte {
 		data = child.joinTasksExecSources(data)
 	}
 	return data
+}
+
+func (dn *Node) isAcyclic() bool {
+	nodeMap := make(map[*Node]struct{})
+	return dn.isAcyclicImpl(nodeMap, 0)
+}
+
+func (dn *Node) isAcyclicImpl(traversed map[*Node]struct{}, depth int) bool {
+	if depth > MAX_RECURSION {
+		log.Error().Msgf("Max recursion depth reached (%d). Cannot determine if grapth is acyclic.",
+			MAX_RECURSION)
+		return false
+	}
+	if _, alreadyTraversed := traversed[dn]; alreadyTraversed {
+		return false
+	}
+	traversed[dn] = struct{}{}
+	for _, child := range dn.Children {
+		check := child.isAcyclicImpl(traversed, depth+1)
+		if !check {
+			return false
+		}
+	}
+	return true
 }
 
 func (n *Node) String(ident int) string {
