@@ -66,11 +66,14 @@ func (dn *Node) joinTasksExecSources(data []byte) []byte {
 	return data
 }
 
+// Checks whenever graph starting from this node does not have cycles.
 func (dn *Node) isAcyclic() bool {
 	nodeMap := make(map[*Node]struct{})
 	return dn.isAcyclicImpl(nodeMap, 0)
 }
 
+// Checks whenever address of a node already exists in the set of traversed nodes, to determine cycles. If traversing
+// depth exceeds MAX_RECURSION, then false is returned and further examination is stopped.
 func (dn *Node) isAcyclicImpl(traversed map[*Node]struct{}, depth int) bool {
 	if depth > MAX_RECURSION {
 		log.Error().Msgf("Max recursion depth reached (%d). Cannot determine if grapth is acyclic.",
@@ -88,6 +91,54 @@ func (dn *Node) isAcyclicImpl(traversed map[*Node]struct{}, depth int) bool {
 		}
 	}
 	return true
+}
+
+func (dn *Node) flatten(bfs bool) []Task {
+	if bfs {
+		return dn.flattenBFS()
+	}
+	tasks := make([]Task, 0, 100)
+	return dn.flattenDFS(tasks, 0)
+}
+
+func (dn *Node) flattenBFS() []Task {
+	var ts []Task
+	var queue []*Node
+	depthMarker := &Node{}
+	depth := 0
+	queue = append(queue, dn, depthMarker)
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current == depthMarker {
+			depth++
+			if depth > MAX_RECURSION {
+				log.Error().Msgf("Max level reached (%d). Returned result might be incomplete.", MAX_RECURSION)
+				break
+			}
+			if len(queue) > 0 {
+				queue = append(queue, depthMarker)
+			}
+			continue
+		}
+		ts = append(ts, current.Task)
+		queue = append(queue, current.Children...)
+	}
+	return ts
+}
+
+func (dn *Node) flattenDFS(ts []Task, depth int) []Task {
+	if depth > MAX_RECURSION {
+		log.Error().Msgf("Max recursion depth reached (%d). Returned result might be incomplete.",
+			MAX_RECURSION)
+		return ts
+	}
+	ts = append(ts, dn.Task)
+	for _, child := range dn.Children {
+		ts = child.flattenDFS(ts, depth+1)
+	}
+	return ts
 }
 
 func (n *Node) String(ident int) string {

@@ -96,6 +96,44 @@ func TestIsAcyclicOnCyclicSimple(t *testing.T) {
 	}
 }
 
+func TestFlattenBfsSimple(t *testing.T) {
+	g := deep3Width3Graph()
+	tasks := g.flatten(true)
+	for _, t := range tasks {
+		fmt.Println(t.Id())
+	}
+
+	if len(tasks) != 5 {
+		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
+	}
+
+	expectedIds := []string{"ConstTask", "A", "B", "ConstTask", "EmptyTask"}
+	for idx, task := range tasks {
+		if task.Id() != expectedIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], task.Id())
+		}
+	}
+}
+
+func TestFlattenDfsSimple(t *testing.T) {
+	g := deep3Width3Graph()
+	tasks := g.flatten(false)
+	for _, t := range tasks {
+		fmt.Println(t.Id())
+	}
+
+	if len(tasks) != 5 {
+		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
+	}
+
+	expectedIds := []string{"ConstTask", "A", "EmptyTask", "B", "ConstTask"}
+	for idx, task := range tasks {
+		if task.Id() != expectedIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], task.Id())
+		}
+	}
+}
+
 func TestJointTasksExecSources(t *testing.T) {
 	n1 := Node{Task: constTask{}}
 	n2 := Node{Task: constTask{}}
