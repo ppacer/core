@@ -93,6 +93,8 @@ func (dn *Node) isAcyclicImpl(traversed map[*Node]struct{}, depth int) bool {
 	return true
 }
 
+// Flattens tasks into a list of tasks. It can be done either bread-first-search (BFS) or deep-first-search (DFS)
+// order. List of tasks might be incomplete if depth of the graph exceeds MAX_RECURSION value.
 func (dn *Node) flatten(bfs bool) []Task {
 	if bfs {
 		return dn.flattenBFS()

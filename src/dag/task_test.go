@@ -70,7 +70,7 @@ func TestIsAcyclicLongList(t *testing.T) {
 }
 
 func TestIsAcyclicTooLongList(t *testing.T) {
-	g := linkedList(MAX_RECURSION + 1)
+	g := linkedList(MAX_RECURSION + 2)
 	if g.isAcyclic() {
 		t.Error("Expected isAcyclic to be false on too deep graphs")
 	}
@@ -99,9 +99,6 @@ func TestIsAcyclicOnCyclicSimple(t *testing.T) {
 func TestFlattenBfsSimple(t *testing.T) {
 	g := deep3Width3Graph()
 	tasks := g.flatten(true)
-	for _, t := range tasks {
-		fmt.Println(t.Id())
-	}
 
 	if len(tasks) != 5 {
 		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
@@ -118,9 +115,6 @@ func TestFlattenBfsSimple(t *testing.T) {
 func TestFlattenDfsSimple(t *testing.T) {
 	g := deep3Width3Graph()
 	tasks := g.flatten(false)
-	for _, t := range tasks {
-		fmt.Println(t.Id())
-	}
 
 	if len(tasks) != 5 {
 		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
@@ -130,6 +124,88 @@ func TestFlattenDfsSimple(t *testing.T) {
 	for idx, task := range tasks {
 		if task.Id() != expectedIds[idx] {
 			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], task.Id())
+		}
+	}
+}
+
+func TestFlattenBfsLinkedList(t *testing.T) {
+	const N = 100
+	l := linkedList(N)
+	tasks := l.flatten(true)
+
+	if len(tasks) != N {
+		t.Errorf("Expected flatten %d tasks, got: %d", N, len(tasks))
+	}
+
+	var expectedTaskIds []string
+	expectedTaskIds = append(expectedTaskIds, "Start")
+	for i := 0; i < N-1; i++ {
+		expectedTaskIds = append(expectedTaskIds, fmt.Sprintf("step_%d", i))
+	}
+
+	for idx, task := range tasks {
+		if task.Id() != expectedTaskIds[idx] {
+			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+		}
+	}
+}
+
+func TestFlattenDfsLinkedList(t *testing.T) {
+	const N = 100
+	l := linkedList(N)
+	tasks := l.flatten(true)
+
+	if len(tasks) != N {
+		t.Errorf("Expected flatten %d tasks, got: %d", N, len(tasks))
+	}
+
+	var expectedTaskIds []string
+	expectedTaskIds = append(expectedTaskIds, "Start")
+	for i := 0; i < N-1; i++ {
+		expectedTaskIds = append(expectedTaskIds, fmt.Sprintf("step_%d", i))
+	}
+
+	for idx, task := range tasks {
+		if task.Id() != expectedTaskIds[idx] {
+			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+		}
+	}
+}
+
+func TestFlattenBfsBinaryTree(t *testing.T) {
+	g := binaryTree(2)
+	tasks := g.flatten(true)
+	expectedTaskIds := []string{
+		"Node",
+		"Node_0",
+		"Node_1",
+		"Node_0_0",
+		"Node_0_1",
+		"Node_1_0",
+		"Node_1_1",
+	}
+	for idx, task := range tasks {
+		if task.Id() != expectedTaskIds[idx] {
+			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+		}
+	}
+}
+
+func TestFlattenDfsBinaryTree(t *testing.T) {
+	g := binaryTree(2)
+	tasks := g.flatten(false)
+	expectedTaskIds := []string{
+		"Node",
+		"Node_0",
+		"Node_0_0",
+		"Node_0_1",
+		"Node_1",
+		"Node_1_0",
+		"Node_1_1",
+	}
+	for idx, task := range tasks {
+		if task.Id() != expectedTaskIds[idx] {
+			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
 		}
 	}
 }
@@ -248,7 +324,7 @@ func deep3Width3Graph() *Node {
 func linkedList(length int) *Node {
 	s := Node{Task: nameTask{Name: "Start"}}
 	prev := &s
-	for i := 0; i < length; i++ {
+	for i := 0; i < length-1; i++ {
 		n := Node{Task: nameTask{Name: fmt.Sprintf("step_%d", i)}}
 		prev.Next(&n)
 		prev = &n
