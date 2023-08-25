@@ -54,16 +54,16 @@ func (dn *Node) Hash() string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// This method is getting DAG tasks Execute() methods source code and join it into single []byte. Traversal is depth
-// first search.
-func (dn *Node) joinTasksExecSources(data []byte) []byte {
-	taskId := []byte(dn.Task.Id() + ":")
-	data = append(data, taskId...)
-	data = append(data, []byte(TaskExecuteSource(dn.Task))...)
+// Get graph depth. Single node has depth=1.
+func (dn *Node) depth() int {
+	maxChildDepth := 0
 	for _, child := range dn.Children {
-		data = child.joinTasksExecSources(data)
+		childDepth := child.depth()
+		if childDepth > maxChildDepth {
+			maxChildDepth = childDepth
+		}
 	}
-	return data
+	return maxChildDepth + 1
 }
 
 // Checks whenever graph starting from this node does not have cycles.
@@ -141,6 +141,31 @@ func (dn *Node) flattenDFS(ts []Task, depth int) []Task {
 		ts = child.flattenDFS(ts, depth+1)
 	}
 	return ts
+}
+
+func (dn *Node) taskIdsUnique() bool {
+	tasks := dn.flatten(true)
+	taskIds := make(map[string]struct{})
+
+	for _, task := range tasks {
+		if _, alreadyExists := taskIds[task.Id()]; alreadyExists {
+			return false
+		}
+		taskIds[task.Id()] = struct{}{}
+	}
+	return true
+}
+
+// This method is getting DAG tasks Execute() methods source code and join it into single []byte. Traversal is depth
+// first search.
+func (dn *Node) joinTasksExecSources(data []byte) []byte {
+	taskId := []byte(dn.Task.Id() + ":")
+	data = append(data, taskId...)
+	data = append(data, []byte(TaskExecuteSource(dn.Task))...)
+	for _, child := range dn.Children {
+		data = child.joinTasksExecSources(data)
+	}
+	return data
 }
 
 func (n *Node) String(ident int) string {

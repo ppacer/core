@@ -210,6 +210,37 @@ func TestFlattenDfsBinaryTree(t *testing.T) {
 	}
 }
 
+func TestDepthSingleNode(t *testing.T) {
+	n := Node{Task: nameTask{Name: "Start"}}
+	if n.depth() != 1 {
+		t.Errorf("Expected single node to have depth=1, got: %d", n.depth())
+	}
+}
+
+func TestDepthBinary(t *testing.T) {
+	const N = 5
+	g := binaryTree(N)
+	if g.depth() != N+1 {
+		t.Errorf("Expected tree depth to be %d, but got: %d", N+1, g.depth())
+	}
+}
+
+func TestDepthLinkedList(t *testing.T) {
+	const N = 500
+	g := linkedList(N)
+	if g.depth() != N {
+		t.Errorf("Expected tree depth to be %d, but got: %d", N, g.depth())
+	}
+}
+
+func TestDepthLinkedLong(t *testing.T) {
+	const N = MAX_RECURSION * 2
+	g := linkedList(N)
+	if g.depth() != N {
+		t.Errorf("Expected long tree depth to be %d, but got: %d", N, g.depth())
+	}
+}
+
 func TestJointTasksExecSources(t *testing.T) {
 	n1 := Node{Task: constTask{}}
 	n2 := Node{Task: constTask{}}
