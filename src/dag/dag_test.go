@@ -12,7 +12,7 @@ type EmptyTask struct {
 func (et EmptyTask) Id() string { return et.TaskId }
 func (et EmptyTask) Execute()   { fmt.Println(et.TaskId); fmt.Println("crap") }
 
-func TestDag(t *testing.T) {
+func TestDagNew(t *testing.T) {
 	start := Node{Task: EmptyTask{"start"}}
 	end := Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
@@ -33,6 +33,49 @@ func TestDag(t *testing.T) {
 	secondTask := dag.Root.Children[0]
 	if secondTask.Task.Id() != "end" {
 		t.Errorf("Expected second task 'end', got: %s\n", secondTask.Task.Id())
+	}
+}
+
+func TestDagIsValidSimple(t *testing.T) {
+	attr := Attr{Id: "mock_dag", Schedule: ""}
+	// g has two tasks with the same ID
+	g := deep3Width3Graph()
+	d := New(attr, g)
+	if d.IsValid() {
+		t.Errorf("Expected dag %s to be invalid (duplicated task IDs), but is valid.", d.String())
+	}
+}
+
+func TestDagIsValidSimpleLL(t *testing.T) {
+	attr := Attr{Id: "mock_dag", Schedule: ""}
+	g := linkedList(100)
+	d := New(attr, g)
+	if !d.IsValid() {
+		t.Errorf("Expected dag %s to be valid, but is not.", d.String())
+	}
+}
+
+func TestDagIsValidSimpleLLTooLong(t *testing.T) {
+	attr := Attr{Id: "mock_dag", Schedule: ""}
+	g := linkedList(MAX_RECURSION + 1)
+	d := New(attr, g)
+	if d.IsValid() {
+		t.Error("Expected dag to be invalid (too deep), but is valid.")
+	}
+}
+
+func TestDagIsValidSimpleCyclic(t *testing.T) {
+	n1 := Node{Task: nameTask{Name: "n1"}}
+	n2 := Node{Task: nameTask{Name: "n2"}}
+	n3 := Node{Task: nameTask{Name: "n3"}}
+	n1.Next(&n2)
+	n2.Next(&n3)
+	n3.Next(&n1)
+
+	attr := Attr{Id: "mock_dag", Schedule: ""}
+	d := New(attr, &n1)
+	if d.IsValid() {
+		t.Error("Expected dag to be invalid (cylic), but is valid.")
 	}
 }
 
