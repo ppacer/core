@@ -48,7 +48,7 @@ func (dn *Node) Next(node *Node) {
 
 // TODO(ds): docs
 func (dn *Node) Hash() string {
-	execSources := dn.joinTasksExecSources([]byte{})
+	execSources := dn.joinTasksExecSources()
 	hasher := sha256.New()
 	hasher.Write(execSources)
 	return hex.EncodeToString(hasher.Sum(nil))
@@ -156,14 +156,15 @@ func (dn *Node) taskIdsUnique() bool {
 	return true
 }
 
-// This method is getting DAG tasks Execute() methods source code and join it into single []byte. Traversal is depth
-// first search.
-func (dn *Node) joinTasksExecSources(data []byte) []byte {
-	taskId := []byte(dn.Task.Id() + ":")
-	data = append(data, taskId...)
-	data = append(data, []byte(TaskExecuteSource(dn.Task))...)
-	for _, child := range dn.Children {
-		data = child.joinTasksExecSources(data)
+// This method is getting DAG tasks Execute() methods source code and join it into single []byte. Traversal is in BFS
+// order.
+func (dn *Node) joinTasksExecSources() []byte {
+	data := make([]byte, 0, 1024)
+	tasks := dn.flatten(true)
+	for _, task := range tasks {
+		taskId := []byte(task.Id() + ":")
+		data = append(data, taskId...)
+		data = append(data, []byte(TaskExecuteSource(task))...)
 	}
 	return data
 }

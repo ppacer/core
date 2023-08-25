@@ -248,7 +248,7 @@ func TestJointTasksExecSources(t *testing.T) {
 	n1.Next(&n2)
 	n2.Next(&n3)
 
-	execSources := n1.joinTasksExecSources([]byte{})
+	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
 	fmt.Println("Executing...")
 }ConstTask:{
@@ -263,16 +263,16 @@ func TestJointTasksExecSources(t *testing.T) {
 
 func TestJointTasksExecSourcesBroad(t *testing.T) {
 	n1 := deep3Width3Graph()
-	execSources := n1.joinTasksExecSources([]byte{})
+	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
 	fmt.Println("Executing...")
 }A:{
 	fmt.Println("A")
-}EmptyTask:{
 }B:{
 	fmt.Println("B")
 }ConstTask:{
 	fmt.Println("Executing...")
+}EmptyTask:{
 }`
 	if string(execSources) != expectedExecSources {
 		t.Errorf("Expected %s, but got %s", expectedExecSources, string(execSources))
