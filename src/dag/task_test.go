@@ -96,6 +96,13 @@ func TestIsAcyclicOnCyclicSimple(t *testing.T) {
 	}
 }
 
+func TestIsAcyclicOnBranchoutAndJoin(t *testing.T) {
+	g := branchOutAndMergeGraph()
+	if !g.isAcyclic() {
+		t.Error("Expected branch-out-and-merge graph to be acyclic, but is not")
+	}
+}
+
 func TestFlattenBfsSimple(t *testing.T) {
 	g := deep3Width3Graph()
 	tasks := g.flatten(true)
@@ -241,6 +248,13 @@ func TestDepthLinkedLong(t *testing.T) {
 	}
 }
 
+func TestDepthBranchoutAndJoin(t *testing.T) {
+	g := branchOutAndMergeGraph()
+	if g.depth() != 3 {
+		t.Errorf("Expected branch-out-and-merge graph to has depth=3, got: %d", g.depth())
+	}
+}
+
 func TestJointTasksExecSources(t *testing.T) {
 	n1 := Node{Task: constTask{}}
 	n2 := Node{Task: constTask{}}
@@ -329,6 +343,30 @@ func TestNodeTheSameExecute(t *testing.T) {
 	if h1 == h2 {
 		t.Error("Expected different hashes for aTask and aTaskWithSpace but got the same")
 	}
+}
+
+func branchOutAndMergeGraph() *Node {
+	//      n21
+	//    /    \
+	//   /      \
+	// n1 - n22 - n3
+	//   \      /
+	//    \    /
+	//      n23
+	n1 := Node{Task: nameTask{Name: "n1"}}
+	n21 := Node{Task: nameTask{Name: "n21"}}
+	n22 := Node{Task: nameTask{Name: "n22"}}
+	n23 := Node{Task: nameTask{Name: "n23"}}
+	n3 := Node{Task: nameTask{Name: "n3"}}
+
+	n1.Next(&n21)
+	n1.Next(&n22)
+	n1.Next(&n23)
+	n21.Next(&n3)
+	n22.Next(&n3)
+	n23.Next(&n3)
+
+	return &n1
 }
 
 func deep3Width3Graph() *Node {

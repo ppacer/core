@@ -68,22 +68,23 @@ func (dn *Node) depth() int {
 
 // Checks whenever graph starting from this node does not have cycles.
 func (dn *Node) isAcyclic() bool {
-	nodeMap := make(map[*Node]struct{})
+	nodeMap := make(map[*Node]int)
 	return dn.isAcyclicImpl(nodeMap, 0)
 }
 
 // Checks whenever address of a node already exists in the set of traversed nodes, to determine cycles. If traversing
 // depth exceeds MAX_RECURSION, then false is returned and further examination is stopped.
-func (dn *Node) isAcyclicImpl(traversed map[*Node]struct{}, depth int) bool {
+func (dn *Node) isAcyclicImpl(traversed map[*Node]int, depth int) bool {
 	if depth > MAX_RECURSION {
 		log.Error().Msgf("Max recursion depth reached (%d). Cannot determine if grapth is acyclic.",
 			MAX_RECURSION)
 		return false
 	}
-	if _, alreadyTraversed := traversed[dn]; alreadyTraversed {
+	// condition for traversedOnDepth < depth-1 is for case when there are multiply nodes merging into one node
+	if traversedOnDepth, alreadyTraversed := traversed[dn]; alreadyTraversed && traversedOnDepth < depth-1 {
 		return false
 	}
-	traversed[dn] = struct{}{}
+	traversed[dn] = depth
 	for _, child := range dn.Children {
 		check := child.isAcyclicImpl(traversed, depth+1)
 		if !check {
