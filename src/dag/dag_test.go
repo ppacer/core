@@ -79,6 +79,32 @@ func TestDagIsValidSimpleCyclic(t *testing.T) {
 	}
 }
 
+func TestDagGetTaskSimple(t *testing.T) {
+	attr := Attr{Id: "mock_dag"}
+	g := linkedList(100)
+	d := New(attr, g)
+	t50, err := d.GetTask("step_50")
+	if err != nil {
+		t.Errorf("Expected nil error while GetTask, but got: %s", err.Error())
+	}
+	if t50.Id() != "step_50" {
+		t.Errorf("Expected task Id 'step_50', got: %s", t50.Id())
+	}
+}
+
+func TestDagGetTaskInvalidId(t *testing.T) {
+	attr := Attr{Id: "mock_dag"}
+	g := linkedList(100)
+	d := New(attr, g)
+	_, err := d.GetTask("step_500")
+	if err == nil {
+		t.Error("Expected non-nil error while getting 'step_500', but got empty error.")
+	}
+	if err != ErrTaskNotFoundInDag {
+		t.Errorf("Expected non-nill ErrTaskNotFoundInDag, but got: %v", err)
+	}
+}
+
 func TestDagPrint(t *testing.T) {
 	start := Node{Task: EmptyTask{"start"}}
 	t1 := Node{Task: EmptyTask{"t1"}}

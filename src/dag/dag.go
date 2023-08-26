@@ -1,8 +1,11 @@
 package dag
 
 import (
+	"errors"
 	"fmt"
 )
+
+var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
 
 type Attr struct {
 	Id       Id
@@ -27,6 +30,18 @@ func New(attr Attr, root *Node) Dag {
 //   - Graph is no deeper then MAX_RECURSION
 func (d *Dag) IsValid() bool {
 	return d.Root.isAcyclic() && d.Root.taskIdsUnique() && d.Root.depth() <= MAX_RECURSION
+}
+
+// GetTask return task by its identifier. In case when there is no Task within the DAG of given taskId, then non-nil
+// error will be returned (ErrTaskNotFoundInDag).
+func (d *Dag) GetTask(taskId string) (Task, error) {
+	tasks := d.Root.flatten(true)
+	for _, task := range tasks {
+		if task.Id() == taskId {
+			return task, nil
+		}
+	}
+	return nil, ErrTaskNotFoundInDag
 }
 
 func (d *Dag) String() string {
