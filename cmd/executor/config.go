@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"go_shed/src/version"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -17,9 +15,7 @@ type LoggerConfig struct {
 }
 
 type Config struct {
-	AppVersion string
-	Port       int
-	Logger     LoggerConfig
+	Logger LoggerConfig
 }
 
 // Parse Config or fail.
@@ -28,19 +24,13 @@ func ParseConfig() Config {
 		"Log events on at least debug level. Otherwise info level is assumed.")
 	logUseConsoleWriter := flag.Bool("logConsole", true,
 		"Use ConsoleWriter within zerolog - pretty but not efficient, mostly for development")
-	port := flag.Int("port", 8080, "Port on which Scheduler is exposed")
 	flag.Parse()
 
 	loggerCfg := LoggerConfig{
 		UseDebugLevel:    *logDebugLevel,
 		UseConsoleWriter: *logUseConsoleWriter,
 	}
-
-	return Config{
-		AppVersion: strings.TrimSpace(version.Version),
-		Port:       *port,
-		Logger:     loggerCfg,
-	}
+	return Config{Logger: loggerCfg}
 }
 
 func (c *Config) setupZerolog() {
