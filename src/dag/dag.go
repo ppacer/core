@@ -35,10 +35,10 @@ func (d *Dag) IsValid() bool {
 // GetTask return task by its identifier. In case when there is no Task within the DAG of given taskId, then non-nil
 // error will be returned (ErrTaskNotFoundInDag).
 func (d *Dag) GetTask(taskId string) (Task, error) {
-	tasks := d.Root.flatten(true)
-	for _, task := range tasks {
-		if task.Id() == taskId {
-			return task, nil
+	nodesInfo := d.Root.flatten()
+	for _, ni := range nodesInfo {
+		if ni.Node.Task.Id() == taskId {
+			return ni.Node.Task, nil
 		}
 	}
 	return nil, ErrTaskNotFoundInDag

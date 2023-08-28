@@ -47,6 +47,23 @@ func (dn *Node) Next(node *Node) {
 }
 
 // TODO(ds): docs
+//         an[0]
+//       /       \
+//      /  an[1]  \
+//     / /      \  \
+//   dn -- an[2] ---- mergeNode
+//     \ \      /  /
+//      \  an[3]  /
+//       \  ...  /
+//         an[N]
+func (dn *Node) NextAsyncAndMerge(asyncNodes []*Node, mergeNode *Node) {
+	for _, an := range asyncNodes {
+		dn.Next(an)
+		an.Next(mergeNode)
+	}
+}
+
+// TODO(ds): docs
 func (dn *Node) Hash() string {
 	execSources := dn.joinTasksExecSources()
 	hasher := sha256.New()
@@ -94,26 +111,57 @@ func (dn *Node) isAcyclicImpl(traversed map[*Node]int, depth int) bool {
 	return true
 }
 
-// Flattens tasks into a list of tasks. It can be done either bread-first-search (BFS) or deep-first-search (DFS)
-// order. List of tasks might be incomplete if depth of the graph exceeds MAX_RECURSION value.
-func (dn *Node) flatten(bfs bool) []Task {
-	if bfs {
-		return dn.flattenBFS()
-	}
-	tasks := make([]Task, 0, 100)
-	return dn.flattenDFS(tasks, 0)
+// NodeInfo represents enriched information about node in the DAG. It's used mostly for convenience. In particular it's
+// used to flatten DAG into slice of NodeInfo.
+type NodeInfo struct {
+	Node    *Node
+	Depth   int
+	Parents []*Node
 }
 
-func (dn *Node) flattenBFS() []Task {
-	var ts []Task
+// Flattens tree (DAG) into a list of NodeInfo. Flattening is done in BFS order. Result slice does not contain duplicates.
+// List of nodes might be incomplete if depth of the graph exceeds MAX_RECURSION value.
+func (dn *Node) flatten() []NodeInfo {
+	flattenNodes, parentsMap := dn.flattenBFS()
+	ni := make([]NodeInfo, 0, len(flattenNodes))
+	for idx, nodeD := range flattenNodes {
+		thereIsBetterCandidate := false
+		if idx < len(flattenNodes)-1 {
+			for i := idx + 1; i < len(flattenNodes); i++ {
+				if flattenNodes[i].Node == nodeD.Node {
+					// This is for case where there are several edges from different depth level of graph into the same
+					// target node. In such case we want to put target node on level of deepest edge.
+					thereIsBetterCandidate = true
+					break
+				}
+			}
+		}
+		if !thereIsBetterCandidate {
+			parents, parentsExists := parentsMap[nodeD.Node]
+			if parentsExists {
+				nodeD.Parents = parents
+			}
+			ni = append(ni, nodeD)
+		}
+	}
+	return ni
+}
+
+func (dn *Node) flattenBFS() ([]NodeInfo, map[*Node][]*Node) {
+	visited := make(map[*Node]int)
+	parentsMap := make(map[*Node][]*Node)
+	var ni []NodeInfo
 	var queue []*Node
 	depthMarker := &Node{}
-	depth := 0
+	depth := 1
 	queue = append(queue, dn, depthMarker)
 
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
+		if visitedOnDepth, alreadyVisited := visited[current]; alreadyVisited && visitedOnDepth == depth {
+			continue
+		}
 		if current == depthMarker {
 			depth++
 			if depth > MAX_RECURSION {
@@ -125,34 +173,25 @@ func (dn *Node) flattenBFS() []Task {
 			}
 			continue
 		}
-		ts = append(ts, current.Task)
-		queue = append(queue, current.Children...)
+		visited[current] = depth
+		ni = append(ni, NodeInfo{Node: current, Depth: depth, Parents: nil})
+		for _, child := range current.Children {
+			parentsMap[child] = append(parentsMap[child], current)
+			queue = append(queue, child)
+		}
 	}
-	return ts
-}
-
-func (dn *Node) flattenDFS(ts []Task, depth int) []Task {
-	if depth > MAX_RECURSION {
-		log.Error().Msgf("Max recursion depth reached (%d). Returned result might be incomplete.",
-			MAX_RECURSION)
-		return ts
-	}
-	ts = append(ts, dn.Task)
-	for _, child := range dn.Children {
-		ts = child.flattenDFS(ts, depth+1)
-	}
-	return ts
+	return ni, parentsMap
 }
 
 func (dn *Node) taskIdsUnique() bool {
-	tasks := dn.flatten(true)
+	nodesInfo := dn.flatten()
 	taskIds := make(map[string]struct{})
 
-	for _, task := range tasks {
-		if _, alreadyExists := taskIds[task.Id()]; alreadyExists {
+	for _, ni := range nodesInfo {
+		if _, alreadyExists := taskIds[ni.Node.Task.Id()]; alreadyExists {
 			return false
 		}
-		taskIds[task.Id()] = struct{}{}
+		taskIds[ni.Node.Task.Id()] = struct{}{}
 	}
 	return true
 }
@@ -161,11 +200,11 @@ func (dn *Node) taskIdsUnique() bool {
 // order.
 func (dn *Node) joinTasksExecSources() []byte {
 	data := make([]byte, 0, 1024)
-	tasks := dn.flatten(true)
-	for _, task := range tasks {
-		taskId := []byte(task.Id() + ":")
+	nodesInfo := dn.flatten()
+	for _, ni := range nodesInfo {
+		taskId := []byte(ni.Node.Task.Id() + ":")
 		data = append(data, taskId...)
-		data = append(data, []byte(TaskExecuteSource(task))...)
+		data = append(data, []byte(TaskExecuteSource(ni.Node.Task))...)
 	}
 	return data
 }

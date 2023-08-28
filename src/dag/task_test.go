@@ -103,45 +103,37 @@ func TestIsAcyclicOnBranchoutAndJoin(t *testing.T) {
 	}
 }
 
-func TestFlattenBfsSimple(t *testing.T) {
+func TestFlattenSimple(t *testing.T) {
 	g := deep3Width3Graph()
-	tasks := g.flatten(true)
+	nodesInfo := g.flatten()
 
-	if len(tasks) != 5 {
-		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
+	if len(nodesInfo) != 5 {
+		t.Errorf("Expected 5 tasks, got: %d", len(nodesInfo))
 	}
 
 	expectedIds := []string{"ConstTask", "A", "B", "ConstTask", "EmptyTask"}
-	for idx, task := range tasks {
-		if task.Id() != expectedIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], task.Id())
+	expectedLevels := []int{1, 2, 2, 2, 3}
+	expectedNumOfParents := []int{0, 1, 1, 1, 1}
+	for idx, ni := range nodesInfo {
+		if ni.Node.Task.Id() != expectedIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], ni.Node.Task.Id())
+		}
+		if ni.Depth != expectedLevels[idx] {
+			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if len(ni.Parents) != expectedNumOfParents[idx] {
+			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 }
 
-func TestFlattenDfsSimple(t *testing.T) {
-	g := deep3Width3Graph()
-	tasks := g.flatten(false)
-
-	if len(tasks) != 5 {
-		t.Errorf("Expected 5 tasks, got: %d", len(tasks))
-	}
-
-	expectedIds := []string{"ConstTask", "A", "EmptyTask", "B", "ConstTask"}
-	for idx, task := range tasks {
-		if task.Id() != expectedIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], task.Id())
-		}
-	}
-}
-
-func TestFlattenBfsLinkedList(t *testing.T) {
+func TestFlattenLinkedList(t *testing.T) {
 	const N = 100
 	l := linkedList(N)
-	tasks := l.flatten(true)
+	nodesInfo := l.flatten()
 
-	if len(tasks) != N {
-		t.Errorf("Expected flatten %d tasks, got: %d", N, len(tasks))
+	if len(nodesInfo) != N {
+		t.Errorf("Expected flatten %d tasks, got: %d", N, len(nodesInfo))
 	}
 
 	var expectedTaskIds []string
@@ -150,69 +142,122 @@ func TestFlattenBfsLinkedList(t *testing.T) {
 		expectedTaskIds = append(expectedTaskIds, fmt.Sprintf("step_%d", i))
 	}
 
-	for idx, task := range tasks {
-		if task.Id() != expectedTaskIds[idx] {
-			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+	for idx, ni := range nodesInfo {
+		if ni.Node.Task.Id() != expectedTaskIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+		}
+		if idx == 0 && len(ni.Parents) != 0 {
+			t.Errorf("Expected 0 parents for the first node, but got: %d", len(ni.Parents))
+		}
+		if idx > 0 && len(ni.Parents) != 1 {
+			t.Errorf("Expected 1 parent for a node inside linked list, got %d", len(ni.Parents))
+		}
+		if ni.Depth != idx+1 {
+			t.Errorf("Expected Task %s to be on depth %d, got %d", ni.Node.Task.Id(), idx+1, ni.Depth)
 		}
 	}
 }
 
-func TestFlattenDfsLinkedList(t *testing.T) {
-	const N = 100
-	l := linkedList(N)
-	tasks := l.flatten(true)
-
-	if len(tasks) != N {
-		t.Errorf("Expected flatten %d tasks, got: %d", N, len(tasks))
-	}
-
-	var expectedTaskIds []string
-	expectedTaskIds = append(expectedTaskIds, "Start")
-	for i := 0; i < N-1; i++ {
-		expectedTaskIds = append(expectedTaskIds, fmt.Sprintf("step_%d", i))
-	}
-
-	for idx, task := range tasks {
-		if task.Id() != expectedTaskIds[idx] {
-			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
-		}
-	}
-}
-
-func TestFlattenBfsBinaryTree(t *testing.T) {
+func TestFlattenBinaryTree(t *testing.T) {
 	g := binaryTree(2)
-	tasks := g.flatten(true)
-	expectedTaskIds := []string{
-		"Node",
-		"Node_0",
-		"Node_1",
-		"Node_0_0",
-		"Node_0_1",
-		"Node_1_0",
-		"Node_1_1",
-	}
-	for idx, task := range tasks {
-		if task.Id() != expectedTaskIds[idx] {
-			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+	nodesInfo := g.flatten()
+
+	expectedTaskIds := []string{"Node", "Node_0", "Node_1", "Node_0_0", "Node_0_1", "Node_1_0", "Node_1_1"}
+	expectedLevels := []int{1, 2, 2, 3, 3, 3, 3}
+	expectedNumOfParents := []int{0, 1, 1, 1, 1, 1, 1}
+	for idx, ni := range nodesInfo {
+		if ni.Node.Task.Id() != expectedTaskIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+		}
+		if ni.Depth != expectedLevels[idx] {
+			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if len(ni.Parents) != expectedNumOfParents[idx] {
+			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 }
 
-func TestFlattenDfsBinaryTree(t *testing.T) {
-	g := binaryTree(2)
-	tasks := g.flatten(false)
-	expectedTaskIds := []string{
-		"Node",
-		"Node_0",
-		"Node_0_0",
-		"Node_0_1",
-		"Node_1",
-		"Node_1_0",
-		"Node_1_1",
+func TestFlattenBranchoutAndMerge(t *testing.T) {
+	g := branchOutAndMergeGraph()
+	nodesInfo := g.flatten()
+	expectedTaskIds := []string{"n1", "n21", "n22", "n23", "n3"}
+	expectedLevels := []int{1, 2, 2, 2, 3}
+	expectedNumOfParents := []int{0, 1, 1, 1, 3}
+
+	if len(nodesInfo) != len(expectedTaskIds) {
+		t.Errorf("Expected flatten %d tasks, but got %d", len(expectedTaskIds), len(nodesInfo))
+		return
 	}
-	for idx, task := range tasks {
-		if task.Id() != expectedTaskIds[idx] {
-			t.Errorf("Expected task (%d) with Id=%s, got: %s", idx, expectedTaskIds[idx], task.Id())
+	for idx, ni := range nodesInfo {
+		if ni.Node.Task.Id() != expectedTaskIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+		}
+		if ni.Depth != expectedLevels[idx] {
+			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if len(ni.Parents) != expectedNumOfParents[idx] {
+			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+		}
+	}
+
+	n3ExpectedParentIds := []string{"n21", "n22", "n23"}
+	for idx, parent := range nodesInfo[len(nodesInfo)-1].Parents {
+		if parent.Task.Id() != n3ExpectedParentIds[idx] {
+			t.Errorf("n3 parent %d expected to have ID=%s, but got: %s", idx, n3ExpectedParentIds[idx], parent.Task.Id())
+		}
+	}
+}
+
+func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
+	g := fewBranchoutsAndMergesGraph()
+	nodesInfo := g.flatten()
+
+	expectedTaskIds := []string{
+		"n1",
+		"g1n1", "g3", "g2n1",
+		"g1n21", "g1n22", "g2n21", "g2n22", "g2n23",
+		"g1n3", "g2n31", "g2n32",
+		"g2Merge",
+		"finish",
+	}
+	expectedLevels := []int{
+		1,
+		2, 2, 2,
+		3, 3, 3, 3, 3,
+		4, 4, 4,
+		5,
+		6,
+	}
+	expectedNumOfParents := []int{
+		0,
+		1, 1, 1,
+		1, 1, 1, 1, 1,
+		2, 2, 1,
+		2,
+		3,
+	}
+
+	if len(nodesInfo) != len(expectedTaskIds) {
+		t.Errorf("Expected flatten %d tasks, but got %d", len(expectedTaskIds), len(nodesInfo))
+		return
+	}
+	for idx, ni := range nodesInfo {
+		if ni.Node.Task.Id() != expectedTaskIds[idx] {
+			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+		}
+		if ni.Depth != expectedLevels[idx] {
+			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if len(ni.Parents) != expectedNumOfParents[idx] {
+			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+		}
+	}
+
+	finishExpectedParentIds := []string{"g3", "g1n3", "g2Merge"}
+	for idx, parent := range nodesInfo[len(nodesInfo)-1].Parents {
+		if parent.Task.Id() != finishExpectedParentIds[idx] {
+			t.Errorf("finish parent %d expected to have ID=%s, but got: %s", idx, finishExpectedParentIds[idx], parent.Task.Id())
 		}
 	}
 }
@@ -345,28 +390,82 @@ func TestNodeTheSameExecute(t *testing.T) {
 	}
 }
 
+//      n21
+//    /    \
+//   /      \
+// n1 - n22 - n3
+//   \      /
+//    \    /
+//      n23
 func branchOutAndMergeGraph() *Node {
-	//      n21
-	//    /    \
-	//   /      \
-	// n1 - n22 - n3
-	//   \      /
-	//    \    /
-	//      n23
-	n1 := Node{Task: nameTask{Name: "n1"}}
-	n21 := Node{Task: nameTask{Name: "n21"}}
-	n22 := Node{Task: nameTask{Name: "n22"}}
-	n23 := Node{Task: nameTask{Name: "n23"}}
-	n3 := Node{Task: nameTask{Name: "n3"}}
+	n1 := nameTaskNode("n1")
+	n21 := nameTaskNode("n21")
+	n22 := nameTaskNode("n22")
+	n23 := nameTaskNode("n23")
+	n3 := nameTaskNode("n3")
 
-	n1.Next(&n21)
-	n1.Next(&n22)
-	n1.Next(&n23)
-	n21.Next(&n3)
-	n22.Next(&n3)
-	n23.Next(&n3)
+	n1.NextAsyncAndMerge([]*Node{n21, n22, n23}, n3)
+	return n1
+}
 
-	return &n1
+//
+//           g1n21
+//         /       \
+//      g1n1       g1n3 -----------
+//      /  \       /               \
+//     /     g1n21                  \
+//    /                              \
+//   /                                \
+// n1---g3---------------------------finish
+//   \                                /
+//    \      g2n21                   /
+//     \    /     \                 /
+//      \  /       \               /
+//      g2n1--g2n22-g2n31         /
+//         \              \      /
+//          \             g2Merge
+//           \            /
+//            g2n23--g2n32
+//
+//
+func fewBranchoutsAndMergesGraph() *Node {
+	n1 := nameTaskNode("n1")
+
+	// sub graph 1
+	g1n1 := nameTaskNode("g1n1")
+	g1n21 := nameTaskNode("g1n21")
+	g1n22 := nameTaskNode("g1n22")
+	g1n3 := nameTaskNode("g1n3")
+
+	n1.Next(g1n1)
+	g1n1.NextAsyncAndMerge([]*Node{g1n21, g1n22}, g1n3)
+
+	// sub graph 3
+	g3 := nameTaskNode("g3")
+	n1.Next(g3)
+
+	// sub graph 2
+	g2n1 := nameTaskNode("g2n1")
+	g2n21 := nameTaskNode("g2n21")
+	g2n22 := nameTaskNode("g2n22")
+	g2n23 := nameTaskNode("g2n23")
+	g2n31 := nameTaskNode("g2n31")
+	g2n32 := nameTaskNode("g2n32")
+	g2Merge := nameTaskNode("g2Merge")
+
+	n1.Next(g2n1)
+	g2n1.NextAsyncAndMerge([]*Node{g2n21, g2n22}, g2n31)
+	g2n1.Next(g2n23)
+	g2n23.Next(g2n32)
+	g2n31.Next(g2Merge)
+	g2n32.Next(g2Merge)
+
+	finish := nameTaskNode("finish")
+	g1n3.Next(finish)
+	g3.Next(finish)
+	g2Merge.Next(finish)
+
+	return n1
 }
 
 func deep3Width3Graph() *Node {
@@ -388,6 +487,10 @@ func deep3Width3Graph() *Node {
 	n21.Next(&n3)
 
 	return &n1
+}
+
+func nameTaskNode(name string) *Node {
+	return &Node{Task: nameTask{Name: name}}
 }
 
 func linkedList(length int) *Node {
