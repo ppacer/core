@@ -32,6 +32,14 @@ func TaskExecuteSource(t Task) string {
 	return execMethodSource
 }
 
+// TaskHash returns SHA256 of given Task Execute method body source.
+func TaskHash(t Task) string {
+	taskBodySource := TaskExecuteSource(t)
+	hasher := sha256.New()
+	hasher.Write([]byte(taskBodySource))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 // Node represents single node (vertex) in the DAG.
 type Node struct {
 	Task     Task

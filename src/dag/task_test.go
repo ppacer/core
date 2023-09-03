@@ -55,6 +55,8 @@ func TestExecSourceConst(t *testing.T) {
 	}
 }
 
+// TODO(dskrzypiec): Unit tests for TaskHash
+
 func TestIsAcyclicSimple(t *testing.T) {
 	g := deep3Width3Graph()
 	if !g.isAcyclic() {
