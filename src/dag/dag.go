@@ -44,6 +44,16 @@ func (d *Dag) GetTask(taskId string) (Task, error) {
 	return nil, ErrTaskNotFoundInDag
 }
 
+// Flatten DAG into list of Tasks in BFS order.
+func (d *Dag) Flatten() []Task {
+	nodesInfo := d.Root.flatten()
+	tasks := make([]Task, len(nodesInfo))
+	for idx, ni := range nodesInfo {
+		tasks[idx] = ni.Node.Task
+	}
+	return tasks
+}
+
 func (d *Dag) String() string {
 	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Attr.Id, d.Attr.Schedule, d.Root.String(0))
 }

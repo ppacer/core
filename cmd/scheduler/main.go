@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go_shed/src/dag"
+	"go_shed/src/db"
 	"go_shed/src/models"
 	_ "go_shed/src/user"
 	"net/http"
@@ -23,6 +24,11 @@ func main() {
 	cfg := ParseConfig()
 	cfg.setupZerolog()
 	var ss SharedState
+	dbClient, err := db.NewClient("/Users/ds/GoProjects/go_sched/test.db")
+	if err != nil {
+		log.Panic().Err(err).Msg("Cannot connect to the database")
+	}
+	start(dbClient)
 
 	// Endpoints
 	http.HandleFunc("/hello", ss.HelloHandler)

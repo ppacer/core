@@ -23,8 +23,13 @@ func TestDagTasksInsertAndReadSimple(t *testing.T) {
 		t.Error(err)
 	}
 
+	tx, _ := c.dbConn.Begin()
 	task := tasks.PrintTask{Name: "db_test"}
-	err = c.InsertDagTask("db_dag", task)
+	err = c.insertSingleDagTask(tx, "db_dag", task)
+	cErr := tx.Commit()
+	if cErr != nil {
+		t.Error(cErr)
+	}
 	if err != nil {
 		t.Errorf("Unexpected error while trying inserting dagtask to in-memory DB: %s", err.Error())
 	}
@@ -52,8 +57,13 @@ func TestDagTestDoubleInsertAndRead(t *testing.T) {
 	}
 
 	// Insert first db_dag.db_test dagtask
+	tx, _ := c.dbConn.Begin()
 	task := tasks.PrintTask{Name: "db_test"}
-	err = c.InsertDagTask(DAG_ID, task)
+	err = c.insertSingleDagTask(tx, "db_dag", task)
+	cErr := tx.Commit()
+	if cErr != nil {
+		t.Error(cErr)
+	}
 	if err != nil {
 		t.Errorf("Unexpected error while trying inserting dbNameTask to in-memory DB: %s", err.Error())
 	}
@@ -83,8 +93,13 @@ func TestDagTestDoubleInsertAndRead(t *testing.T) {
 	time.Sleep(1 * time.Millisecond)
 
 	// Second insert for db_dag.db_test
+	tx, _ = c.dbConn.Begin()
 	task2 := tasks.WaitTask{TaskId: "db_test", Interval: 5 * time.Second}
-	err = c.InsertDagTask(DAG_ID, task2)
+	err = c.insertSingleDagTask(tx, "db_dag", task2)
+	cErr = tx.Commit()
+	if cErr != nil {
+		t.Error(cErr)
+	}
 	if err != nil {
 		t.Errorf("Unexpected error while trying inserting second dbNameTask to in-memory DB: %s", err.Error())
 		return

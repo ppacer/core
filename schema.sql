@@ -10,6 +10,6 @@ CREATE TABLE IF NOT EXISTS dagtasks (
     TaskBodyHash TEXT NOT NULL,     -- Task Execute() method body source code hash
     TaskBodySource TEXT NOT NULL,   -- Task Execute() method body source code as text
 
-    PRIMARY KEY (DagId, TaskId, IsCurrent)
+    PRIMARY KEY (DagId, TaskId, IsCurrent, InsertTs)
 );
 

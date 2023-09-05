@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"go_shed/src/dag"
 	"go_shed/src/version"
 	"reflect"
@@ -22,14 +23,44 @@ type DagTask struct {
 	TaskBodySource string
 }
 
-// InsertDagTask inserts new DagTask which represents a task within a DAG. Using multiple InsertDagTask for dagId and
+// InsertDagTasks inserts the tasks of given DAG to dagtasks table and set it as the current version. Previous versions
+// would still be in dagtasks table but with set IsCurrent=0. In case of inserting any of dag's task insertion would be
+// rollbacked (in terms of SQL transactions).
+func (c *Client) InsertDagTasks(d dag.Dag) error {
+	start := time.Now()
+	dagId := string(d.Attr.Id)
+	log.Info().Str("dagId", dagId).Msgf("[%s] Start syncing dag and dagtasks table...", LOG_PREFIX)
+	tx, _ := c.dbConn.Begin()
+
+	for _, task := range d.Flatten() {
+		iErr := c.insertSingleDagTask(tx, dagId, task)
+		if iErr != nil {
+			rollErr := tx.Rollback()
+			if rollErr != nil {
+				log.Error().Err(rollErr).Msgf("[%s] Error while rollbacking SQL transaction", LOG_PREFIX)
+			}
+			return errors.New("could not sync dag and dagtasks properly. SQL transaction was rollbacked")
+		}
+	}
+
+	cErr := tx.Commit()
+	if cErr != nil {
+		log.Error().Err(cErr).Str("dagId", dagId).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
+		return cErr
+	}
+
+	log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished syncing dag and dagtasks table.", LOG_PREFIX)
+	return nil
+}
+
+// insertSingleDagTask inserts new DagTask which represents a task within a DAG. Using multiple InsertDagTask for dagId and
 // task is a common case. Newely inserted version will have IsCurrent=1 and others will not. On database side (DagId,
 // TaskId, IsCurrent) defines primary key on dagtasks table.
-func (c *Client) InsertDagTask(dagId string, task dag.Task) error {
+func (c *Client) insertSingleDagTask(tx *sql.Tx, dagId string, task dag.Task) error {
 	start := time.Now()
 	insertTs := time.Now().Format(InsertTsFormat)
 	log.Info().Str("dagId", dagId).Str("taskId", task.Id()).Str("insertTs", insertTs).Msgf("[%s] Start inserting new DagTask.", LOG_PREFIX)
-	tx, _ := c.dbConn.Begin()
 
 	// Make IsCurrent=0 for outdated rows
 	uErr := c.outdateDagTasks(tx, dagId, task.Id(), insertTs)
@@ -43,12 +74,6 @@ func (c *Client) InsertDagTask(dagId string, task dag.Task) error {
 	if iErr != nil {
 		log.Error().Err(iErr).Str("dagId", dagId).Str("taskId", task.Id()).Msgf("[%s] Cannot insert new dagtask", LOG_PREFIX)
 		return iErr
-	}
-
-	cErr := tx.Commit()
-	if cErr != nil {
-		log.Error().Err(cErr).Str("dagId", dagId).Str("taskId", task.Id()).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
-		return cErr
 	}
 
 	log.Info().Str("dagId", dagId).Str("taskId", task.Id()).Dur("durationMs", time.Since(start)).
@@ -90,6 +115,10 @@ func (c *Client) ReadDagTask(dagId, taskId string) (DagTask, error) {
 	var dId, tId, typeName, insertTs, version, bodyHash, bodySource string
 	var isCurrent int
 	scanErr := row.Scan(&dId, &tId, &isCurrent, &insertTs, &version, &typeName, &bodyHash, &bodySource)
+
+	if scanErr == sql.ErrNoRows {
+		return DagTask{}, scanErr
+	}
 
 	if scanErr != nil {
 		log.Error().Err(scanErr).Str("dagId", dagId).Str("taskId", taskId).
