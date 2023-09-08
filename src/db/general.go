@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -14,8 +15,8 @@ func (c *Client) Count(table string) int {
 	start := time.Now()
 	log.Info().Str("table", table).Msgf("[%s] Start COUNT query.", LOG_PREFIX)
 
-	query := "SELECT COUNT(*) FROM ?"
-	row := c.dbConn.QueryRow(query, table)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
+	row := c.dbConn.QueryRow(query)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
@@ -33,8 +34,8 @@ func (c *Client) CountWhere(table, where string) int {
 	start := time.Now()
 	log.Info().Str("table", table).Str("where", where).Msgf("[%s] Start COUNT query.", LOG_PREFIX)
 
-	query := "SELECT COUNT(*) FROM ? WHERE ?"
-	row := c.dbConn.QueryRow(query, table, where)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", table, where)
+	row := c.dbConn.QueryRow(query)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {

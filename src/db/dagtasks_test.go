@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+	"go_shed/src/dag"
 	"go_shed/src/user/tasks"
 	"testing"
 	"time"
@@ -17,7 +19,7 @@ func TestDagTestReadFromEmptyTable(t *testing.T) {
 	}
 }
 
-func TestDagTasksInsertAndReadSimple(t *testing.T) {
+func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 	c, err := emptyDbWithSchema()
 	if err != nil {
 		t.Error(err)
@@ -49,7 +51,7 @@ func TestDagTasksInsertAndReadSimple(t *testing.T) {
 	}
 }
 
-func TestDagTestDoubleInsertAndRead(t *testing.T) {
+func TestDagTestDoubleSingleInsertAndRead(t *testing.T) {
 	const DAG_ID = "db_dag"
 	c, err := emptyDbWithSchema()
 	if err != nil {
@@ -131,4 +133,61 @@ func TestDagTestDoubleInsertAndRead(t *testing.T) {
 	if t2db.TaskBodySource != waitTaskSource {
 		t.Errorf("Expected task body source [%s], got [%s]", waitTaskSource, t2db.TaskBodySource)
 	}
+}
+
+func TestInsertDagTasks(t *testing.T) {
+	c, err := emptyDbWithSchema()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	d := simpleDag("simple_dag", 2)
+	iErr := c.InsertDagTasks(d)
+	if iErr != nil {
+		t.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
+		return
+	}
+	rowCnt := c.Count("dagtasks")
+	if rowCnt != 3 {
+		t.Errorf("Expected 3 rows (3 tasks of simple_dag) after the first insert, got: %d", rowCnt)
+	}
+	rowCurrentCnt := c.CountWhere("dagtasks", "IsCurrent=1")
+	if rowCurrentCnt != 3 {
+		t.Errorf("Expected 3 rows with IsCurrent=1 after the first insert, got: %d", rowCurrentCnt)
+	}
+
+	time.Sleep(1 * time.Millisecond)
+
+	// Let's modify simple_dag and try to insert once again
+	d2 := simpleDag("simple_dag", 9)
+	iErr = c.InsertDagTasks(d2)
+	if iErr != nil {
+		t.Errorf("Error while inserting modified simple_dag tasks: %s", iErr.Error())
+		return
+	}
+	rowCnt = c.Count("dagtasks")
+	if rowCnt != 13 {
+		t.Errorf("Expected 13 rows (3 from first insert and 10 from another), got: %d", rowCnt)
+	}
+	rowCurrentCnt = c.CountWhere("dagtasks", "IsCurrent=1")
+	if rowCurrentCnt != 10 {
+		t.Errorf("Expected 10 rows with IsCurrent=1 after the second insert, got: %d", rowCurrentCnt)
+	}
+}
+
+func simpleDag(dagId string, innerTasks int) dag.Dag {
+	start := dag.Node{Task: tasks.WaitTask{TaskId: "start", Interval: 3 * time.Second}}
+	prev := &start
+
+	for i := 0; i < innerTasks; i++ {
+		t := dag.Node{Task: tasks.PrintTask{Name: fmt.Sprintf("t%d", i)}}
+		prev.Next(&t)
+		prev = &t
+	}
+
+	attr := dag.Attr{Id: dag.Id(dagId), Schedule: "5 7 * * *"}
+	dag := dag.New(attr, &start)
+
+	return dag
 }
