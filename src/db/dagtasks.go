@@ -28,8 +28,9 @@ type DagTask struct {
 // rollbacked (in terms of SQL transactions).
 func (c *Client) InsertDagTasks(d dag.Dag) error {
 	start := time.Now()
+	insertTs := time.Now().Format(InsertTsFormat)
 	dagId := string(d.Attr.Id)
-	log.Info().Str("dagId", dagId).Msgf("[%s] Start syncing dag and dagtasks table...", LOG_PREFIX)
+	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start syncing dag and dagtasks table...", LOG_PREFIX)
 	tx, _ := c.dbConn.Begin()
 
 	// Make IsCurrent=0 for outdated rows
@@ -40,7 +41,7 @@ func (c *Client) InsertDagTasks(d dag.Dag) error {
 	}
 
 	for _, task := range d.Flatten() {
-		iErr := c.insertSingleDagTask(tx, dagId, task)
+		iErr := c.insertSingleDagTask(tx, dagId, task, insertTs)
 		if iErr != nil {
 			rollErr := tx.Rollback()
 			if rollErr != nil {
@@ -64,9 +65,8 @@ func (c *Client) InsertDagTasks(d dag.Dag) error {
 // insertSingleDagTask inserts new DagTask which represents a task within a DAG. Using multiple InsertDagTask for dagId and
 // task is a common case. Newely inserted version will have IsCurrent=1 and others will not. On database side (DagId,
 // TaskId, IsCurrent) defines primary key on dagtasks table.
-func (c *Client) insertSingleDagTask(tx *sql.Tx, dagId string, task dag.Task) error {
+func (c *Client) insertSingleDagTask(tx *sql.Tx, dagId string, task dag.Task, insertTs string) error {
 	start := time.Now()
-	insertTs := time.Now().Format(InsertTsFormat)
 	log.Info().Str("dagId", dagId).Str("taskId", task.Id()).Str("insertTs", insertTs).Msgf("[%s] Start inserting new DagTask.", LOG_PREFIX)
 
 	// Insert dagtask row

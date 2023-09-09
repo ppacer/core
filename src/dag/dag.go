@@ -46,6 +46,9 @@ func (d *Dag) GetTask(taskId string) (Task, error) {
 
 // Flatten DAG into list of Tasks in BFS order.
 func (d *Dag) Flatten() []Task {
+	if d.Root == nil {
+		return []Task{}
+	}
 	nodesInfo := d.Root.flatten()
 	tasks := make([]Task, len(nodesInfo))
 	for idx, ni := range nodesInfo {

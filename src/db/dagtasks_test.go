@@ -28,7 +28,8 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 
 	tx, _ := c.dbConn.Begin()
 	task := tasks.PrintTask{Name: "db_test"}
-	err = c.insertSingleDagTask(tx, "db_dag", task)
+	insertTs := time.Now().Format(InsertTsFormat)
+	err = c.insertSingleDagTask(tx, "db_dag", task, insertTs)
 	cErr := tx.Commit()
 	if cErr != nil {
 		t.Error(cErr)
@@ -101,6 +102,33 @@ func TestInsertDagTasks(t *testing.T) {
 	if rowCurrentCnt != dTaskNum2 {
 		t.Errorf("Expected %d rows with IsCurrent=1 after the second insert, got: %d", dTaskNum2, rowCurrentCnt)
 		logDagTasks(c, dagId, t)
+	}
+}
+
+func TestInsertEmptyDagTasks(t *testing.T) {
+	c, err := emptyDbWithSchema()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// DAG with no tasks
+	attr := dag.Attr{Id: dag.Id("test"), Schedule: "5 7 * * *"}
+	d := dag.New(attr, nil)
+
+	iErr := c.InsertDagTasks(d)
+	if iErr != nil {
+		t.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
+		return
+	}
+	rowCnt := c.Count("dagtasks")
+	if rowCnt != 0 {
+		t.Errorf("Expected no rows for dagtasks in this case, got: %d", rowCnt)
+		logDagTasks(c, "test", t)
+	}
+	rowCnt = c.CountWhere("dagtasks", "DagId='test'")
+	if rowCnt != 0 {
+		t.Errorf("Expected no rows for dagtasks where DagId=test, got: %d", rowCnt)
+		logDagTasks(c, "test", t)
 	}
 }
 
