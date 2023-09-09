@@ -8,7 +8,7 @@ import (
 )
 
 const LOG_PREFIX = "db"
-const InsertTsFormat = "2006-01-02T15:04:05.999Z07:00"
+const InsertTsFormat = "2006-01-02T15:04:05.999999Z07:00"
 
 // Count returns count of rows for given table. If case of errors -1 is returned and error is logged.
 func (c *Client) Count(table string) int {

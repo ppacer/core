@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go_shed/src/dag"
 	"go_shed/src/user/tasks"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -51,128 +52,72 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 	}
 }
 
-func TestDagTestDoubleSingleInsertAndRead(t *testing.T) {
-	const DAG_ID = "db_dag"
-	c, err := emptyDbWithSchema()
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Insert first db_dag.db_test dagtask
-	tx, _ := c.dbConn.Begin()
-	task := tasks.PrintTask{Name: "db_test"}
-	err = c.insertSingleDagTask(tx, "db_dag", task)
-	cErr := tx.Commit()
-	if cErr != nil {
-		t.Error(cErr)
-	}
-	if err != nil {
-		t.Errorf("Unexpected error while trying inserting dbNameTask to in-memory DB: %s", err.Error())
-	}
-
-	// Checks
-	tdb, rErr := c.ReadDagTask(DAG_ID, task.Id())
-	if rErr != nil {
-		t.Errorf("Error while reading DagTask from DB: %s", rErr.Error())
-	}
-	if tdb.DagId != DAG_ID {
-		t.Errorf("Expected DagId db_dag, got: %s", tdb.DagId)
-	}
-	if tdb.TaskId != task.Id() {
-		t.Errorf("Expected TaskId db_test, got: %s", tdb.TaskId)
-	}
-	if tdb.TaskTypeName != "PrintTask" {
-		t.Errorf("Expected TaskTypeName PrintTask, got: %s", tdb.TaskTypeName)
-	}
-	printTaskSource := `{
-	fmt.Println("Hello executor!")
-}`
-	if tdb.TaskBodySource != printTaskSource {
-		t.Errorf("Expected task body source [%s], got [%s]", printTaskSource, tdb.TaskBodySource)
-	}
-
-	// Need at least 1ms difference in time to produce distinguish insertTs
-	time.Sleep(1 * time.Millisecond)
-
-	// Second insert for db_dag.db_test
-	tx, _ = c.dbConn.Begin()
-	task2 := tasks.WaitTask{TaskId: "db_test", Interval: 5 * time.Second}
-	err = c.insertSingleDagTask(tx, "db_dag", task2)
-	cErr = tx.Commit()
-	if cErr != nil {
-		t.Error(cErr)
-	}
-	if err != nil {
-		t.Errorf("Unexpected error while trying inserting second dbNameTask to in-memory DB: %s", err.Error())
-		return
-	}
-
-	// Checks for the second row (the current one)
-	t2db, r2Err := c.ReadDagTask(DAG_ID, task.Id())
-	if r2Err != nil {
-		t.Errorf("Error while second reading DagTask from DB: %s", r2Err.Error())
-		return
-	}
-	if t2db.DagId != DAG_ID {
-		t.Errorf("Expected DagId db_dag, got: %s", t2db.DagId)
-	}
-	if t2db.TaskId != task.Id() {
-		t.Errorf("Expected TaskId db_test, got: %s", t2db.TaskId)
-	}
-	if !t2db.IsCurrent {
-		t.Error("Expected second inserted row to be the current one")
-	}
-	if t2db.TaskTypeName != "WaitTask" {
-		t.Errorf("Expected TaskTypeName WaitTask, got: %s", t2db.TaskTypeName)
-	}
-	waitTaskSource := `{
-	log.Info().Msgf("Task [%s] starts sleeping for %v...", wt.Id(), wt.Interval)
-	time.Sleep(wt.Interval)
-	log.Info().Msgf("Task [%s] is done", wt.Id())
-}`
-	if t2db.TaskBodySource != waitTaskSource {
-		t.Errorf("Expected task body source [%s], got [%s]", waitTaskSource, t2db.TaskBodySource)
-	}
-}
-
 func TestInsertDagTasks(t *testing.T) {
+	const maxTasks = 25
 	c, err := emptyDbWithSchema()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-
-	d := simpleDag("simple_dag", 2)
+	dagId := "simple_dag"
+	innerTasks1 := rand.Intn(maxTasks) + 1
+	d := simpleDag(dagId, innerTasks1)
+	dTaskNum := len(d.Flatten())
 	iErr := c.InsertDagTasks(d)
 	if iErr != nil {
 		t.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
 		return
 	}
 	rowCnt := c.Count("dagtasks")
-	if rowCnt != 3 {
-		t.Errorf("Expected 3 rows (3 tasks of simple_dag) after the first insert, got: %d", rowCnt)
+	if rowCnt != dTaskNum {
+		t.Errorf("Expected %d rows (%d tasks of simple_dag) after the first insert, got: %d",
+			dTaskNum, dTaskNum, rowCnt)
+		logDagTasks(c, dagId, t)
 	}
 	rowCurrentCnt := c.CountWhere("dagtasks", "IsCurrent=1")
-	if rowCurrentCnt != 3 {
-		t.Errorf("Expected 3 rows with IsCurrent=1 after the first insert, got: %d", rowCurrentCnt)
+	if rowCurrentCnt != dTaskNum {
+		t.Errorf("Expected %d rows with IsCurrent=1 after the first insert, got: %d", dTaskNum, rowCurrentCnt)
+		logDagTasks(c, dagId, t)
 	}
 
 	time.Sleep(1 * time.Millisecond)
 
 	// Let's modify simple_dag and try to insert once again
-	d2 := simpleDag("simple_dag", 9)
+	innerTasks2 := rand.Intn(maxTasks) + 1
+	d2 := simpleDag("simple_dag", innerTasks2)
+	dTaskNum2 := len(d2.Flatten())
 	iErr = c.InsertDagTasks(d2)
 	if iErr != nil {
 		t.Errorf("Error while inserting modified simple_dag tasks: %s", iErr.Error())
 		return
 	}
 	rowCnt = c.Count("dagtasks")
-	if rowCnt != 13 {
-		t.Errorf("Expected 13 rows (3 from first insert and 10 from another), got: %d", rowCnt)
+	if rowCnt != dTaskNum+dTaskNum2 {
+		t.Errorf("Expected %d rows (%d from first insert and %d from another), got: %d",
+			dTaskNum+dTaskNum2, dTaskNum, dTaskNum2, rowCnt)
+		logDagTasks(c, dagId, t)
 	}
 	rowCurrentCnt = c.CountWhere("dagtasks", "IsCurrent=1")
-	if rowCurrentCnt != 10 {
-		t.Errorf("Expected 10 rows with IsCurrent=1 after the second insert, got: %d", rowCurrentCnt)
+	if rowCurrentCnt != dTaskNum2 {
+		t.Errorf("Expected %d rows with IsCurrent=1 after the second insert, got: %d", dTaskNum2, rowCurrentCnt)
+		logDagTasks(c, dagId, t)
+	}
+}
+
+func BenchmarkDagTasksInsert(b *testing.B) {
+	c, err := emptyDbWithSchema()
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	d := simpleDag("simple_dag", 99)
+
+	for i := 0; i < b.N; i++ {
+		iErr := c.InsertDagTasks(d)
+		if iErr != nil {
+			b.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
+			return
+		}
 	}
 }
 
@@ -190,4 +135,20 @@ func simpleDag(dagId string, innerTasks int) dag.Dag {
 	dag := dag.New(attr, &start)
 
 	return dag
+}
+
+func logDagTasks(c *Client, dagId string, t *testing.T) {
+	dts, err := c.ReadDagTasks(dagId)
+	if err != nil {
+		t.Errorf("Could not read dagtasks for dagId=%s for debugging", dagId)
+	}
+	t.Logf("dagtasks row for dagId=%s:\n", dagId)
+	for _, dt := range dts {
+		isCurrInt := 0
+		if dt.IsCurrent {
+			isCurrInt = 1
+		}
+		fmt.Printf("%s|%s|%d|%s|%s\n",
+			dt.DagId, dt.TaskId, isCurrInt, dt.InsertTs, dt.TaskTypeName)
+	}
 }
