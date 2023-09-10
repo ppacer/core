@@ -55,15 +55,16 @@ func (dn *Node) Next(node *Node) {
 }
 
 // TODO(ds): docs
-//         an[0]
-//       /       \
-//      /  an[1]  \
-//     / /      \  \
-//   dn -- an[2] ---- mergeNode
-//     \ \      /  /
-//      \  an[3]  /
-//       \  ...  /
-//         an[N]
+//
+//	      an[0]
+//	    /       \
+//	   /  an[1]  \
+//	  / /      \  \
+//	dn -- an[2] ---- mergeNode
+//	  \ \      /  /
+//	   \  an[3]  /
+//	    \  ...  /
+//	      an[N]
 func (dn *Node) NextAsyncAndMerge(asyncNodes []*Node, mergeNode *Node) {
 	for _, an := range asyncNodes {
 		dn.Next(an)
@@ -71,7 +72,7 @@ func (dn *Node) NextAsyncAndMerge(asyncNodes []*Node, mergeNode *Node) {
 	}
 }
 
-// TODO(ds): docs
+// Hash calculates SHA256 hash based on concatenated body sources of Execute methods of all children recursively.
 func (dn *Node) Hash() string {
 	execSources := dn.joinTasksExecSources()
 	hasher := sha256.New()

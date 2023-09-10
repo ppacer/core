@@ -4,8 +4,9 @@ CREATE TABLE IF NOT EXISTS dags (
     CreateTs TEXT NOT NULL,         -- Timestamp when DAG was initially inserted
     LatestUpdateTs TEXT NULL,       -- Timestamp of the DAG latest update
     CreateVersion TEXT NOT NULL,    -- Verion when DAG was innitially inserted
-    LatestUpdateVersion TEXT NULL,  -- Version of the DAG latest update
-    Hash TEXT NOT NULL,             -- SHA256 hash of the DAG
+    LatestUpdateVersion TEXT NULL,  -- Version of DAG latest update
+    HashAttributes TEXT NOT NULL,   -- SHA256 hash of DAG attributes
+    HashTasks TEXT NOT NULL,        -- SHA256 hash of DAG tasks
     Attributes TEXT NOT NULL,       -- DAG attributes like schedule...
     -- TODO: probably many more, but sometime later
 

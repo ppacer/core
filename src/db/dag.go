@@ -16,7 +16,8 @@ type Dag struct {
 	LatestUpdateTs      *string
 	CreateVersion       string
 	LatestUpdateVersion *string
-	Hash                string
+	HashAttributes      string
+	HashTasks           string
 	Attributes          string // serialized dag.Dag.Attr
 }
 
@@ -75,10 +76,11 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading Dag.", LOG_PREFIX)
 
 	row := tx.QueryRow(c.readDagQuery(), dagId)
-	var dId, createTs, createVersion, hash, attr string
+	var dId, createTs, createVersion, hashAttr, hashTasks, attr string
 	var latestUpdateTs, latestUpdateVersion *string
 
-	scanErr := row.Scan(&dId, &createTs, &latestUpdateTs, &createVersion, &latestUpdateVersion, &hash, &attr)
+	scanErr := row.Scan(&dId, &createTs, &latestUpdateTs, &createVersion, &latestUpdateVersion, &hashAttr, &hashTasks,
+		&attr)
 	if scanErr == sql.ErrNoRows {
 		return Dag{}, scanErr
 	}
@@ -92,7 +94,8 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 		LatestUpdateTs:      latestUpdateTs,
 		CreateVersion:       createVersion,
 		LatestUpdateVersion: latestUpdateVersion,
-		Hash:                hash,
+		HashAttributes:      hashAttr,
+		HashTasks:           hashTasks,
 		Attributes:          attr,
 	}
 	log.Info().Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading Dag.", LOG_PREFIX)
@@ -103,7 +106,8 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
 	_, err := tx.Exec(
 		c.dagInsertQuery(),
-		d.DagId, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.Hash, d.Attributes,
+		d.DagId, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.HashAttributes, d.HashTasks,
+		d.Attributes,
 	)
 	if err != nil {
 		return err
@@ -115,7 +119,7 @@ func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
 func (c *Client) updateDag(tx *sql.Tx, d Dag) error {
 	_, err := tx.Exec(
 		c.dagUpdateQuery(),
-		d.LatestUpdateTs, d.LatestUpdateVersion, d.Hash, d.Attributes, d.DagId,
+		d.LatestUpdateTs, d.LatestUpdateVersion, d.HashAttributes, d.HashTasks, d.Attributes, d.DagId,
 	)
 	if err != nil {
 		return err
@@ -134,7 +138,8 @@ func fromDagToDag(d dag.Dag, createTs string) Dag {
 		LatestUpdateTs:      nil,
 		CreateVersion:       version.Version,
 		LatestUpdateVersion: nil,
-		Hash:                d.Hash(),
+		HashAttributes:      d.HashAttr(),
+		HashTasks:           d.HashTasks(),
 		Attributes:          string(attrJson),
 	}
 }
@@ -150,7 +155,8 @@ func dagUpdate(d dag.Dag, currDagRow Dag, insertTs string) Dag {
 		LatestUpdateTs:      &insertTs,
 		CreateVersion:       currDagRow.CreateVersion,
 		LatestUpdateVersion: &version.Version,
-		Hash:                d.Hash(),
+		HashAttributes:      d.HashAttr(),
+		HashTasks:           d.HashTasks(),
 		Attributes:          string(attrJson),
 	}
 }
@@ -163,7 +169,8 @@ func (c *Client) readDagQuery() string {
 			LatestUpdateTs,
 			CreateVersion,
 			LatestUpdateVersion,
-			Hash,
+			HashAttributes,
+			HashTasks,
 			Attributes
 		FROM
 			dags
@@ -175,9 +182,9 @@ func (c *Client) readDagQuery() string {
 func (c *Client) dagInsertQuery() string {
 	return `
 		INSERT INTO dags (
-			DagId, CreateTs, LatestUpdateTs, CreateVersion, LatestUpdateVersion, Hash, Attributes
+			DagId, CreateTs, LatestUpdateTs, CreateVersion, LatestUpdateVersion, HashAttributes, HashTasks, Attributes
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 }
 
@@ -188,7 +195,8 @@ func (c *Client) dagUpdateQuery() string {
 		SET
 			LatestUpdateTs = ?,
 			LatestUpdateVersion = ?,
-			Hash = ?,
+			HashAttributes = ?,
+			HashTasks = ?,
 			Attributes = ?
 		WHERE
 			DagId = ?

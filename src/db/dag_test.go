@@ -32,7 +32,7 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	}
 
 	// Insert DAG row for the first time
-	firstHash := insertSimpleDagAndTest(c, t)
+	firstHashTasks, firstHashAttr := insertSimpleDagAndTest(c, t)
 
 	dagId := "my_simple_dag"
 	uDag := simpleDag(dagId, 5)
@@ -45,11 +45,15 @@ func TestInsertDagAndUpdate(t *testing.T) {
 		t.Errorf("Could not read just updated row from dags table, err: %s", rErr.Error())
 	}
 
-	if dbDag.Hash == "" {
-		t.Error("Expected non-empty hash after row in dags table was updated")
+	if dbDag.HashTasks == "" {
+		t.Error("Expected non-empty hash tasks after row in dags table was updated")
 	}
-	if firstHash == dbDag.Hash {
-		t.Errorf("Expected different hash after updating the row. In both cases got: %s", firstHash)
+	if firstHashTasks == dbDag.HashTasks {
+		t.Errorf("Expected different hash tasks after updating the row. In both cases got: %s", firstHashTasks)
+	}
+	if firstHashAttr != dbDag.HashAttributes {
+		t.Errorf("Expected the same hash of attributes after updating the row. Got first: %s and after update: %s",
+			firstHashAttr, dbDag.HashAttributes)
 	}
 	if dbDag.LatestUpdateTs == nil {
 		t.Error("Expected non-empty LatestUpdateTs after row in dags table was updated")
@@ -59,7 +63,7 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	}
 }
 
-func insertSimpleDagAndTest(c *Client, t *testing.T) string {
+func insertSimpleDagAndTest(c *Client, t *testing.T) (string, string) {
 	dagId := "my_simple_dag"
 	d := simpleDag(dagId, 1)
 	iErr := c.UpsertDag(d)
@@ -82,8 +86,11 @@ func insertSimpleDagAndTest(c *Client, t *testing.T) string {
 	if dagFromDb.LatestUpdateVersion != nil {
 		t.Errorf("Expected NULL LatestUpdateVersion in dags table, got: %s", *dagFromDb.LatestUpdateVersion)
 	}
-	if dagFromDb.Hash == "" {
-		t.Error("Expected non-empty Hash")
+	if dagFromDb.HashTasks == "" {
+		t.Error("Expected non-empty HashTasks")
 	}
-	return dagFromDb.Hash
+	if dagFromDb.HashAttributes == "" {
+		t.Error("Expected non-empty HashAttributes")
+	}
+	return dagFromDb.HashTasks, dagFromDb.HashAttributes
 }

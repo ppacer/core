@@ -1,15 +1,22 @@
 package dag
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/rs/zerolog/log"
 )
+
+const LOG_PREFIX = "dag"
 
 var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
 
 type Attr struct {
-	Id       Id
-	Schedule string
+	Id       Id     `json:"id"`
+	Schedule string `json:"schedule"`
 }
 
 type Dag struct {
@@ -57,11 +64,25 @@ func (d *Dag) Flatten() []Task {
 	return tasks
 }
 
-func (d *Dag) Hash() string {
-	if d.Root == nil {
-		return "TODO"
+// HashAttr calculates SHA256 hash based on DAG attribues.
+func (d *Dag) HashAttr() string {
+	attrJson, jErr := json.Marshal(d.Attr)
+	if jErr != nil {
+		log.Error().Err(jErr).Msgf("[%s] Cannot serialize DAG attributes [%v]", LOG_PREFIX, d.Attr)
+		return "CANNOT SERIALIZE DAG ATTRIBUTES"
 	}
-	// TODO: Include attributes etc...
+	hasher := sha256.New()
+	hasher.Write(attrJson)
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// HashTasks calculates SHA256 hash based on concatanated body sources of Execute methods for all tasks.
+func (d *Dag) HashTasks() string {
+	if d.Root == nil {
+		hasher := sha256.New()
+		hasher.Write([]byte("NO TASKS"))
+		return hex.EncodeToString(hasher.Sum(nil))
+	}
 	return d.Root.Hash()
 }
 
