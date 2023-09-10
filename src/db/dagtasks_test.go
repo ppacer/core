@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"go_shed/src/dag"
 	"go_shed/src/user/tasks"
@@ -17,6 +18,9 @@ func TestDagTestReadFromEmptyTable(t *testing.T) {
 	_, rErr := c.ReadDagTask("hello", "say_hello")
 	if rErr == nil {
 		t.Error("Expected ReadDagTask fail to reading non existent task")
+	}
+	if rErr != sql.ErrNoRows {
+		t.Errorf("Expected sql.ErrNoRows, but got: %s", rErr.Error())
 	}
 }
 

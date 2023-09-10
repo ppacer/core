@@ -57,6 +57,14 @@ func (d *Dag) Flatten() []Task {
 	return tasks
 }
 
+func (d *Dag) Hash() string {
+	if d.Root == nil {
+		return "TODO"
+	}
+	// TODO: Include attributes etc...
+	return d.Root.Hash()
+}
+
 func (d *Dag) String() string {
 	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Attr.Id, d.Attr.Schedule, d.Root.String(0))
 }

@@ -109,13 +109,11 @@ func (c *Client) outdateDagTasks(tx *sql.Tx, dagId string) error {
 // ReadDagTasks reads all tasks for given dagId in the current version from dagtasks table.
 func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
 	start := time.Now()
-	logEntry := log.Info().Str("dagId", dagId)
-	logEntry.Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
+	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
 
 	rows, queryErr := c.dbConn.Query(c.readDagTasksQuery(), dagId)
 	if queryErr != nil {
-		logEntry := log.Error().Err(queryErr).Str("dagId", dagId)
-		logEntry.Msgf("[%s] Failed querying DagTasks.", LOG_PREFIX)
+		log.Error().Err(queryErr).Str("dagId", dagId).Msgf("[%s] Failed querying DagTasks.", LOG_PREFIX)
 		return nil, queryErr
 	}
 	defer rows.Close()
@@ -128,8 +126,7 @@ func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
 		scanErr := rows.Scan(&fetchedDagId, &fetchedTaskId, &isCurrentInt, &insertTs, &version, &typeName, &bodyHash,
 			&bodySource)
 		if scanErr != nil {
-			logEntry := log.Error().Err(scanErr).Str("dagId", dagId)
-			logEntry.Msgf("[%s] Failed scanning a DagTask record.", LOG_PREFIX)
+			log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] Failed scanning a DagTask record.", LOG_PREFIX)
 			return nil, scanErr
 		}
 
@@ -143,26 +140,21 @@ func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
 			TaskBodyHash:   bodyHash,
 			TaskBodySource: bodySource,
 		}
-
 		tasks = append(tasks, task)
 	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
-		logEntry := log.Error().Err(rowsErr).Str("dagId", dagId)
-		logEntry.Msgf("[%s] Failed iterating over DagTask rows.", LOG_PREFIX)
+		log.Error().Err(rowsErr).Str("dagId", dagId).Msgf("[%s] Failed iterating over DagTask rows.", LOG_PREFIX)
 		return nil, rowsErr
 	}
-
-	logEntry.Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading DagTasks.", LOG_PREFIX)
-
+	log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading DagTasks.", LOG_PREFIX)
 	return tasks, nil
 }
 
 // ReadDagTask reads single row (current version) from dagtasks table for given DAG ID and task ID.
 func (c *Client) ReadDagTask(dagId, taskId string) (DagTask, error) {
 	start := time.Now()
-	logEntry := log.Info().Str("dagId", dagId).Str("taskId", taskId)
-	logEntry.Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
+	log.Info().Str("dagId", dagId).Str("taskId", taskId).Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
 
 	row := c.dbConn.QueryRow(c.readDagTaskQuery(), dagId, taskId)
 	var dId, tId, typeName, insertTs, version, bodyHash, bodySource string
@@ -189,7 +181,8 @@ func (c *Client) ReadDagTask(dagId, taskId string) (DagTask, error) {
 		TaskBodySource: bodySource,
 	}
 
-	logEntry.Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading DagTask.", LOG_PREFIX)
+	log.Info().Str("dagId", dagId).Str("taskId", taskId).Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished reading DagTask.", LOG_PREFIX)
 	return dagtask, nil
 }
 
