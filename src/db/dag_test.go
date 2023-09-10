@@ -3,11 +3,14 @@ package db
 import (
 	"database/sql"
 	"go_shed/src/version"
+	"path"
 	"testing"
 )
 
+var sqlSchemaPath = path.Join("..", "..", "schema.sql")
+
 func TestReadDagFromEmpty(t *testing.T) {
-	c, err := emptyDbWithSchema()
+	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -18,7 +21,7 @@ func TestReadDagFromEmpty(t *testing.T) {
 }
 
 func TestInsertDagSimple(t *testing.T) {
-	c, err := emptyDbWithSchema()
+	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -26,7 +29,7 @@ func TestInsertDagSimple(t *testing.T) {
 }
 
 func TestInsertDagAndUpdate(t *testing.T) {
-	c, err := emptyDbWithSchema()
+	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Error(err)
 	}
