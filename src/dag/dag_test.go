@@ -79,6 +79,20 @@ func TestDagIsValidSimpleCyclic(t *testing.T) {
 	}
 }
 
+func TestDagIsValidSimpleNonuniqueIds(t *testing.T) {
+	n1 := Node{Task: nameTask{Name: "n1"}}
+	n2 := Node{Task: nameTask{Name: "n2"}}
+	n3 := Node{Task: nameTask{Name: "n1"}}
+	n1.Next(&n2)
+	n2.Next(&n3)
+
+	attr := Attr{Id: "mock_dag", Schedule: ""}
+	d := New(attr, &n1)
+	if d.IsValid() {
+		t.Error("Expected dag to be invalid (have non unique task IDs), but is valid.")
+	}
+}
+
 func TestDagGetTaskSimple(t *testing.T) {
 	attr := Attr{Id: "mock_dag"}
 	g := linkedList(100)
