@@ -26,3 +26,6 @@ jobs:
 
     - name: Test
       run: go test -count=1 -v ./...
+
+    - name: Benchmarks
+      run: go test -bench=. -benchmem ./src/meta && go test -bench=. -benchmem ./src/sched
