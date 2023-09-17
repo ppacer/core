@@ -36,17 +36,20 @@ func NewSimpleQueue[T comparable](queueMaxSize int) SimpleQueue[T] {
 	}
 }
 
-// Put puts given task at the end of the task queue.
-func (stq *SimpleQueue[T]) Put(task T) error {
+// Put puts given object at the end of the queue. Returns ErrQueueIsFull is the
+// queue is full and object cannot be put there.
+func (stq *SimpleQueue[T]) Put(obj T) error {
 	stq.Lock()
 	defer stq.Unlock()
 	if len(stq.buffer) >= stq.maxSize {
 		return ErrQueueIsFull
 	}
-	stq.buffer = append(stq.buffer, task)
+	stq.buffer = append(stq.buffer, obj)
 	return nil
 }
 
+// Pop returns the first object from the queue and removes it from the queue.
+// If the queue is empty, then non-nill error ErrQueueIsEmpty is returned.
 func (stq *SimpleQueue[T]) Pop() (T, error) {
 	stq.Lock()
 	defer stq.Unlock()
@@ -54,9 +57,9 @@ func (stq *SimpleQueue[T]) Pop() (T, error) {
 		var t T
 		return t, ErrQueueIsEmpty
 	}
-	task := stq.buffer[0]
+	obj := stq.buffer[0]
 	stq.buffer = stq.buffer[1:]
-	return task, nil
+	return obj, nil
 }
 
 func (stq *SimpleQueue[T]) Capacity() int {

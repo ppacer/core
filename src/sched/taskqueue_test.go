@@ -149,6 +149,40 @@ func TestSimpleQueueConcurrent(t *testing.T) {
 	testQueueSize(&q, 4*chunkSize-1*chunkSize, t)
 }
 
+func BenchmarkQueuePutAndPop(b *testing.B) {
+	const size = 1000
+	type dagrun struct {
+		RunId  string
+		DagId  string
+		TaskId string
+	}
+	q := NewSimpleQueue[dagrun](size)
+	dr := dagrun{"runid_123123", "sample_dag", "print_task"}
+
+	for i := 0; i < b.N; i++ {
+		q.Put(dr)
+		q.Pop()
+	}
+}
+
+func BenchmarkQueuePut1000Objects(b *testing.B) {
+	const size = 10000
+	const putBatchSize = 1000
+	type dagrun struct {
+		RunId  string
+		DagId  string
+		TaskId string
+	}
+	q := NewSimpleQueue[dagrun](size)
+	dr := dagrun{"runid_123123", "sample_dag", "print_task"}
+
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < putBatchSize; j++ {
+			q.Put(dr)
+		}
+	}
+}
+
 func testQueueCapacity[T comparable](q *SimpleQueue[T], expectedCapacity int, t *testing.T) {
 	cap := q.Capacity()
 	if cap != expectedCapacity {
