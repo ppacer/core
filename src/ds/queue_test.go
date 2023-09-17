@@ -1,4 +1,4 @@
-package sched
+package ds
 
 import (
 	"sync"

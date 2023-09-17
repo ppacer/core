@@ -1,4 +1,5 @@
-package sched
+// Package ds contains implementation for data structures.
+package ds
 
 import (
 	"errors"
