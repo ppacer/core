@@ -8,13 +8,21 @@ import (
 var ErrQueueIsFull = errors.New("queue is full")
 var ErrQueueIsEmpty = errors.New("queue is empty")
 
+// Queue defines interface for the FIFO queue. Put puts object onto the queue,
+// pop returns the first object from the queue. Capacity returns how many more
+// objects can be put onto the queue before it will be full. Size method should
+// return how much object there are currently on the queue. If object cannot be
+// put, because the queue is full it Put method should return ErrQueueIsFull.
+// In case when Pop method is called on empty queue, it should also return
+// non-nil error ErrQueueIsEmpty.
 type Queue[T comparable] interface {
 	Put(t T) error
 	Pop() (T, error)
 	Capacity() int
+	Size() int
 }
 
-// Simple buffer-based task queue. It's safe for concurrent use.
+// Simple buffer-based FIFO queue. It's safe for concurrent use.
 type SimpleQueue[T comparable] struct {
 	maxSize int
 	sync.Mutex
@@ -56,4 +64,11 @@ func (stq *SimpleQueue[T]) Capacity() int {
 	size := len(stq.buffer)
 	stq.Unlock()
 	return stq.maxSize - size
+}
+
+func (stq *SimpleQueue[T]) Size() int {
+	stq.Lock()
+	size := len(stq.buffer)
+	stq.Unlock()
+	return size
 }

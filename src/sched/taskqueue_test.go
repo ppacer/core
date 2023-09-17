@@ -10,28 +10,34 @@ func TestSimpleQueueBasic(t *testing.T) {
 	const size = 5
 	q := NewSimpleQueue[int](size)
 	testQueueCapacity(&q, size, t)
+	testQueueSize(&q, 0, t)
 
 	p1Err := q.Put(42)
 	testPutErr(p1Err, t)
 	testQueueCapacity(&q, size-1, t)
+	testQueueSize(&q, 1, t)
 
 	p2Err := q.Put(123)
 	testPutErr(p2Err, t)
 	testQueueCapacity(&q, size-2, t)
+	testQueueSize(&q, 2, t)
 
 	n1, err1 := q.Pop()
 	testPop(n1, err1, 42, t)
 	testQueueCapacity(&q, size-1, t)
+	testQueueSize(&q, 1, t)
 
 	n2, err2 := q.Pop()
 	testPop(n2, err2, 123, t)
 	testQueueCapacity(&q, size, t)
+	testQueueSize(&q, 0, t)
 }
 
 func TestSimpeQueueEmpty(t *testing.T) {
 	const size = 5
 	q := NewSimpleQueue[string](size)
 	testQueueCapacity(&q, size, t)
+	testQueueSize(&q, 0, t)
 
 	_, err1 := q.Pop()
 	if err1 == nil {
@@ -41,6 +47,7 @@ func TestSimpeQueueEmpty(t *testing.T) {
 		t.Errorf("Expected queue is empty error, got: %s", err1.Error())
 	}
 	testQueueCapacity(&q, size, t)
+	testQueueSize(&q, 0, t)
 }
 
 func TestSimpleQueueZeroSize(t *testing.T) {
@@ -48,6 +55,7 @@ func TestSimpleQueueZeroSize(t *testing.T) {
 	const size = 0
 	q := NewSimpleQueue[X](size)
 	testQueueCapacity(&q, 0, t)
+	testQueueSize(&q, 0, t)
 
 	_, err1 := q.Pop()
 	if err1 == nil {
@@ -57,6 +65,7 @@ func TestSimpleQueueZeroSize(t *testing.T) {
 		t.Errorf("Expected queue is empty error, got: %s", err1.Error())
 	}
 	testQueueCapacity(&q, 0, t)
+	testQueueSize(&q, 0, t)
 
 	putErr := q.Put(X{X: 42})
 	if putErr == nil {
@@ -66,24 +75,29 @@ func TestSimpleQueueZeroSize(t *testing.T) {
 		t.Errorf("Expected queue is full error, but got: %s", putErr.Error())
 	}
 	testQueueCapacity(&q, 0, t)
+	testQueueSize(&q, 0, t)
 }
 
 func TestSimpeQueueFull(t *testing.T) {
 	const size = 3
 	q := NewSimpleQueue[int](size)
 	testQueueCapacity(&q, size, t)
+	testQueueSize(&q, 0, t)
 
 	p1Err := q.Put(42)
 	testPutErr(p1Err, t)
 	testQueueCapacity(&q, size-1, t)
+	testQueueSize(&q, 1, t)
 
 	p2Err := q.Put(142)
 	testPutErr(p2Err, t)
 	testQueueCapacity(&q, size-2, t)
+	testQueueSize(&q, 2, t)
 
 	p3Err := q.Put(242)
 	testPutErr(p3Err, t)
 	testQueueCapacity(&q, size-3, t)
+	testQueueSize(&q, 3, t)
 
 	p4Err := q.Put(1213123)
 	if p4Err == nil {
@@ -93,6 +107,7 @@ func TestSimpeQueueFull(t *testing.T) {
 		t.Errorf("Expected queue is full error, but got: %s", p4Err.Error())
 	}
 	testQueueCapacity(&q, size-3, t)
+	testQueueSize(&q, 3, t)
 
 	p5Err := q.Put(-123123)
 	if p5Err == nil {
@@ -102,14 +117,16 @@ func TestSimpeQueueFull(t *testing.T) {
 		t.Errorf("Expected queue is full error, but got: %s", p5Err.Error())
 	}
 	testQueueCapacity(&q, size-3, t)
+	testQueueSize(&q, 3, t)
 
 	n1, popErr := q.Pop()
 	testPop(n1, popErr, 42, t)
 	testQueueCapacity(&q, size-2, t)
+	testQueueSize(&q, 2, t)
 }
 
 func TestSimpleQueueConcurrent(t *testing.T) {
-	const size = 1000000
+	const size = 3000000
 	const chunkSize = 100000
 	q := NewSimpleQueue[int](size)
 	errChan := make(chan error, size)
@@ -129,12 +146,20 @@ func TestSimpleQueueConcurrent(t *testing.T) {
 	wg.Wait()
 	expectedCap := size - (4*chunkSize - 1*chunkSize)
 	testQueueCapacity(&q, expectedCap, t)
+	testQueueSize(&q, 4*chunkSize-1*chunkSize, t)
 }
 
 func testQueueCapacity[T comparable](q *SimpleQueue[T], expectedCapacity int, t *testing.T) {
 	cap := q.Capacity()
 	if cap != expectedCapacity {
 		t.Errorf("Expected queue capacity %d, got: %d", expectedCapacity, cap)
+	}
+}
+
+func testQueueSize[T comparable](q *SimpleQueue[T], expectedSize int, t *testing.T) {
+	s := q.Size()
+	if s != expectedSize {
+		t.Errorf("Expected queue size %d, got: %d", expectedSize, s)
 	}
 }
 
