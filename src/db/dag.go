@@ -12,11 +12,13 @@ import (
 
 type Dag struct {
 	DagId               string
+	StartTs             *string
+	Schedule            *string
 	CreateTs            string
 	LatestUpdateTs      *string
 	CreateVersion       string
 	LatestUpdateVersion *string
-	HashAttributes      string
+	HashDagMeta         string
 	HashTasks           string
 	Attributes          string // serialized dag.Dag.Attr
 }
@@ -37,7 +39,7 @@ func (c *Client) ReadDag(dagId string) (Dag, error) {
 func (c *Client) UpsertDag(d dag.Dag) error {
 	start := time.Now()
 	insertTs := time.Now().Format(InsertTsFormat)
-	dagId := string(d.Attr.Id)
+	dagId := string(d.Id)
 	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start upserting dag...", LOG_PREFIX)
 	tx, _ := c.dbConn.Begin()
 
@@ -76,11 +78,11 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading Dag.", LOG_PREFIX)
 
 	row := tx.QueryRow(c.readDagQuery(), dagId)
-	var dId, createTs, createVersion, hashAttr, hashTasks, attr string
-	var latestUpdateTs, latestUpdateVersion *string
+	var dId, createTs, createVersion, hashMeta, hashTasks, attr string
+	var startTs, schedule, latestUpdateTs, latestUpdateVersion *string
 
-	scanErr := row.Scan(&dId, &createTs, &latestUpdateTs, &createVersion, &latestUpdateVersion, &hashAttr, &hashTasks,
-		&attr)
+	scanErr := row.Scan(&dId, &startTs, &schedule, &createTs, &latestUpdateTs, &createVersion, &latestUpdateVersion,
+		&hashMeta, &hashTasks, &attr)
 	if scanErr == sql.ErrNoRows {
 		return Dag{}, scanErr
 	}
@@ -90,11 +92,13 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 	}
 	dag := Dag{
 		DagId:               dId,
+		StartTs:             startTs,
+		Schedule:            schedule,
 		CreateTs:            createTs,
 		LatestUpdateTs:      latestUpdateTs,
 		CreateVersion:       createVersion,
 		LatestUpdateVersion: latestUpdateVersion,
-		HashAttributes:      hashAttr,
+		HashDagMeta:         hashMeta,
 		HashTasks:           hashTasks,
 		Attributes:          attr,
 	}
@@ -102,12 +106,12 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 	return dag, nil
 }
 
-// Insert new row in dagtasks table.
+// Insert new row in dags table.
 func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
 	_, err := tx.Exec(
 		c.dagInsertQuery(),
-		d.DagId, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.HashAttributes, d.HashTasks,
-		d.Attributes,
+		d.DagId, d.StartTs, d.Schedule, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.HashDagMeta,
+		d.HashTasks, d.Attributes,
 	)
 	if err != nil {
 		return err
@@ -119,7 +123,7 @@ func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
 func (c *Client) updateDag(tx *sql.Tx, d Dag) error {
 	_, err := tx.Exec(
 		c.dagUpdateQuery(),
-		d.LatestUpdateTs, d.LatestUpdateVersion, d.HashAttributes, d.HashTasks, d.Attributes, d.DagId,
+		d.StartTs, d.Schedule, d.LatestUpdateTs, d.LatestUpdateVersion, d.HashDagMeta, d.HashTasks, d.Attributes, d.DagId,
 	)
 	if err != nil {
 		return err
@@ -132,13 +136,22 @@ func fromDagToDag(d dag.Dag, createTs string) Dag {
 	if jErr != nil {
 		attrJson = []byte("FAILED DAG ATTR SERIALIZATION")
 	}
+	var dagStart, sched *string
+	if d.Schedule != nil {
+		schedStr := (*d.Schedule).String()
+		sched = &schedStr
+		startStr := (*d.Schedule).StartTime().Format(InsertTsFormat)
+		dagStart = &startStr
+	}
 	return Dag{
-		DagId:               string(d.Attr.Id),
+		DagId:               string(d.Id),
+		StartTs:             dagStart,
+		Schedule:            sched,
 		CreateTs:            createTs,
 		LatestUpdateTs:      nil,
 		CreateVersion:       version.Version,
 		LatestUpdateVersion: nil,
-		HashAttributes:      d.HashAttr(),
+		HashDagMeta:         d.HashDagMeta(),
 		HashTasks:           d.HashTasks(),
 		Attributes:          string(attrJson),
 	}
@@ -150,12 +163,14 @@ func dagUpdate(d dag.Dag, currDagRow Dag, insertTs string) Dag {
 		attrJson = []byte("FAILED DAG ATTR SERIALIZATION")
 	}
 	return Dag{
-		DagId:               string(d.Attr.Id),
+		DagId:               string(d.Id),
+		StartTs:             currDagRow.StartTs,
+		Schedule:            currDagRow.Schedule,
 		CreateTs:            currDagRow.CreateTs,
 		LatestUpdateTs:      &insertTs,
 		CreateVersion:       currDagRow.CreateVersion,
 		LatestUpdateVersion: &version.Version,
-		HashAttributes:      d.HashAttr(),
+		HashDagMeta:         d.HashDagMeta(),
 		HashTasks:           d.HashTasks(),
 		Attributes:          string(attrJson),
 	}
@@ -165,11 +180,13 @@ func (c *Client) readDagQuery() string {
 	return `
 		SELECT
 			DagId,
+			StartTs,
+			Schedule,
 			CreateTs,
 			LatestUpdateTs,
 			CreateVersion,
 			LatestUpdateVersion,
-			HashAttributes,
+			HashDagMeta,
 			HashTasks,
 			Attributes
 		FROM
@@ -182,9 +199,9 @@ func (c *Client) readDagQuery() string {
 func (c *Client) dagInsertQuery() string {
 	return `
 		INSERT INTO dags (
-			DagId, CreateTs, LatestUpdateTs, CreateVersion, LatestUpdateVersion, HashAttributes, HashTasks, Attributes
+			DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion, LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 }
 
@@ -193,12 +210,59 @@ func (c *Client) dagUpdateQuery() string {
 		UPDATE
 			dags
 		SET
+			StartTs = ?,
+			Schedule = ?,
 			LatestUpdateTs = ?,
 			LatestUpdateVersion = ?,
-			HashAttributes = ?,
+			HashDagMeta = ?,
 			HashTasks = ?,
 			Attributes = ?
 		WHERE
 			DagId = ?
 	`
+}
+
+// TODO: Move somewhere?
+func pointerEqual[T comparable](a, b *T) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func (d Dag) Equals(e Dag) bool {
+	if d.DagId != e.DagId {
+		return false
+	}
+	if !pointerEqual(d.StartTs, e.StartTs) {
+		return false
+	}
+	if !pointerEqual(d.Schedule, e.Schedule) {
+		return false
+	}
+	if d.CreateTs != e.CreateTs {
+		return false
+	}
+	if !pointerEqual(d.LatestUpdateTs, e.LatestUpdateTs) {
+		return false
+	}
+	if d.CreateVersion != e.CreateVersion {
+		return false
+	}
+	if !pointerEqual(d.LatestUpdateVersion, e.LatestUpdateVersion) {
+		return false
+	}
+	if d.HashDagMeta != e.HashDagMeta {
+		return false
+	}
+	if d.HashTasks != e.HashTasks {
+		return false
+	}
+	if d.Attributes != e.Attributes {
+		return false
+	}
+	return true
 }

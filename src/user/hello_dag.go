@@ -7,10 +7,6 @@ import (
 )
 
 func createHelloDag() dag.Dag {
-	attrs := dag.Attr{
-		Id:       dag.Id("hello_dag"),
-		Schedule: "* * * * *",
-	}
 	root := dag.Node{Task: tasks.PrintTask{Name: "say_hello"}}
 	wait10s := dag.Node{
 		Task: tasks.WaitTask{TaskId: "wait_10", Interval: 10 * time.Second},
@@ -30,5 +26,13 @@ func createHelloDag() dag.Dag {
 	wait10s.Next(&end)
 	wait5s.Next(&end)
 
-	return dag.New(attrs, &root)
+	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	sched := dag.IntervalSchedule{Interval: 1 * time.Minute, Start: startTs}
+	attr := dag.Attr{Tags: []string{"test"}}
+	d := dag.New(dag.Id("hello_dag")).
+		AddSchedule(&sched).
+		AddRoot(&root).
+		AddAttributes(attr).
+		Done()
+	return d
 }

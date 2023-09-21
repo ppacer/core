@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+
 func TestDagTestReadFromEmptyTable(t *testing.T) {
 	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
@@ -116,8 +118,8 @@ func TestInsertEmptyDagTasks(t *testing.T) {
 	}
 
 	// DAG with no tasks
-	attr := dag.Attr{Id: dag.Id("test"), Schedule: "5 7 * * *"}
-	d := dag.New(attr, nil)
+	sched := dag.IntervalSchedule{Start: startTs, Interval: 1 * time.Hour}
+	d := dag.New(dag.Id("test")).AddSchedule(sched).Done()
 
 	iErr := c.InsertDagTasks(d)
 	if iErr != nil {
@@ -163,8 +165,8 @@ func simpleDag(dagId string, innerTasks int) dag.Dag {
 		prev = &t
 	}
 
-	attr := dag.Attr{Id: dag.Id(dagId), Schedule: "5 7 * * *"}
-	dag := dag.New(attr, &start)
+	sched := dag.IntervalSchedule{Start: startTs, Interval: 1 * time.Hour}
+	dag := dag.New(dag.Id(dagId)).AddSchedule(sched).AddRoot(&start).Done()
 
 	return dag
 }

@@ -3,7 +3,10 @@ package dag
 import (
 	"fmt"
 	"testing"
+	"time"
 )
+
+var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 
 type EmptyTask struct {
 	TaskId string
@@ -17,12 +20,12 @@ func TestDagNew(t *testing.T) {
 	end := Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
 
-	dagAttr := Attr{Id: "mock_dag", Schedule: "5 * * * *"}
-	dag := New(dagAttr, &start)
+	sched := IntervalSchedule{startTs, 5 * time.Second}
+	dag := New("mock_dag").AddSchedule(sched).AddRoot(&start).Done()
 	fmt.Println(dag)
 
-	if dag.Attr.Id != "mock_dag" {
-		t.Errorf("Expected Id 'mock_dag', got: %s\n", dag.Attr.Id)
+	if dag.Id != "mock_dag" {
+		t.Errorf("Expected Id 'mock_dag', got: %s\n", dag.Id)
 	}
 	if dag.Root.Task.Id() != "start" {
 		t.Errorf("Expected first task Id 'start', got: %s\n", dag.Root.Task.Id())
@@ -37,28 +40,25 @@ func TestDagNew(t *testing.T) {
 }
 
 func TestDagIsValidSimple(t *testing.T) {
-	attr := Attr{Id: "mock_dag", Schedule: ""}
 	// g has two tasks with the same ID
 	g := deep3Width3Graph()
-	d := New(attr, g)
+	d := New(Id("test_dag")).AddRoot(g).Done()
 	if d.IsValid() {
 		t.Errorf("Expected dag %s to be invalid (duplicated task IDs), but is valid.", d.String())
 	}
 }
 
 func TestDagIsValidSimpleLL(t *testing.T) {
-	attr := Attr{Id: "mock_dag", Schedule: ""}
 	g := linkedList(100)
-	d := New(attr, g)
+	d := New(Id("mock_dag")).AddRoot(g).Done()
 	if !d.IsValid() {
 		t.Errorf("Expected dag %s to be valid, but is not.", d.String())
 	}
 }
 
 func TestDagIsValidSimpleLLTooLong(t *testing.T) {
-	attr := Attr{Id: "mock_dag", Schedule: ""}
 	g := linkedList(MAX_RECURSION + 1)
-	d := New(attr, g)
+	d := New(Id("mock_dag")).AddRoot(g).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (too deep), but is valid.")
 	}
@@ -72,8 +72,7 @@ func TestDagIsValidSimpleCyclic(t *testing.T) {
 	n2.Next(&n3)
 	n3.Next(&n1)
 
-	attr := Attr{Id: "mock_dag", Schedule: ""}
-	d := New(attr, &n1)
+	d := New(Id("mock_dag")).AddRoot(&n1).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (cylic), but is valid.")
 	}
@@ -86,17 +85,15 @@ func TestDagIsValidSimpleNonuniqueIds(t *testing.T) {
 	n1.Next(&n2)
 	n2.Next(&n3)
 
-	attr := Attr{Id: "mock_dag", Schedule: ""}
-	d := New(attr, &n1)
+	d := New(Id("mock_dag")).AddRoot(&n1).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (have non unique task IDs), but is valid.")
 	}
 }
 
 func TestDagGetTaskSimple(t *testing.T) {
-	attr := Attr{Id: "mock_dag"}
 	g := linkedList(100)
-	d := New(attr, g)
+	d := New(Id("mock_dag")).AddRoot(g).Done()
 	t50, err := d.GetTask("step_50")
 	if err != nil {
 		t.Errorf("Expected nil error while GetTask, but got: %s", err.Error())
@@ -107,9 +104,8 @@ func TestDagGetTaskSimple(t *testing.T) {
 }
 
 func TestDagGetTaskInvalidId(t *testing.T) {
-	attr := Attr{Id: "mock_dag"}
 	g := linkedList(100)
-	d := New(attr, g)
+	d := New(Id("mock_dag")).AddRoot(g).Done()
 	_, err := d.GetTask("step_500")
 	if err == nil {
 		t.Error("Expected non-nil error while getting 'step_500', but got empty error.")
@@ -134,7 +130,6 @@ func TestDagPrint(t *testing.T) {
 	t3.Next(&t4)
 	t4.Next(&end)
 
-	attr := Attr{Id: "mock_dag_2", Schedule: "5 7 * * *"}
-	dag := New(attr, &start)
+	dag := New(Id("mock_dag_2")).AddSchedule(IntervalSchedule{startTs, 1 * time.Hour}).AddRoot(&start).Done()
 	fmt.Println(dag)
 }

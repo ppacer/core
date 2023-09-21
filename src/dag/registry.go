@@ -14,10 +14,10 @@ type Id string
 // Add adds new DAG to the registry. If dag is already added in the registry, which means dag.Attr.Id is already a key
 // in the registry map, then non-nil error is returned.
 func Add(dag Dag) error {
-	if _, exists := registry[dag.Attr.Id]; exists {
-		return fmt.Errorf("Dag %s is already registered", dag.Attr.Id)
+	if _, exists := registry[dag.Id]; exists {
+		return fmt.Errorf("Dag %s is already registered", dag.Id)
 	}
-	registry[dag.Attr.Id] = dag
+	registry[dag.Id] = dag
 	return nil
 }
 

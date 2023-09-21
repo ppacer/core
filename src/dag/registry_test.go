@@ -1,16 +1,19 @@
 package dag
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestAddDagToRegistry(t *testing.T) {
-	dag := New(Attr{Id: Id("test_dag"), Schedule: "10 * * * *"}, nil)
+	dag := New(Id("test_dag")).AddSchedule(IntervalSchedule{Interval: 1 * time.Minute}).Done()
 	Add(dag)
 	d2, getErr := Get(Id("test_dag"))
 	if getErr != nil {
 		t.Errorf("Expected 'test_dag' to exist in the registry got: %s",
 			getErr.Error())
 	}
-	if d2 != dag {
+	if d2.Id != dag.Id {
 		t.Errorf("Expected DAGs to be the same, got: %v vs %v", dag, d2)
 	}
 	// clean up

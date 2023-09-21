@@ -1,13 +1,15 @@
 -- Table dags stores DAGs and its metadata. Information about DAG tasks are stored in dagtasks table.
 CREATE TABLE IF NOT EXISTS dags (
     DagId TEXT NOT NULL,            -- DAG ID
+    StartTs TEXT NULL,              -- DAG start timestamp
+    Schedule TEXT NULL,             -- DAG schedule
     CreateTs TEXT NOT NULL,         -- Timestamp when DAG was initially inserted
     LatestUpdateTs TEXT NULL,       -- Timestamp of the DAG latest update
     CreateVersion TEXT NOT NULL,    -- Verion when DAG was innitially inserted
     LatestUpdateVersion TEXT NULL,  -- Version of DAG latest update
-    HashAttributes TEXT NOT NULL,   -- SHA256 hash of DAG attributes
+    HashDagMeta TEXT NOT NULL,      -- SHA256 hash of DAG attributes + StartTs + Schedule
     HashTasks TEXT NOT NULL,        -- SHA256 hash of DAG tasks
-    Attributes TEXT NOT NULL,       -- DAG attributes like schedule...
+    Attributes TEXT NOT NULL,       -- DAG attributes like tags
     -- TODO: probably many more, but sometime later
 
     PRIMARY KEY (DagId)

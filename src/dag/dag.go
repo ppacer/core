@@ -6,29 +6,52 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 const LOG_PREFIX = "dag"
+const TsFormat = "2006-01-02T15:04:05.999999Z07:00"
 
 var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
 
-type Attr struct {
-	Id       Id     `json:"id"`
-	Schedule string `json:"schedule"`
-}
-
+// TODO: docs
 type Dag struct {
-	Attr Attr
-	Root *Node
+	Id       Id
+	Start    *time.Time
+	Schedule *Schedule
+	Attr     Attr
+	Root     *Node
 }
 
-func New(attr Attr, root *Node) Dag {
-	return Dag{
-		Attr: attr,
-		Root: root,
+type Attr struct {
+	Tags []string `json:"tags"`
+}
+
+func New(id Id) *Dag {
+	return &Dag{
+		Id: id,
 	}
+}
+
+func (d *Dag) AddRoot(node *Node) *Dag {
+	d.Root = node
+	return d
+}
+
+func (d *Dag) AddSchedule(sched Schedule) *Dag {
+	d.Schedule = &sched
+	return d
+}
+
+func (d *Dag) AddAttributes(attr Attr) *Dag {
+	d.Attr = attr
+	return d
+}
+
+func (d *Dag) Done() Dag {
+	return *d
 }
 
 // Graph is a valid DAG when the following conditions are met:
@@ -64,15 +87,25 @@ func (d *Dag) Flatten() []Task {
 	return tasks
 }
 
-// HashAttr calculates SHA256 hash based on DAG attribues.
-func (d *Dag) HashAttr() string {
+// HashAttr calculates SHA256 hash based on DAG attribues, start time and
+// schedule.
+func (d *Dag) HashDagMeta() string {
 	attrJson, jErr := json.Marshal(d.Attr)
 	if jErr != nil {
 		log.Error().Err(jErr).Msgf("[%s] Cannot serialize DAG attributes [%v]", LOG_PREFIX, d.Attr)
 		return "CANNOT SERIALIZE DAG ATTRIBUTES"
 	}
+	sched := ""
+	startTsStr := ""
+	if d.Schedule != nil {
+		sched = (*d.Schedule).String()
+		startTsStr = (*d.Schedule).StartTime().Format(TsFormat)
+	}
+
 	hasher := sha256.New()
 	hasher.Write(attrJson)
+	hasher.Write([]byte(sched))
+	hasher.Write([]byte(startTsStr))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
@@ -87,5 +120,5 @@ func (d *Dag) HashTasks() string {
 }
 
 func (d *Dag) String() string {
-	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Attr.Id, d.Attr.Schedule, d.Root.String(0))
+	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Id, (*d.Schedule).String(), d.Root.String(0))
 }

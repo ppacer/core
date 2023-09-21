@@ -35,7 +35,7 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	}
 
 	// Insert DAG row for the first time
-	firstHashTasks, firstHashAttr := insertSimpleDagAndTest(c, t)
+	firstHashTasks, firstHashMeta := insertSimpleDagAndTest(c, t)
 
 	dagId := "my_simple_dag"
 	uDag := simpleDag(dagId, 5)
@@ -54,9 +54,9 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	if firstHashTasks == dbDag.HashTasks {
 		t.Errorf("Expected different hash tasks after updating the row. In both cases got: %s", firstHashTasks)
 	}
-	if firstHashAttr != dbDag.HashAttributes {
+	if firstHashMeta != dbDag.HashDagMeta {
 		t.Errorf("Expected the same hash of attributes after updating the row. Got first: %s and after update: %s",
-			firstHashAttr, dbDag.HashAttributes)
+			firstHashMeta, dbDag.HashDagMeta)
 	}
 	if dbDag.LatestUpdateTs == nil {
 		t.Error("Expected non-empty LatestUpdateTs after row in dags table was updated")
@@ -92,8 +92,8 @@ func insertSimpleDagAndTest(c *Client, t *testing.T) (string, string) {
 	if dagFromDb.HashTasks == "" {
 		t.Error("Expected non-empty HashTasks")
 	}
-	if dagFromDb.HashAttributes == "" {
-		t.Error("Expected non-empty HashAttributes")
+	if dagFromDb.HashDagMeta == "" {
+		t.Error("Expected non-empty HashDagMeta")
 	}
-	return dagFromDb.HashTasks, dagFromDb.HashAttributes
+	return dagFromDb.HashTasks, dagFromDb.HashDagMeta
 }

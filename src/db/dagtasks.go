@@ -29,7 +29,7 @@ type DagTask struct {
 func (c *Client) InsertDagTasks(d dag.Dag) error {
 	start := time.Now()
 	insertTs := time.Now().Format(InsertTsFormat)
-	dagId := string(d.Attr.Id)
+	dagId := string(d.Id)
 	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start syncing dag and dagtasks table...", LOG_PREFIX)
 	tx, _ := c.dbConn.Begin()
 
