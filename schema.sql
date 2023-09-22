@@ -30,3 +30,18 @@ CREATE TABLE IF NOT EXISTS dagtasks (
     PRIMARY KEY (DagId, TaskId, IsCurrent, InsertTs)
 );
 
+-- Table dagruns stores DAG runs information. Runs might be both scheduled for manually triggered.
+CREATE TABLE IF NOT EXISTS dagruns (
+    RunId INT PRIMARY KEY,  -- Run ID - auto increments
+    DagId TEXT NOT NULL,    -- DAG ID
+    ExecTs TEXT NOT NULL,   -- Execution timestamp
+    InsertTs TEXT NOT NULL, -- Row insertion timestamp
+    Status TEXT NOT NULL   -- DAG run status
+);
+
+
+-- TODO: Think about caching latest dagrun into a separate table with PK(DagId)
+
+
+
+
