@@ -6,7 +6,7 @@ import (
 )
 
 func TestAddDagToRegistry(t *testing.T) {
-	dag := New(Id("test_dag")).AddSchedule(IntervalSchedule{Interval: 1 * time.Minute}).Done()
+	dag := New(Id("test_dag")).AddSchedule(FixedSchedule{Interval: 1 * time.Minute}).Done()
 	Add(dag)
 	d2, getErr := Get(Id("test_dag"))
 	if getErr != nil {

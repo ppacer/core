@@ -67,7 +67,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 		t.Fatalf("Expected %d dag tasks in dagtasks table, got: %d", tasksNum, len(dagtasksDb1))
 	}
 
-	if dagDb1 != dagDb2 {
+	if !dagDb1.Equals(dagDb2) {
 		t.Fatalf("Expected the same dag row from dags table after the second sync. After 1st: [%v], after 2nd: [%v]",
 			dagDb1, dagDb2)
 	}
@@ -113,7 +113,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	}
 
 	// Update DAG attributes
-	d.Attr.Schedule = "8 8 * * 1-5"
+	d.Attr.Tags = []string{"test", "test2"}
 
 	// Second sync - should not change anything
 	s2Err := syncDag(c, d)
@@ -128,11 +128,11 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
 	}
-	if dagDb1 == dagDb2 {
+	if dagDb1.Equals(dagDb2) {
 		t.Fatal("Expected the row in dags table to be different after DAG's attr were updated")
 	}
-	if dagDb1.HashAttributes == dagDb2.HashAttributes {
-		t.Errorf("Expected different HashAttr after the updated, but is unchanged: %s", dagDb1.HashAttributes)
+	if dagDb1.HashDagMeta == dagDb2.HashDagMeta {
+		t.Errorf("Expected different HashDagMeta after the updated, but is unchanged: %s", dagDb1.HashDagMeta)
 	}
 	if dagDb1.Attributes == dagDb2.Attributes {
 		t.Errorf("Expected different Attributes after the updated, but is unchanged: %s", dagDb1.Attributes)
@@ -192,15 +192,15 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
 	}
-	if dagDb1 == dagDb2 {
+	if dagDb1.Equals(dagDb2) {
 		t.Fatal("Expected the row in dags table to be different after DAG's attr were updated")
 	}
 	if dagDb1.HashTasks == dagDb2.HashTasks {
 		t.Errorf("Expected different HashTasks after the update, but is unchanged: %s", dagDb1.HashTasks)
 	}
-	if dagDb1.HashAttributes != dagDb2.HashAttributes {
-		t.Errorf("Expected HashAttr to be unchanged after the update, got different - before: %s, after: %s",
-			dagDb1.HashAttributes, dagDb2.HashAttributes)
+	if dagDb1.HashDagMeta != dagDb2.HashDagMeta {
+		t.Errorf("Expected HashDagMeta to be unchanged after the update, got different - before: %s, after: %s",
+			dagDb1.HashDagMeta, dagDb2.HashDagMeta)
 	}
 	if dagDb1.Attributes != dagDb2.Attributes {
 		t.Errorf("Expected Attributes to be unchanged after the update, got different - before: %s, after: %s",
@@ -226,7 +226,9 @@ func verySimpleDag(dagId string) dag.Dag {
 	start.Next(&t)
 	t.Next(&end)
 
-	attr := dag.Attr{Id: dag.Id(dagId), Schedule: "5 7 * * *"}
-	dag := dag.New(attr, &start)
+	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	sched := dag.FixedSchedule{Interval: 5 * time.Minute, Start: startTs}
+	attr := dag.Attr{Tags: []string{"test"}}
+	dag := dag.New(dag.Id(dagId)).AddSchedule(&sched).AddRoot(&start).AddAttributes(attr).Done()
 	return dag
 }

@@ -118,7 +118,7 @@ func TestInsertEmptyDagTasks(t *testing.T) {
 	}
 
 	// DAG with no tasks
-	sched := dag.IntervalSchedule{Start: startTs, Interval: 1 * time.Hour}
+	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
 	d := dag.New(dag.Id("test")).AddSchedule(sched).Done()
 
 	iErr := c.InsertDagTasks(d)
@@ -165,7 +165,7 @@ func simpleDag(dagId string, innerTasks int) dag.Dag {
 		prev = &t
 	}
 
-	sched := dag.IntervalSchedule{Start: startTs, Interval: 1 * time.Hour}
+	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
 	dag := dag.New(dag.Id(dagId)).AddSchedule(sched).AddRoot(&start).Done()
 
 	return dag

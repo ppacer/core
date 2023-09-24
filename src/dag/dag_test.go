@@ -20,7 +20,7 @@ func TestDagNew(t *testing.T) {
 	end := Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
 
-	sched := IntervalSchedule{startTs, 5 * time.Second}
+	sched := FixedSchedule{startTs, 5 * time.Second}
 	dag := New("mock_dag").AddSchedule(sched).AddRoot(&start).Done()
 	fmt.Println(dag)
 
@@ -130,6 +130,6 @@ func TestDagPrint(t *testing.T) {
 	t3.Next(&t4)
 	t4.Next(&end)
 
-	dag := New(Id("mock_dag_2")).AddSchedule(IntervalSchedule{startTs, 1 * time.Hour}).AddRoot(&start).Done()
+	dag := New(Id("mock_dag_2")).AddSchedule(FixedSchedule{startTs, 1 * time.Hour}).AddRoot(&start).Done()
 	fmt.Println(dag)
 }
