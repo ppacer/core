@@ -1,6 +1,7 @@
 package db
 
 import (
+	"go_shed/src/timeutils"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 		t.Error(err)
 	}
 	dagId := "mock_dag"
-	execTs := time.Now().Format(InsertTsFormat)
+	execTs := timeutils.ToString(time.Now())
 	runId, iErr := c.InsertDagRun(dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
@@ -25,7 +26,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 		t.Errorf("Expected 1 row got: %d", c1)
 	}
 
-	execTs = time.Now().Format(InsertTsFormat)
+	execTs = timeutils.ToString(time.Now())
 	runId, iErr = c.InsertDagRun(dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())

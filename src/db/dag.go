@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"go_shed/src/dag"
+	"go_shed/src/timeutils"
 	"go_shed/src/version"
 	"time"
 
@@ -38,7 +39,7 @@ func (c *Client) ReadDag(dagId string) (Dag, error) {
 // Upsert inserts or updates DAG details in dags table.
 func (c *Client) UpsertDag(d dag.Dag) error {
 	start := time.Now()
-	insertTs := time.Now().Format(InsertTsFormat)
+	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
 	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start upserting dag...", LOG_PREFIX)
 	tx, _ := c.dbConn.Begin()
@@ -46,6 +47,7 @@ func (c *Client) UpsertDag(d dag.Dag) error {
 	// Check if there is already a record for given DAG
 	currDagRow, currErr := c.readDagTx(tx, dagId)
 	if currErr == sql.ErrNoRows {
+		// If no, then simply insert
 		dag := fromDagToDag(d, insertTs)
 		iErr := c.insertDag(tx, dag, insertTs)
 		cErr := tx.Commit()
@@ -57,8 +59,7 @@ func (c *Client) UpsertDag(d dag.Dag) error {
 		log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Msgf("[%s] Inserted new DAG into dags table", LOG_PREFIX)
 		return iErr
 	}
-
-	// If no, then simply insert
+	// Otherwise we need to update existing entry in dags table
 	updatedDag := dagUpdate(d, currDagRow, insertTs)
 	uErr := c.updateDag(tx, updatedDag)
 
@@ -140,7 +141,7 @@ func fromDagToDag(d dag.Dag, createTs string) Dag {
 	if d.Schedule != nil {
 		schedStr := (*d.Schedule).String()
 		sched = &schedStr
-		startStr := (*d.Schedule).StartTime().Format(InsertTsFormat)
+		startStr := timeutils.ToString((*d.Schedule).StartTime())
 		dagStart = &startStr
 	}
 	return Dag{

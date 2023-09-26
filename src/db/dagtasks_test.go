@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"go_shed/src/dag"
+	"go_shed/src/timeutils"
 	"go_shed/src/user/tasks"
 	"math/rand"
 	"testing"
@@ -34,7 +35,7 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 
 	tx, _ := c.dbConn.Begin()
 	task := tasks.PrintTask{Name: "db_test"}
-	insertTs := time.Now().Format(InsertTsFormat)
+	insertTs := timeutils.ToString(time.Now())
 	err = c.insertSingleDagTask(tx, "db_dag", task, insertTs)
 	cErr := tx.Commit()
 	if cErr != nil {

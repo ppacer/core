@@ -1,6 +1,7 @@
 package db
 
 import (
+	"go_shed/src/timeutils"
 	"go_shed/src/version"
 	"time"
 
@@ -65,7 +66,7 @@ func (c *Client) ReadDagRuns(dagId string, topN int) ([]DagRun, error) {
 // DagRunStatusScheduled. RunId for just inserted dag run is returned or -1 in case when error is not nil.
 func (c *Client) InsertDagRun(dagId, execTs string) (int64, error) {
 	start := time.Now()
-	insertTs := time.Now().Format(InsertTsFormat)
+	insertTs := timeutils.ToString(time.Now())
 	log.Info().Str("dagId", dagId).Str("execTs", insertTs).Msgf("[%s] Start inserting dag run...", LOG_PREFIX)
 	res, err := c.dbConn.Exec(c.insertDagRunQuery(), dagId, execTs, insertTs, DagRunStatusScheduled, version.Version)
 	if err != nil {

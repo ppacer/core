@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"go_shed/src/dag"
+	"go_shed/src/timeutils"
 	"go_shed/src/version"
 	"reflect"
 	"time"
@@ -28,7 +29,7 @@ type DagTask struct {
 // rollbacked (in terms of SQL transactions).
 func (c *Client) InsertDagTasks(d dag.Dag) error {
 	start := time.Now()
-	insertTs := time.Now().Format(InsertTsFormat)
+	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
 	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start syncing dag and dagtasks table...", LOG_PREFIX)
 	tx, _ := c.dbConn.Begin()
