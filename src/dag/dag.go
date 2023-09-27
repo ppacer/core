@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go_shed/src/timeutils"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 const LOG_PREFIX = "dag"
-const TsFormat = "2006-01-02T15:04:05.999999Z07:00"
 
 var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
 
@@ -99,7 +99,7 @@ func (d *Dag) HashDagMeta() string {
 	startTsStr := ""
 	if d.Schedule != nil {
 		sched = (*d.Schedule).String()
-		startTsStr = (*d.Schedule).StartTime().Format(TsFormat)
+		startTsStr = timeutils.ToString((*d.Schedule).StartTime())
 	}
 
 	hasher := sha256.New()

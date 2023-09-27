@@ -27,7 +27,7 @@ func createHelloDag() dag.Dag {
 	wait5s.Next(&end)
 
 	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	sched := dag.IntervalSchedule{Interval: 1 * time.Minute, Start: startTs}
+	sched := dag.FixedSchedule{Interval: 1 * time.Minute, Start: startTs}
 	attr := dag.Attr{Tags: []string{"test"}}
 	d := dag.New(dag.Id("hello_dag")).
 		AddSchedule(&sched).
