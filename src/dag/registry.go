@@ -30,10 +30,10 @@ func Get(dagId Id) (Dag, error) {
 }
 
 // List lists all DAGs in the registry.
-func List() []Id {
-	dagIds := make([]Id, 0, len(registry))
-	for id := range registry {
-		dagIds = append(dagIds, id)
+func List() []Dag {
+	dags := make([]Dag, 0, len(registry))
+	for _, dag := range registry {
+		dags = append(dags, dag)
 	}
-	return dagIds
+	return dags
 }

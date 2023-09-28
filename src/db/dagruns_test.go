@@ -283,6 +283,65 @@ func TestDagRunUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestDagRunUpdateStatusNoRun(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	// There is no dagruns rows at all at this point
+	const status = "TEST_STATUS"
+	uErr := c.UpdateDagRunStatus(1234, status)
+	if uErr == nil {
+		t.Error("Expected non-empty error while updating dag run state for non existing runId")
+	}
+}
+
+func TestDagRunExistsOnEmpty(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId := "mock_dag_1"
+	timestamp := "2023-09-23T10:10:00"
+
+	exists, err := c.DagRunExists(dagId, timestamp)
+	if err != nil {
+		t.Errorf("Expected non-nil error, got: %s", err.Error())
+	}
+	if exists {
+		t.Error("DagRunExists on empty table should return false")
+	}
+}
+
+func TestDagRunExistsSimple(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId := "mock_dag"
+	timestamps := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+		"2023-09-23T11:00:00",
+	}
+	for _, ts := range timestamps {
+		insertDagRun(c, dagId, ts, t)
+	}
+
+	for _, ts := range timestamps {
+		exists, err := c.DagRunExists(dagId, ts)
+		if err != nil {
+			t.Errorf("Expected non-nil error, got: %s", err.Error())
+		}
+		if !exists {
+			t.Error("DagRunExists does not exist but should")
+		}
+	}
+}
+
 func insertDagRun(c *Client, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(dagId, execTs)
 	if iErr != nil {

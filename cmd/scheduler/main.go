@@ -31,7 +31,6 @@ func main() {
 	start(dbClient)
 
 	// Endpoints
-	http.HandleFunc("/hello", ss.HelloHandler)
 	http.HandleFunc("/dag/list", ss.ListDagsHandler)
 	http.HandleFunc("/task/next", ss.NextTaskHandler)
 	http.HandleFunc("/shutdown", ss.ShutdownHandler)
@@ -48,7 +47,7 @@ func (ss *SharedState) ListDagsHandler(w http.ResponseWriter, r *http.Request) {
 	defer ss.CheckIfCanSafelyExit()
 	defer ss.FinishEndpoint()
 	dags := dag.List()
-	fmt.Fprintf(w, "%s", dags[0])
+	fmt.Fprintf(w, "%s", string(dags[0].Id))
 }
 
 func (ss *SharedState) NextTaskHandler(w http.ResponseWriter, r *http.Request) {
@@ -62,20 +61,6 @@ func (ss *SharedState) NextTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprint(w, string(tteJson))
-}
-
-func (ss *SharedState) HelloHandler(w http.ResponseWriter, r *http.Request) {
-	ss.StartEndpoint()
-	defer ss.CheckIfCanSafelyExit()
-	defer ss.FinishEndpoint()
-
-	attr := dag.Attr{Id: "test_dag_from_scheduler", Schedule: "10 * * * *"}
-	start := dag.Node{Task: testTask{"start"}}
-	end := dag.Node{Task: testTask{"end"}}
-	start.Next(&end)
-
-	dag := dag.New(attr, &start)
-	fmt.Fprintf(w, "%s\n", dag.String())
 }
 
 func (ss *SharedState) ShutdownHandler(w http.ResponseWriter, r *http.Request) {

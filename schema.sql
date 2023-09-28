@@ -32,12 +32,13 @@ CREATE TABLE IF NOT EXISTS dagtasks (
 
 -- Table dagruns stores DAG runs information. Runs might be both scheduled for manually triggered.
 CREATE TABLE IF NOT EXISTS dagruns (
-    RunId INTEGER PRIMARY KEY,  -- Run ID - auto increments
-    DagId TEXT NOT NULL,    -- DAG ID
-    ExecTs TEXT NOT NULL,   -- Execution timestamp
-    InsertTs TEXT NOT NULL, -- Row insertion timestamp
-    Status TEXT NOT NULL,   -- DAG run status
-    Version TEXT NOT NULL   -- Scheduler Version
+    RunId INTEGER PRIMARY KEY,      -- Run ID - auto increments
+    DagId TEXT NOT NULL,            -- DAG ID
+    ExecTs TEXT NOT NULL,           -- Execution timestamp
+    InsertTs TEXT NOT NULL,         -- Row insertion timestamp
+    Status TEXT NOT NULL,           -- DAG run status
+    StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
+    Version TEXT NOT NULL           -- Scheduler Version
 );
 
 

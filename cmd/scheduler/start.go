@@ -23,10 +23,11 @@ func start(dbClient *db.Client) {
 func syncDags(dbClient *db.Client) error {
 	start := time.Now()
 	log.Info().Msg("Start syncing dag.registry with dags and dagtasks tables...")
-	for _, dagId := range dag.List() {
-		d, _ := dag.Get(dagId)
+	for _, d := range dag.List() {
 		syncErr := syncDag(dbClient, d)
 		if syncErr != nil {
+			// TODO(dskrzypiec): Probably we should retunr []error and don't stop when syncing one DAG would fail
+			// This should be solved together with general approach to error handling in the scheduler.
 			return syncErr
 		}
 	}
@@ -36,7 +37,7 @@ func syncDags(dbClient *db.Client) error {
 
 // Synchronize given DAG with dags and dagtasks tables in the database.
 func syncDag(dbClient *db.Client, d dag.Dag) error {
-	dagId := string(d.Attr.Id)
+	dagId := string(d.Id)
 	dbDag, dbRErr := dbClient.ReadDag(dagId)
 	if dbRErr != nil && dbRErr != sql.ErrNoRows {
 		log.Error().Err(dbRErr).Str("dagId", dagId).Msgf("Could not get DAg metadata from dags table")
@@ -57,7 +58,7 @@ func syncDag(dbClient *db.Client, d dag.Dag) error {
 		return nil
 	}
 	// Check if update is needed
-	if dbDag.HashAttributes == d.HashAttr() && dbDag.HashTasks == d.HashTasks() {
+	if dbDag.HashDagMeta == d.HashDagMeta() && dbDag.HashTasks == d.HashTasks() {
 		log.Debug().Str("dagId", dagId).Msg("There is no need for update. HashAttr and HashTasks are not changed")
 		return nil
 	}

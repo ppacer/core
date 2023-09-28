@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+	"errors"
 	"go_shed/src/timeutils"
 	"go_shed/src/version"
 	"time"
@@ -118,23 +120,47 @@ func (c *Client) ReadLatestDagRuns() ([]DagRun, error) {
 	return dagruns, nil
 }
 
+// Updates dagrun for given runId and status.
 func (c *Client) UpdateDagRunStatus(runId int64, status string) error {
 	start := time.Now()
 	updateTs := timeutils.ToString(time.Now())
 	log.Info().Int64("runId", runId).Str("status", status).Msgf("[%s] Start updating dag run status...", LOG_PREFIX)
-	_, err := c.dbConn.Exec(c.updateDagRunStatusQuery(), status, updateTs, runId)
+	res, err := c.dbConn.Exec(c.updateDagRunStatusQuery(), status, updateTs, runId)
 	if err != nil {
 		log.Error().Err(err).Int64("runId", runId).Str("status", status).Msgf("[%s] Cannot update dag run", LOG_PREFIX)
 		return err
+	}
+	rowsUpdated, _ := res.RowsAffected()
+	if rowsUpdated == 0 {
+		return sql.ErrNoRows
+	}
+	if rowsUpdated > 1 {
+		log.Error().Int64("runId", runId).Int64("rowsUpdated", rowsUpdated).
+			Msgf("[%s] Seems to many rows be updated. Expected to be only one.", LOG_PREFIX)
+		return errors.New("too many rows updated")
 	}
 	log.Info().Int64("runId", runId).Str("status", status).Dur("durationMs", time.Since(start)).
 		Msgf("[%s] Finished updating dag run.", LOG_PREFIX)
 	return nil
 }
 
+// DagRunExists checks whenever dagrun already exists for given DAG ID and schedule timestamp.
 func (c *Client) DagRunExists(dagId, execTs string) (bool, error) {
-	// TODO
-	return false, nil
+	start := time.Now()
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Msgf("[%s] Start DagRunExists query.", LOG_PREFIX)
+
+	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=?"
+	row := c.dbConn.QueryRow(q, dagId, execTs)
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		log.Error().Err(err).Str("dagId", dagId).Str("execTs", execTs).Msgf("[%s] Cannot execute DagRunExists query", LOG_PREFIX)
+		return false, err
+	}
+
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished DagRunExists query", LOG_PREFIX)
+	return count > 0, nil
 }
 
 func (c *Client) readDagRunsQuery(topN int) string {
