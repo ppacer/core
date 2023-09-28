@@ -233,6 +233,56 @@ func TestReadLatestDagRunsSimple(t *testing.T) {
 	}
 }
 
+func TestDagRunUpdateStatus(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId := "mock_dag_1"
+	timestamp := "2023-09-23T10:10:00"
+	insertDagRun(c, dagId, timestamp, t)
+
+	cnt := c.Count("dagruns")
+	if cnt != 1 {
+		t.Errorf("Expected 1 dag runs for %s, got %d", dagId, cnt)
+	}
+	dagruns, err := c.ReadDagRuns(dagId, 1)
+	if err != nil {
+		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err.Error())
+	}
+
+	dr := dagruns[0]
+	t1, tErr := timeutils.FromString(dr.StatusUpdateTs)
+	if tErr != nil {
+		t.Errorf("Cannot convert to time.Time from %s", dr.StatusUpdateTs)
+	}
+	if dr.Status != DagRunStatusScheduled {
+		t.Errorf("Expected status %s for the dag run before update, got: %s", DagRunStatusScheduled, dr.Status)
+	}
+
+	time.Sleep(1 * time.Millisecond)
+	const updateStatus1 = "TEST_STATUS_1"
+	uErr := c.UpdateDagRunStatus(dr.RunId, updateStatus1)
+	if uErr != nil {
+		t.Fatalf("Error while updating dagrun for RunId=%d: %s", dr.RunId, uErr.Error())
+	}
+	dagruns2, err2 := c.ReadDagRuns(dagId, 1)
+	if err2 != nil {
+		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err2.Error())
+	}
+	dr = dagruns2[0]
+	if dr.Status != updateStatus1 {
+		t.Errorf("Expected status %s after the update, but got: %s", updateStatus1, dr.Status)
+	}
+	t2, tErr2 := timeutils.FromString(dr.StatusUpdateTs)
+	if tErr2 != nil {
+		t.Errorf("Cannot convert to time.Time from %s after the update", dr.StatusUpdateTs)
+	}
+	if t1.Compare(t2) != -1 {
+		t.Errorf("Expecte to be %v earlier than %v", t1, t2)
+	}
+}
+
 func insertDagRun(c *Client, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(dagId, execTs)
 	if iErr != nil {

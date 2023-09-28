@@ -9,12 +9,13 @@ import (
 )
 
 type DagRun struct {
-	RunId    int64
-	DagId    string
-	ExecTs   string
-	InsertTs string
-	Status   string
-	Version  string
+	RunId          int64
+	DagId          string
+	ExecTs         string
+	InsertTs       string
+	Status         string
+	StatusUpdateTs string
+	Version        string
 }
 
 const (
@@ -39,20 +40,21 @@ func (c *Client) ReadDagRuns(dagId string, topN int) ([]DagRun, error) {
 
 	for rows.Next() {
 		var runId int64
-		var dagId, execTs, insertTs, status, version string
+		var dagId, execTs, insertTs, status, statusTs, version string
 
-		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status)
+		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
 		if scanErr != nil {
 			log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
 			return nil, scanErr
 		}
 		dagrun := DagRun{
-			RunId:    runId,
-			DagId:    dagId,
-			ExecTs:   execTs,
-			InsertTs: insertTs,
-			Status:   status,
-			Version:  version,
+			RunId:          runId,
+			DagId:          dagId,
+			ExecTs:         execTs,
+			InsertTs:       insertTs,
+			Status:         status,
+			StatusUpdateTs: statusTs,
+			Version:        version,
 		}
 		dagruns = append(dagruns, dagrun)
 	}
@@ -68,7 +70,7 @@ func (c *Client) InsertDagRun(dagId, execTs string) (int64, error) {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	log.Info().Str("dagId", dagId).Str("execTs", insertTs).Msgf("[%s] Start inserting dag run...", LOG_PREFIX)
-	res, err := c.dbConn.Exec(c.insertDagRunQuery(), dagId, execTs, insertTs, DagRunStatusScheduled, version.Version)
+	res, err := c.dbConn.Exec(c.insertDagRunQuery(), dagId, execTs, insertTs, DagRunStatusScheduled, insertTs, version.Version)
 	if err != nil {
 		log.Error().Err(err).Str("dagId", dagId).Str("execTs", execTs).Msgf("[%s] Cannot insert new dag run", LOG_PREFIX)
 		return -1, err
@@ -93,20 +95,21 @@ func (c *Client) ReadLatestDagRuns() ([]DagRun, error) {
 
 	for rows.Next() {
 		var runId int64
-		var dagId, execTs, insertTs, status, version string
+		var dagId, execTs, insertTs, status, statusTs, version string
 
-		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status)
+		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
 		if scanErr != nil {
 			log.Error().Err(scanErr).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
 			return nil, scanErr
 		}
 		dagrun := DagRun{
-			RunId:    runId,
-			DagId:    dagId,
-			ExecTs:   execTs,
-			InsertTs: insertTs,
-			Status:   status,
-			Version:  version,
+			RunId:          runId,
+			DagId:          dagId,
+			ExecTs:         execTs,
+			InsertTs:       insertTs,
+			Status:         status,
+			StatusUpdateTs: statusTs,
+			Version:        version,
 		}
 		dagruns = append(dagruns, dagrun)
 	}
@@ -116,7 +119,16 @@ func (c *Client) ReadLatestDagRuns() ([]DagRun, error) {
 }
 
 func (c *Client) UpdateDagRunStatus(runId int64, status string) error {
-	// TODO
+	start := time.Now()
+	updateTs := timeutils.ToString(time.Now())
+	log.Info().Int64("runId", runId).Str("status", status).Msgf("[%s] Start updating dag run status...", LOG_PREFIX)
+	_, err := c.dbConn.Exec(c.updateDagRunStatusQuery(), status, updateTs, runId)
+	if err != nil {
+		log.Error().Err(err).Int64("runId", runId).Str("status", status).Msgf("[%s] Cannot update dag run", LOG_PREFIX)
+		return err
+	}
+	log.Info().Int64("runId", runId).Str("status", status).Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished updating dag run.", LOG_PREFIX)
 	return nil
 }
 
@@ -133,7 +145,9 @@ func (c *Client) readDagRunsQuery(topN int) string {
 				DagId,
 				ExecTs,
 				InsertTs,
-				Status
+				Status,
+				StatusUpdateTs,
+				Version
 			FROM
 				dagruns
 			WHERE
@@ -148,7 +162,9 @@ func (c *Client) readDagRunsQuery(topN int) string {
 			DagId,
 			ExecTs,
 			InsertTs,
-			Status
+			Status,
+			StatusUpdateTs,
+			Version
 		FROM
 			dagruns
 		WHERE
@@ -162,8 +178,8 @@ func (c *Client) readDagRunsQuery(topN int) string {
 
 func (c *Client) insertDagRunQuery() string {
 	return `
-		INSERT INTO dagruns (DagId, ExecTs, InsertTs, Status, Version)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO dagruns (DagId, ExecTs, InsertTs, Status, StatusUpdateTs, Version)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 }
 
@@ -183,10 +199,24 @@ func (c *Client) latestDagRunsQuery() string {
 			d.DagId,
 			d.ExecTs,
 			d.InsertTs,
-			d.Status
+			d.Status,
+			d.StatusUpdateTs,
+			d.Version
 		FROM
 			dagruns d
 		INNER JOIN
 			latestDagRuns ldr ON d.RunId = ldr.LatestRunId
+	`
+}
+
+func (c *Client) updateDagRunStatusQuery() string {
+	return `
+	UPDATE
+		dagruns
+	SET
+		Status = ?,
+		StatusUpdateTs = ?
+	WHERE
+		RunId = ?
 	`
 }
