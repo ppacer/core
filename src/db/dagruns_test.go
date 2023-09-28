@@ -177,6 +177,62 @@ func TestInsertAndReadDagRunsTop1000(t *testing.T) {
 	}
 }
 
+func TestReadLatestDagRunsSimple(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId1 := "mock_dag_1"
+	timestamps1 := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+		"2023-09-23T11:00:00",
+	}
+	dagId2 := "mock_dag_2"
+	timestamp2 := "2023-09-23T10:10:00"
+
+	// Insert dagruns for mock_dag_1
+	for _, ts := range timestamps1 {
+		insertDagRun(c, dagId1, ts, t)
+	}
+
+	// Insert dagrun for mock_dag_2
+	insertDagRun(c, dagId2, timestamp2, t)
+	dag1Count := c.CountWhere("dagruns", "DagId='mock_dag_1'")
+	if dag1Count != 6 {
+		t.Errorf("Expected 6 dag runs for %s, got %d", dagId1, dag1Count)
+	}
+	dag2Count := c.CountWhere("dagruns", "DagId='mock_dag_2'")
+	if dag2Count != 1 {
+		t.Errorf("Expected 1 dag run for %s, got %d", dagId2, dag2Count)
+	}
+
+	latestDagRuns, lErr := c.ReadLatestDagRuns()
+	if lErr != nil {
+		t.Fatalf("Error while reading latest dag runs: %s", lErr.Error())
+	}
+	if len(latestDagRuns) != 2 {
+		t.Errorf("Expected latest dag runs for 2 dags, got %d", len(latestDagRuns))
+	}
+	for _, ldr := range latestDagRuns {
+		if ldr.DagId == dagId1 && ldr.ExecTs != timestamps1[5] {
+			t.Errorf("Expected latest dag run for %s to be %s, got: %s", dagId1, timestamps1[5], ldr.ExecTs)
+		}
+		if ldr.DagId == dagId2 && ldr.ExecTs != timestamp2 {
+			t.Errorf("Expected latest dag run for %s to be %s, got: %s", dagId2, timestamp2, ldr.ExecTs)
+		}
+		if ldr.DagId == dagId1 && ldr.RunId != 6 {
+			t.Errorf("Expected latest dag run for %s to have runId=%d, got: %d", dagId1, 6, ldr.RunId)
+		}
+		if ldr.DagId == dagId2 && ldr.RunId != 7 {
+			t.Errorf("Expected latest dag run for %s to have runId=%d, got: %d", dagId2, 1, ldr.RunId)
+		}
+	}
+}
+
 func insertDagRun(c *Client, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(dagId, execTs)
 	if iErr != nil {
