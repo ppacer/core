@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"go_shed/src/timeutils"
 	"testing"
 	"time"
@@ -11,9 +12,10 @@ func TestInsertDagRunSimple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag"
 	execTs := timeutils.ToString(time.Now())
-	runId, iErr := c.InsertDagRun(dagId, execTs)
+	runId, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}
@@ -27,7 +29,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 	}
 
 	execTs = timeutils.ToString(time.Now())
-	runId, iErr = c.InsertDagRun(dagId, execTs)
+	runId, iErr = c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}
@@ -45,6 +47,7 @@ func TestInsertAndReadDagRunsAll(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag"
 	timestamps := []string{
 		"2023-09-23T10:10:00",
@@ -55,11 +58,11 @@ func TestInsertAndReadDagRunsAll(t *testing.T) {
 		"2023-09-23T11:00:00",
 	}
 	for _, ts := range timestamps {
-		insertDagRun(c, dagId, ts, t)
+		insertDagRun(c, ctx, dagId, ts, t)
 	}
 
 	// Read all dag runs for mock_dag
-	dagRunsAll, rErr := c.ReadDagRuns(dagId, -1)
+	dagRunsAll, rErr := c.ReadDagRuns(ctx, dagId, -1)
 	if rErr != nil {
 		t.Fatalf("Error while reading all dag runs for %s: %s", dagId, rErr.Error())
 	}
@@ -90,6 +93,7 @@ func TestInsertAndReadDagRunsTop3(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag"
 	timestamps := []string{
 		"2023-09-23T10:10:00",
@@ -100,12 +104,12 @@ func TestInsertAndReadDagRunsTop3(t *testing.T) {
 		"2023-09-23T11:00:00",
 	}
 	for _, ts := range timestamps {
-		insertDagRun(c, dagId, ts, t)
+		insertDagRun(c, ctx, dagId, ts, t)
 	}
 
 	// Read dag runs for top 3 runs
 	const topN = 3
-	dagRunsAll, rErr := c.ReadDagRuns(dagId, topN)
+	dagRunsAll, rErr := c.ReadDagRuns(ctx, dagId, topN)
 	if rErr != nil {
 		t.Fatalf("Error while reading all dag runs for %s: %s", dagId, rErr.Error())
 	}
@@ -136,6 +140,7 @@ func TestInsertAndReadDagRunsTop1000(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag"
 	timestamps := []string{
 		"2023-09-23T10:10:00",
@@ -146,12 +151,12 @@ func TestInsertAndReadDagRunsTop1000(t *testing.T) {
 		"2023-09-23T11:00:00",
 	}
 	for _, ts := range timestamps {
-		insertDagRun(c, dagId, ts, t)
+		insertDagRun(c, ctx, dagId, ts, t)
 	}
 
 	// Read all dag runs for mock_dag
 	const topN = 1000
-	dagRunsAll, rErr := c.ReadDagRuns(dagId, topN)
+	dagRunsAll, rErr := c.ReadDagRuns(ctx, dagId, topN)
 	if rErr != nil {
 		t.Fatalf("Error while reading all dag runs for %s: %s", dagId, rErr.Error())
 	}
@@ -177,11 +182,44 @@ func TestInsertAndReadDagRunsTop1000(t *testing.T) {
 	}
 }
 
+func TestInsertAndReadDagRunsTimeout(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag"
+	timestamps := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+		"2023-09-23T11:00:00",
+	}
+	for _, ts := range timestamps {
+		insertDagRun(c, ctx, dagId, ts, t)
+	}
+
+	// Read all dag runs for mock_dag
+	const topN = 1000
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Nanosecond)
+	defer cancel()
+	dagRunsAll, rErr := c.ReadDagRuns(ctx, dagId, topN)
+	if rErr == nil {
+		t.Error("Expected non-nil error for ReadDagRuns with Timeout in nanoseconds")
+	}
+	if dagRunsAll != nil {
+		t.Errorf("Expected nil ReadDagRuns result, got: %v", dagRunsAll)
+	}
+}
+
 func TestReadLatestDagRunsSimple(t *testing.T) {
 	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId1 := "mock_dag_1"
 	timestamps1 := []string{
 		"2023-09-23T10:10:00",
@@ -196,11 +234,11 @@ func TestReadLatestDagRunsSimple(t *testing.T) {
 
 	// Insert dagruns for mock_dag_1
 	for _, ts := range timestamps1 {
-		insertDagRun(c, dagId1, ts, t)
+		insertDagRun(c, ctx, dagId1, ts, t)
 	}
 
 	// Insert dagrun for mock_dag_2
-	insertDagRun(c, dagId2, timestamp2, t)
+	insertDagRun(c, ctx, dagId2, timestamp2, t)
 	dag1Count := c.CountWhere("dagruns", "DagId='mock_dag_1'")
 	if dag1Count != 6 {
 		t.Errorf("Expected 6 dag runs for %s, got %d", dagId1, dag1Count)
@@ -210,7 +248,7 @@ func TestReadLatestDagRunsSimple(t *testing.T) {
 		t.Errorf("Expected 1 dag run for %s, got %d", dagId2, dag2Count)
 	}
 
-	latestDagRuns, lErr := c.ReadLatestDagRuns()
+	latestDagRuns, lErr := c.ReadLatestDagRuns(ctx)
 	if lErr != nil {
 		t.Fatalf("Error while reading latest dag runs: %s", lErr.Error())
 	}
@@ -238,15 +276,16 @@ func TestDagRunUpdateStatus(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag_1"
 	timestamp := "2023-09-23T10:10:00"
-	insertDagRun(c, dagId, timestamp, t)
+	insertDagRun(c, ctx, dagId, timestamp, t)
 
 	cnt := c.Count("dagruns")
 	if cnt != 1 {
 		t.Errorf("Expected 1 dag runs for %s, got %d", dagId, cnt)
 	}
-	dagruns, err := c.ReadDagRuns(dagId, 1)
+	dagruns, err := c.ReadDagRuns(ctx, dagId, 1)
 	if err != nil {
 		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err.Error())
 	}
@@ -262,11 +301,11 @@ func TestDagRunUpdateStatus(t *testing.T) {
 
 	time.Sleep(1 * time.Millisecond)
 	const updateStatus1 = "TEST_STATUS_1"
-	uErr := c.UpdateDagRunStatus(dr.RunId, updateStatus1)
+	uErr := c.UpdateDagRunStatus(ctx, dr.RunId, updateStatus1)
 	if uErr != nil {
 		t.Fatalf("Error while updating dagrun for RunId=%d: %s", dr.RunId, uErr.Error())
 	}
-	dagruns2, err2 := c.ReadDagRuns(dagId, 1)
+	dagruns2, err2 := c.ReadDagRuns(ctx, dagId, 1)
 	if err2 != nil {
 		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err2.Error())
 	}
@@ -289,8 +328,9 @@ func TestDagRunUpdateStatusNoRun(t *testing.T) {
 		t.Error(err)
 	}
 	// There is no dagruns rows at all at this point
+	ctx := context.Background()
 	const status = "TEST_STATUS"
-	uErr := c.UpdateDagRunStatus(1234, status)
+	uErr := c.UpdateDagRunStatus(ctx, 1234, status)
 	if uErr == nil {
 		t.Error("Expected non-empty error while updating dag run state for non existing runId")
 	}
@@ -301,10 +341,11 @@ func TestDagRunExistsOnEmpty(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag_1"
 	timestamp := "2023-09-23T10:10:00"
 
-	exists, err := c.DagRunExists(dagId, timestamp)
+	exists, err := c.DagRunExists(ctx, dagId, timestamp)
 	if err != nil {
 		t.Errorf("Expected non-nil error, got: %s", err.Error())
 	}
@@ -318,6 +359,7 @@ func TestDagRunExistsSimple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx := context.Background()
 	dagId := "mock_dag"
 	timestamps := []string{
 		"2023-09-23T10:10:00",
@@ -328,11 +370,11 @@ func TestDagRunExistsSimple(t *testing.T) {
 		"2023-09-23T11:00:00",
 	}
 	for _, ts := range timestamps {
-		insertDagRun(c, dagId, ts, t)
+		insertDagRun(c, ctx, dagId, ts, t)
 	}
 
 	for _, ts := range timestamps {
-		exists, err := c.DagRunExists(dagId, ts)
+		exists, err := c.DagRunExists(ctx, dagId, ts)
 		if err != nil {
 			t.Errorf("Expected non-nil error, got: %s", err.Error())
 		}
@@ -342,8 +384,8 @@ func TestDagRunExistsSimple(t *testing.T) {
 	}
 }
 
-func insertDagRun(c *Client, dagId, execTs string, t *testing.T) {
-	_, iErr := c.InsertDagRun(dagId, execTs)
+func insertDagRun(c *Client, ctx context.Context, dagId, execTs string, t *testing.T) {
+	_, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}

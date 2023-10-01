@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"go_shed/src/dag"
 	"go_shed/src/db"
 	"go_shed/src/timeutils"
@@ -23,7 +24,8 @@ type ScheduledInstance struct {
 // that case they are sent onto the given channel. Watch checks DAG registry
 // every WatchInterval period. This function runs indefinitely.
 func Watch(dags []dag.Dag, scheduleChan chan<- ScheduledInstance, dbClient *db.Client) {
-	latestDagRunsCache := readLatestDagRunTimes(dbClient)
+	ctx := context.TODO() // Think about it
+	latestDagRunsCache := readLatestDagRunTimes(ctx, dbClient)
 	for {
 		trySchedule(dags, scheduleChan, latestDagRunsCache, dbClient)
 		time.Sleep(WatchInterval)
@@ -32,29 +34,30 @@ func Watch(dags []dag.Dag, scheduleChan chan<- ScheduledInstance, dbClient *db.C
 
 func trySchedule(dags []dag.Dag, scheduleChan chan<- ScheduledInstance, cache map[dag.Id]time.Time, dbClient *db.Client) {
 	for _, d := range dags {
+		ctx := context.TODO() // Think about it
 		if shouldBe, schedule := shouldBeSheduled(d, time.Now()); shouldBe {
 			// Check the cache first
 			if latestTs, isInCache := cache[d.Id]; isInCache && schedule.Equal(latestTs) {
 				continue
 			}
 			execTs := timeutils.ToString(schedule)
-			alreadyScheduled, dreErr := dbClient.DagRunExists(string(d.Id), execTs)
+			alreadyScheduled, dreErr := dbClient.DagRunExists(ctx, string(d.Id), execTs)
 			if dreErr != nil {
 				// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
 			}
 			if alreadyScheduled {
 				continue
 			}
-			runId, iErr := dbClient.InsertDagRun(string(d.Id), execTs)
+			runId, iErr := dbClient.InsertDagRun(ctx, string(d.Id), execTs)
 			if iErr != nil {
 				// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
 			}
-			uErr := dbClient.UpdateDagRunStatus(runId, StatusReadyToSchedule)
+			uErr := dbClient.UpdateDagRunStatus(ctx, runId, StatusReadyToSchedule)
 			if uErr != nil {
 				// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
 			}
 			scheduleChan <- ScheduledInstance{Dag: d, AtTime: schedule}
-			uErr = dbClient.UpdateDagRunStatus(runId, StatusScheduled)
+			uErr = dbClient.UpdateDagRunStatus(ctx, runId, StatusScheduled)
 			if uErr != nil {
 				// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
 			}
@@ -80,9 +83,9 @@ func shouldBeSheduled(dag dag.Dag, currentTime time.Time) (bool, time.Time) {
 
 // Reads from database latest dagrun for each DAG and caches its execution timestamps. In case of problems with
 // database connection cache can be empty.
-func readLatestDagRunTimes(dbClient *db.Client) map[dag.Id]time.Time {
+func readLatestDagRunTimes(ctx context.Context, dbClient *db.Client) map[dag.Id]time.Time {
 	latestDagRunTime := make(map[dag.Id]time.Time)
-	latestDagRuns, err := dbClient.ReadLatestDagRuns()
+	latestDagRuns, err := dbClient.ReadLatestDagRuns(ctx)
 	if err != nil {
 		log.Error().Msgf("[%s] Failed to load latest DAG runs to create a cache. Cache is empty.", LOG_PREFIX)
 		return latestDagRunTime
