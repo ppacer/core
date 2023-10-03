@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"go_shed/src/dag"
@@ -18,7 +19,8 @@ func TestDagTestReadFromEmptyTable(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, rErr := c.ReadDagTask("hello", "say_hello")
+	ctx := context.Background()
+	_, rErr := c.ReadDagTask(ctx, "hello", "say_hello")
 	if rErr == nil {
 		t.Error("Expected ReadDagTask fail to reading non existent task")
 	}
@@ -33,10 +35,11 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 		t.Error(err)
 	}
 
+	ctx := context.Background()
 	tx, _ := c.dbConn.Begin()
 	task := tasks.PrintTask{Name: "db_test"}
 	insertTs := timeutils.ToString(time.Now())
-	err = c.insertSingleDagTask(tx, "db_dag", task, insertTs)
+	err = c.insertSingleDagTask(ctx, tx, "db_dag", task, insertTs)
 	cErr := tx.Commit()
 	if cErr != nil {
 		t.Error(cErr)
@@ -45,7 +48,7 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 		t.Errorf("Unexpected error while trying inserting dagtask to in-memory DB: %s", err.Error())
 	}
 
-	readTask, err := c.ReadDagTask("db_dag", task.Id())
+	readTask, err := c.ReadDagTask(ctx, "db_dag", task.Id())
 	if err != nil {
 		t.Errorf("Error while reading just inserted dagtask from in-memory DB: %s", err.Error())
 	}
@@ -67,11 +70,12 @@ func TestInsertDagTasks(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	ctx := context.Background()
 	dagId := "simple_dag"
 	innerTasks1 := rand.Intn(maxTasks) + 1
 	d := simpleDag(dagId, innerTasks1)
 	dTaskNum := len(d.Flatten())
-	iErr := c.InsertDagTasks(d)
+	iErr := c.InsertDagTasks(ctx, d)
 	if iErr != nil {
 		t.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
 		return
@@ -94,7 +98,7 @@ func TestInsertDagTasks(t *testing.T) {
 	innerTasks2 := rand.Intn(maxTasks) + 1
 	d2 := simpleDag("simple_dag", innerTasks2)
 	dTaskNum2 := len(d2.Flatten())
-	iErr = c.InsertDagTasks(d2)
+	iErr = c.InsertDagTasks(ctx, d2)
 	if iErr != nil {
 		t.Errorf("Error while inserting modified simple_dag tasks: %s", iErr.Error())
 		return
@@ -119,10 +123,11 @@ func TestInsertEmptyDagTasks(t *testing.T) {
 	}
 
 	// DAG with no tasks
+	ctx := context.Background()
 	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
 	d := dag.New(dag.Id("test")).AddSchedule(sched).Done()
 
-	iErr := c.InsertDagTasks(d)
+	iErr := c.InsertDagTasks(ctx, d)
 	if iErr != nil {
 		t.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
 		return
@@ -145,10 +150,11 @@ func BenchmarkDagTasksInsert(b *testing.B) {
 		b.Error(err)
 		return
 	}
+	ctx := context.Background()
 	d := simpleDag("simple_dag", 99)
 
 	for i := 0; i < b.N; i++ {
-		iErr := c.InsertDagTasks(d)
+		iErr := c.InsertDagTasks(ctx, d)
 		if iErr != nil {
 			b.Errorf("Error while inserting simple_dag tasks: %s", iErr.Error())
 			return
@@ -173,7 +179,8 @@ func simpleDag(dagId string, innerTasks int) dag.Dag {
 }
 
 func logDagTasks(c *Client, dagId string, t *testing.T) {
-	dts, err := c.ReadDagTasks(dagId)
+	ctx := context.Background()
+	dts, err := c.ReadDagTasks(ctx, dagId)
 	if err != nil {
 		t.Errorf("Could not read dagtasks for dagId=%s for debugging", dagId)
 	}

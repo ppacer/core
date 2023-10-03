@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"go_shed/src/dag"
@@ -27,7 +28,7 @@ type DagTask struct {
 // InsertDagTasks inserts the tasks of given DAG to dagtasks table and set it as the current version. Previous versions
 // would still be in dagtasks table but with set IsCurrent=0. In case of inserting any of dag's task insertion would be
 // rollbacked (in terms of SQL transactions).
-func (c *Client) InsertDagTasks(d dag.Dag) error {
+func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
@@ -35,14 +36,14 @@ func (c *Client) InsertDagTasks(d dag.Dag) error {
 	tx, _ := c.dbConn.Begin()
 
 	// Make IsCurrent=0 for outdated rows
-	uErr := c.outdateDagTasks(tx, dagId)
+	uErr := c.outdateDagTasks(ctx, tx, dagId)
 	if uErr != nil {
 		log.Error().Err(uErr).Str("dagId", dagId).Msgf("[%s] Cannot outdate old dagtasks", LOG_PREFIX)
 		return uErr
 	}
 
 	for _, task := range d.Flatten() {
-		iErr := c.insertSingleDagTask(tx, dagId, task, insertTs)
+		iErr := c.insertSingleDagTask(ctx, tx, dagId, task, insertTs)
 		if iErr != nil {
 			rollErr := tx.Rollback()
 			if rollErr != nil {
@@ -66,12 +67,12 @@ func (c *Client) InsertDagTasks(d dag.Dag) error {
 // insertSingleDagTask inserts new DagTask which represents a task within a DAG. Using multiple InsertDagTask for dagId and
 // task is a common case. Newely inserted version will have IsCurrent=1 and others will not. On database side (DagId,
 // TaskId, IsCurrent) defines primary key on dagtasks table.
-func (c *Client) insertSingleDagTask(tx *sql.Tx, dagId string, task dag.Task, insertTs string) error {
+func (c *Client) insertSingleDagTask(ctx context.Context, tx *sql.Tx, dagId string, task dag.Task, insertTs string) error {
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Str("taskId", task.Id()).Str("insertTs", insertTs).Msgf("[%s] Start inserting new DagTask.", LOG_PREFIX)
 
 	// Insert dagtask row
-	iErr := c.insertDagTask(tx, dagId, task, insertTs)
+	iErr := c.insertDagTask(ctx, tx, dagId, task, insertTs)
 	if iErr != nil {
 		log.Error().Err(iErr).Str("dagId", dagId).Str("taskId", task.Id()).Msgf("[%s] Cannot insert new dagtask", LOG_PREFIX)
 		return iErr
@@ -83,12 +84,13 @@ func (c *Client) insertSingleDagTask(tx *sql.Tx, dagId string, task dag.Task, in
 }
 
 // Insert new row in dagtasks table.
-func (c *Client) insertDagTask(tx *sql.Tx, dagId string, task dag.Task, insertTs string) error {
+func (c *Client) insertDagTask(ctx context.Context, tx *sql.Tx, dagId string, task dag.Task, insertTs string) error {
 	tTypeName := reflect.TypeOf(task).Name()
 	taskBody := dag.TaskExecuteSource(task)
 	taskHash := dag.TaskHash(task)
 
-	_, err := tx.Exec(
+	_, err := tx.ExecContext(
+		ctx,
 		c.dagTaskInsertQuery(),
 		dagId, task.Id(), 1, insertTs, version.Version, tTypeName, taskHash, taskBody,
 	)
@@ -99,8 +101,8 @@ func (c *Client) insertDagTask(tx *sql.Tx, dagId string, task dag.Task, insertTs
 }
 
 // Outdates all rows in dagtasks table for given dagId.
-func (c *Client) outdateDagTasks(tx *sql.Tx, dagId string) error {
-	_, err := tx.Exec(c.dagTaskOutdateQuery(), dagId)
+func (c *Client) outdateDagTasks(ctx context.Context, tx *sql.Tx, dagId string) error {
+	_, err := tx.ExecContext(ctx, c.dagTaskOutdateQuery(), dagId)
 	if err != nil {
 		return err
 	}
@@ -108,11 +110,11 @@ func (c *Client) outdateDagTasks(tx *sql.Tx, dagId string) error {
 }
 
 // ReadDagTasks reads all tasks for given dagId in the current version from dagtasks table.
-func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
+func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, error) {
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
 
-	rows, queryErr := c.dbConn.Query(c.readDagTasksQuery(), dagId)
+	rows, queryErr := c.dbConn.QueryContext(ctx, c.readDagTasksQuery(), dagId)
 	if queryErr != nil {
 		log.Error().Err(queryErr).Str("dagId", dagId).Msgf("[%s] Failed querying DagTasks.", LOG_PREFIX)
 		return nil, queryErr
@@ -121,6 +123,13 @@ func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
 	var tasks []DagTask
 
 	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			// Handle context cancellation or deadline exceeded
+			log.Warn().Err(ctx.Err()).Str("dagId", dagId).Msgf("[%s] Context done while processing DagTask rows.", LOG_PREFIX)
+			return nil, ctx.Err()
+		default:
+		}
 		var fetchedDagId, fetchedTaskId, typeName, insertTs, version, bodyHash, bodySource string
 		var isCurrentInt int
 
@@ -153,11 +162,11 @@ func (c *Client) ReadDagTasks(dagId string) ([]DagTask, error) {
 }
 
 // ReadDagTask reads single row (current version) from dagtasks table for given DAG ID and task ID.
-func (c *Client) ReadDagTask(dagId, taskId string) (DagTask, error) {
+func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask, error) {
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Str("taskId", taskId).Msgf("[%s] Start reading DagTasks.", LOG_PREFIX)
 
-	row := c.dbConn.QueryRow(c.readDagTaskQuery(), dagId, taskId)
+	row := c.dbConn.QueryRowContext(ctx, c.readDagTaskQuery(), dagId, taskId)
 	var dId, tId, typeName, insertTs, version, bodyHash, bodySource string
 	var isCurrent int
 	scanErr := row.Scan(&dId, &tId, &isCurrent, &insertTs, &version, &typeName, &bodyHash, &bodySource)

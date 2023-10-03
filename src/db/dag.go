@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"go_shed/src/dag"
@@ -25,9 +26,9 @@ type Dag struct {
 }
 
 // ReadDag reads metadata about DAG from dags table for given dagId.
-func (c *Client) ReadDag(dagId string) (Dag, error) {
+func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 	tx, _ := c.dbConn.Begin()
-	d, err := c.readDagTx(tx, dagId)
+	d, err := c.readDagTx(ctx, tx, dagId)
 	cErr := tx.Commit()
 	if cErr != nil {
 		log.Error().Err(cErr).Str("dagId", dagId).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
@@ -37,7 +38,7 @@ func (c *Client) ReadDag(dagId string) (Dag, error) {
 }
 
 // Upsert inserts or updates DAG details in dags table.
-func (c *Client) UpsertDag(d dag.Dag) error {
+func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
@@ -45,11 +46,11 @@ func (c *Client) UpsertDag(d dag.Dag) error {
 	tx, _ := c.dbConn.Begin()
 
 	// Check if there is already a record for given DAG
-	currDagRow, currErr := c.readDagTx(tx, dagId)
+	currDagRow, currErr := c.readDagTx(ctx, tx, dagId)
 	if currErr == sql.ErrNoRows {
 		// If no, then simply insert
 		dag := fromDagToDag(d, insertTs)
-		iErr := c.insertDag(tx, dag, insertTs)
+		iErr := c.insertDag(ctx, tx, dag, insertTs)
 		cErr := tx.Commit()
 		if cErr != nil {
 			log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Err(cErr).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
@@ -61,7 +62,7 @@ func (c *Client) UpsertDag(d dag.Dag) error {
 	}
 	// Otherwise we need to update existing entry in dags table
 	updatedDag := dagUpdate(d, currDagRow, insertTs)
-	uErr := c.updateDag(tx, updatedDag)
+	uErr := c.updateDag(ctx, tx, updatedDag)
 
 	cErr := tx.Commit()
 	if cErr != nil {
@@ -74,11 +75,11 @@ func (c *Client) UpsertDag(d dag.Dag) error {
 }
 
 // readDag reads a row from dags table within SQL transaction.
-func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
+func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, error) {
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading Dag.", LOG_PREFIX)
 
-	row := tx.QueryRow(c.readDagQuery(), dagId)
+	row := tx.QueryRowContext(ctx, c.readDagQuery(), dagId)
 	var dId, createTs, createVersion, hashMeta, hashTasks, attr string
 	var startTs, schedule, latestUpdateTs, latestUpdateVersion *string
 
@@ -108,8 +109,9 @@ func (c *Client) readDagTx(tx *sql.Tx, dagId string) (Dag, error) {
 }
 
 // Insert new row in dags table.
-func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
-	_, err := tx.Exec(
+func (c *Client) insertDag(ctx context.Context, tx *sql.Tx, d Dag, insertTs string) error {
+	_, err := tx.ExecContext(
+		ctx,
 		c.dagInsertQuery(),
 		d.DagId, d.StartTs, d.Schedule, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.HashDagMeta,
 		d.HashTasks, d.Attributes,
@@ -121,8 +123,9 @@ func (c *Client) insertDag(tx *sql.Tx, d Dag, insertTs string) error {
 }
 
 // Updates existing row in dags table.
-func (c *Client) updateDag(tx *sql.Tx, d Dag) error {
-	_, err := tx.Exec(
+func (c *Client) updateDag(ctx context.Context, tx *sql.Tx, d Dag) error {
+	_, err := tx.ExecContext(
+		ctx,
 		c.dagUpdateQuery(),
 		d.StartTs, d.Schedule, d.LatestUpdateTs, d.LatestUpdateVersion, d.HashDagMeta, d.HashTasks, d.Attributes, d.DagId,
 	)

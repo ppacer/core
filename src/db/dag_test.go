@@ -1,10 +1,12 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"go_shed/src/version"
 	"path"
 	"testing"
+	"time"
 )
 
 var sqlSchemaPath = path.Join("..", "..", "schema.sql")
@@ -14,7 +16,8 @@ func TestReadDagFromEmpty(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, rErr := c.ReadDag("mock_dag")
+	ctx := context.Background()
+	_, rErr := c.ReadDag(ctx, "mock_dag")
 	if rErr != sql.ErrNoRows {
 		t.Errorf("Expected sql.ErrNoRows, but got: %s", rErr.Error())
 	}
@@ -37,13 +40,14 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	// Insert DAG row for the first time
 	firstHashTasks, firstHashMeta := insertSimpleDagAndTest(c, t)
 
+	ctx := context.Background()
 	dagId := "my_simple_dag"
 	uDag := simpleDag(dagId, 5)
-	uErr := c.UpsertDag(uDag)
+	uErr := c.UpsertDag(ctx, uDag)
 	if uErr != nil {
 		t.Errorf("Expected no error while updating DAG in dags, got: %s", uErr.Error())
 	}
-	dbDag, rErr := c.ReadDag(dagId)
+	dbDag, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Errorf("Could not read just updated row from dags table, err: %s", rErr.Error())
 	}
@@ -66,14 +70,32 @@ func TestInsertDagAndUpdate(t *testing.T) {
 	}
 }
 
+func TestInsertDagTimeout(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ctx, cancle := context.WithTimeout(context.Background(), 10*time.Microsecond)
+	defer cancle()
+
+	dagId := "my_simple_dag"
+	uDag := simpleDag(dagId, 5)
+	uErr := c.UpsertDag(ctx, uDag)
+	if uErr == nil {
+		t.Errorf("Expected error when context is done due to timeout, but got nil")
+	}
+}
+
 func insertSimpleDagAndTest(c *Client, t *testing.T) (string, string) {
+	ctx := context.Background()
 	dagId := "my_simple_dag"
 	d := simpleDag(dagId, 1)
-	iErr := c.UpsertDag(d)
+	iErr := c.UpsertDag(ctx, d)
 	if iErr != nil {
 		t.Errorf("Expected no error while inserting DAG into dags, got: %s", iErr.Error())
 	}
-	dagFromDb, rErr := c.ReadDag(dagId)
+	dagFromDb, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Errorf("Could not read just inserted row from dags table, err: %s", rErr.Error())
 	}

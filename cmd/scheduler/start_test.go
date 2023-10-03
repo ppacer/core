@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"go_shed/src/dag"
 	"go_shed/src/db"
 	"go_shed/src/user/tasks"
@@ -21,10 +22,11 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	dagtasksCountCheck(0, 0, c, t)
 
 	// First sync
+	ctx := context.Background()
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(c, d)
+	s1Err := syncDag(ctx, c, d)
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -33,11 +35,11 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	// Checks after the first sync
 	dagtasksCountCheck(1, tasksNum, c, t)
 
-	dagDb1, rErr := c.ReadDag(dagId)
+	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
 	}
-	dagtasksDb1, dtErr := c.ReadDagTasks(dagId)
+	dagtasksDb1, dtErr := c.ReadDagTasks(ctx, dagId)
 	if dtErr != nil {
 		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s", dtErr.Error())
 	}
@@ -46,7 +48,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(c, d)
+	s2Err := syncDag(ctx, c, d)
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -54,12 +56,12 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	// Checks after the second sync
 	dagtasksCountCheck(1, tasksNum, c, t)
 
-	dagDb2, r2Err := c.ReadDag(dagId)
+	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if r2Err != nil {
 		t.Fatalf("Unexpected error while reading dag from dags table: %s", r2Err.Error())
 	}
 
-	dagtasksDb2, dt2Err := c.ReadDagTasks(dagId)
+	dagtasksDb2, dt2Err := c.ReadDagTasks(ctx, dagId)
 	if dt2Err != nil {
 		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s", dt2Err.Error())
 	}
@@ -85,7 +87,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	}
 }
 
-func TestSyncOneDagChangingAttr(t *testing.T) {
+func TestSyncOneDagTimeout(t *testing.T) {
 	c, err := db.NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +97,32 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	dagtasksCountCheck(0, 0, c, t)
 
 	// First sync
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Microsecond)
+	defer cancel()
+	dagId := "very_simple_dag"
+	d := verySimpleDag(dagId)
+	sErr := syncDag(ctx, c, d)
+	if sErr == nil {
+		t.Error("Expected syncDag error due to context timeout, but got nil")
+	}
+}
+
+func TestSyncOneDagChangingAttr(t *testing.T) {
+	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// Before sync - db is empty
+	dagtasksCountCheck(0, 0, c, t)
+
+	// First sync
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(c, d)
+	s1Err := syncDag(ctx, c, d)
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -107,7 +131,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	// Checks after the first sync
 	dagtasksCountCheck(1, tasksNum, c, t)
 
-	dagDb1, rErr := c.ReadDag(dagId)
+	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
 	}
@@ -116,7 +140,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	d.Attr.Tags = []string{"test", "test2"}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(c, d)
+	s2Err := syncDag(ctx, c, d)
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -124,7 +148,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	// Checks after the second sync
 	dagtasksCountCheck(1, tasksNum, c, t)
 
-	dagDb2, r2Err := c.ReadDag(dagId)
+	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
 	}
@@ -149,6 +173,8 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx := context.Background()
+
 	// Before sync - db is empty
 	dagtasksCountCheck(0, 0, c, t)
 
@@ -156,7 +182,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(c, d)
+	s1Err := syncDag(ctx, c, d)
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -165,7 +191,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	// Checks after the first sync
 	dagtasksCountCheck(1, tasksNum, c, t)
 
-	dagDb1, rErr := c.ReadDag(dagId)
+	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
 	}
@@ -175,7 +201,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	d.Root.Next(&additionalTask)
 
 	// Second sync - should not change anything
-	s2Err := syncDag(c, d)
+	s2Err := syncDag(ctx, c, d)
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -188,7 +214,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 		t.Fatalf("Expected %d current rows in dagtasks table after the update, got: %d", tasksNum+1, currentDagTasks)
 	}
 
-	dagDb2, r2Err := c.ReadDag(dagId)
+	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if rErr != nil {
 		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
 	}

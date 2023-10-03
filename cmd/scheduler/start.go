@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"go_shed/src/dag"
 	"go_shed/src/db"
 	"time"
@@ -9,9 +11,17 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const StartContextTimeout = 30 * time.Second
+
 // This function is called on scheduler start up. TODO: more docs.
 func start(dbClient *db.Client) {
-	dagTasksSyncErr := syncDags(dbClient)
+	ctx, cancel := context.WithTimeoutCause(
+		context.Background(),
+		StartContextTimeout,
+		errors.New("scheduler initial sync timeouted"),
+	)
+	defer cancel()
+	dagTasksSyncErr := syncDags(ctx, dbClient)
 	if dagTasksSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
 		log.Panic().Err(dagTasksSyncErr).Msg("Cannot sync up dag.registry and dagtasks")
@@ -20,11 +30,17 @@ func start(dbClient *db.Client) {
 
 // Synchronize all DAGs from dag.registry with dags and dagtasks tables in the database. If only DAG attributes were
 // changed then the record in dags table would be updated and dagtasks would not.
-func syncDags(dbClient *db.Client) error {
+func syncDags(ctx context.Context, dbClient *db.Client) error {
 	start := time.Now()
 	log.Info().Msg("Start syncing dag.registry with dags and dagtasks tables...")
 	for _, d := range dag.List() {
-		syncErr := syncDag(dbClient, d)
+		select {
+		case <-ctx.Done():
+			// TODO(dskrzypiec): what now? Probably retries... and eventually panic
+			log.Panic().Err(ctx.Err()).Msg("Context for Scheduler initial sync timeouted")
+		default:
+		}
+		syncErr := syncDag(ctx, dbClient, d)
 		if syncErr != nil {
 			// TODO(dskrzypiec): Probably we should retunr []error and don't stop when syncing one DAG would fail
 			// This should be solved together with general approach to error handling in the scheduler.
@@ -36,21 +52,21 @@ func syncDags(dbClient *db.Client) error {
 }
 
 // Synchronize given DAG with dags and dagtasks tables in the database.
-func syncDag(dbClient *db.Client, d dag.Dag) error {
+func syncDag(ctx context.Context, dbClient *db.Client, d dag.Dag) error {
 	dagId := string(d.Id)
-	dbDag, dbRErr := dbClient.ReadDag(dagId)
+	dbDag, dbRErr := dbClient.ReadDag(ctx, dagId)
 	if dbRErr != nil && dbRErr != sql.ErrNoRows {
-		log.Error().Err(dbRErr).Str("dagId", dagId).Msgf("Could not get DAg metadata from dags table")
+		log.Error().Err(dbRErr).Str("dagId", dagId).Msgf("Could not get Dag metadata from dags table")
 		return dbRErr
 	}
 	if dbRErr == sql.ErrNoRows {
 		// There is no DAG in the database yet
-		uErr := dbClient.UpsertDag(d)
+		uErr := dbClient.UpsertDag(ctx, d)
 		if uErr != nil {
 			log.Error().Err(uErr).Str("dagId", dagId).Msgf("Could no insert DAG into dags table")
 			return uErr
 		}
-		dtErr := dbClient.InsertDagTasks(d)
+		dtErr := dbClient.InsertDagTasks(ctx, d)
 		if dtErr != nil {
 			log.Error().Err(dtErr).Str("dagId", dagId).Msgf("Could not insert DAG tasks into dagtasks table")
 			return dtErr
@@ -63,7 +79,7 @@ func syncDag(dbClient *db.Client, d dag.Dag) error {
 		return nil
 	}
 	// Either attributes or tasks for this DAG were modified
-	uErr := dbClient.UpsertDag(d)
+	uErr := dbClient.UpsertDag(ctx, d)
 	if uErr != nil {
 		log.Error().Err(uErr).Str("dagId", dagId).Msgf("Could no update DAG in dags table")
 		return uErr
@@ -71,7 +87,7 @@ func syncDag(dbClient *db.Client, d dag.Dag) error {
 	if dbDag.HashTasks != d.HashTasks() {
 		log.Info().Str("dagId", dagId).Str("prevHashTasks", dbDag.HashTasks).Str("currHashTasks", d.HashTasks()).
 			Msg("Hash tasks has changed. New version of dagtasks will be inserted.")
-		dtErr := dbClient.InsertDagTasks(d)
+		dtErr := dbClient.InsertDagTasks(ctx, d)
 		if dtErr != nil {
 			log.Error().Err(dtErr).Str("dagId", dagId).Msgf("Could not insert DAG tasks into dagtasks table")
 			return dtErr
