@@ -93,11 +93,11 @@ func (c *Client) InsertDagRun(ctx context.Context, dagId, execTs string) (int64,
 	return res.LastInsertId()
 }
 
-// ReadLatestDagRuns reads latest dag run for each Dag.
-func (c *Client) ReadLatestDagRuns(ctx context.Context) ([]DagRun, error) {
+// ReadLatestDagRuns reads latest dag run for each Dag. Returns map from DagId to DagRun.
+func (c *Client) ReadLatestDagRuns(ctx context.Context) (map[string]DagRun, error) {
 	start := time.Now()
 	log.Info().Msgf("[%s] Start reading latest run for each DAG...", LOG_PREFIX)
-	dagruns := make([]DagRun, 0, 100)
+	dagruns := make(map[string]DagRun, 100)
 
 	rows, qErr := c.dbConn.QueryContext(ctx, c.latestDagRunsQuery())
 	if qErr != nil {
@@ -132,7 +132,7 @@ func (c *Client) ReadLatestDagRuns(ctx context.Context) ([]DagRun, error) {
 			StatusUpdateTs: statusTs,
 			Version:        version,
 		}
-		dagruns = append(dagruns, dagrun)
+		dagruns[dagId] = dagrun
 	}
 
 	log.Info().Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading latest DAG runs.", LOG_PREFIX)
