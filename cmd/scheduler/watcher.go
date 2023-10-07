@@ -111,7 +111,8 @@ func shouldBeSheduled(dag dag.Dag, nextSchedules map[dag.Id]*time.Time, currentT
 	return false, time.Time{}
 }
 
-// TODO: docs + tests
+// NextScheduleForDagRuns determines next schedules for all DAGs given in dags and current time. It reads latest dag
+// runs from the database. If DAG has no schedule this DAG is still in output map but with nil next schedule time.
 func nextScheduleForDagRuns(ctx context.Context, dags []dag.Dag, currentTime time.Time, dbClient *db.Client) map[dag.Id]*time.Time {
 	latestDagRunTime := make(map[dag.Id]*time.Time, len(dags))
 	latestDagRuns, err := dbClient.ReadLatestDagRuns(ctx)
