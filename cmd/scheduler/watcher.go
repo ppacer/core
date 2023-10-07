@@ -149,6 +149,5 @@ func nextScheduleForDagRuns(ctx context.Context, dags []dag.Dag, currentTime tim
 		}
 		latestDagRunTime[dag.Id] = &nextSched
 	}
-
 	return latestDagRunTime
 }
