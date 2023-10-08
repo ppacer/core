@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_shed/src/dag"
 	"go_shed/src/db"
+	"go_shed/src/ds"
 	"go_shed/src/models"
 	_ "go_shed/src/user"
 	"net/http"
@@ -18,21 +19,30 @@ type SharedState struct {
 	sync.Mutex
 	ActiveEndpoints  int
 	ShouldBeShutdown bool
+
+	// think about it where to put it
+	Queue *ds.SimpleQueue[DagRun]
 }
 
 func main() {
 	cfg := ParseConfig()
 	cfg.setupZerolog()
 	var ss SharedState
+	queue := ds.NewSimpleQueue[DagRun](1000)
+	ss.Queue = &queue
 	dbClient, err := db.NewClient("/Users/ds/GoProjects/go_sched/test.db")
 	if err != nil {
 		log.Panic().Err(err).Msg("Cannot connect to the database")
 	}
-	start(dbClient)
+	start(ss.Queue, dbClient)
+	go func() {
+		Watch(dag.List(), ss.Queue, dbClient)
+	}()
 
 	// Endpoints
 	http.HandleFunc("/dag/list", ss.ListDagsHandler)
 	http.HandleFunc("/task/next", ss.NextTaskHandler)
+	http.HandleFunc("/task/pop", ss.PopTask)
 	http.HandleFunc("/shutdown", ss.ShutdownHandler)
 
 	log.Info().Msgf("Start Scheduler v%s on :%d...", cfg.AppVersion, cfg.Port)
@@ -40,6 +50,17 @@ func main() {
 	if lasErr != nil {
 		log.Panic().Err(lasErr).Msg("Cannot start the server")
 	}
+}
+
+func (ss *SharedState) PopTask(w http.ResponseWriter, r *http.Request) {
+	ss.StartEndpoint()
+	defer ss.CheckIfCanSafelyExit()
+	defer ss.FinishEndpoint()
+	dr, err := ss.Queue.Pop()
+	if err != nil {
+		log.Error().Err(err).Msg("Error while popping scheduled task from the queue")
+	}
+	fmt.Fprintf(w, "%s %v", string(dr.DagId), dr.AtTime)
 }
 
 func (ss *SharedState) ListDagsHandler(w http.ResponseWriter, r *http.Request) {

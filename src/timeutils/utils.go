@@ -1,6 +1,7 @@
 package timeutils
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -34,4 +35,17 @@ func FromStringMust(s string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+func RandomUtcTime(minYear int) time.Time {
+	year := rand.Intn(2023-minYear) + minYear
+	month := rand.Intn(12) + 1
+	day := rand.Intn(28) + 1
+
+	hour := rand.Intn(24)
+	minute := rand.Intn(60)
+	second := rand.Intn(60)
+	ns := rand.Intn(10000000) * 1000
+
+	return time.Date(year, time.Month(month), day, hour, minute, second, ns, time.UTC)
 }

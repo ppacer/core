@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"go_shed/src/timeutils"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -19,14 +18,15 @@ var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
 // TODO: docs
 type Dag struct {
 	Id       Id
-	Start    *time.Time
 	Schedule *Schedule
 	Attr     Attr
 	Root     *Node
 }
 
 type Attr struct {
-	Tags []string `json:"tags"`
+	// If set to true schedule dag run would be catch up since the last run or Start.
+	CatchUp bool     `json:"catchUp"`
+	Tags    []string `json:"tags"`
 }
 
 func New(id Id) *Dag {

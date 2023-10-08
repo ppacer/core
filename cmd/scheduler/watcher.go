@@ -15,15 +15,15 @@ const LOG_PREFIX = "scheduler"
 const StatusReadyToSchedule = "READY_TO_SCHEDULE"
 const StatusScheduled = "SCHEDULED"
 const WatchInterval = 1 * time.Second
+const QueueIsFullInterval = 100 * time.Millisecond
 
 type DagRun struct {
 	DagId  dag.Id
 	AtTime time.Time
 }
 
-// Watch watches DAG registry and check whenever DAGs should be scheduled. In
-// that case they are sent onto the given channel. Watch checks DAG registry
-// every WatchInterval period. This function runs indefinitely.
+// Watch watches DAG registry and check whenever DAGs should be scheduled. In that case they are sent onto the given
+// channel. Watch checks DAG registry every WatchInterval period. This function runs indefinitely.
 func Watch(dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client) {
 	ctx := context.TODO() // Think about it
 	nextSchedules := nextScheduleForDagRuns(ctx, dag.List(), time.Now(), dbClient)
@@ -33,64 +33,108 @@ func Watch(dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client) {
 	}
 }
 
-func trySchedule(dags []dag.Dag, queue ds.Queue[DagRun], cache map[dag.Id]*time.Time, dbClient *db.Client) {
+func trySchedule(dags []dag.Dag, queue ds.Queue[DagRun], nextSchedules map[dag.Id]*time.Time, dbClient *db.Client) {
+	now := time.Now()
+
+	// Make sure we have next schedules for every dag in dags
+	if len(dags) != len(nextSchedules) {
+		log.Warn().Int("dag", len(dags)).Int("nextSchedules", len(nextSchedules)).
+			Msgf("Seems like number of next shedules does not match number of dags. Will try refresh next schedules.")
+		ctx := context.TODO() // Think about it
+		nextSchedules = nextScheduleForDagRuns(ctx, dags, now, dbClient)
+	}
+
 	for _, d := range dags {
 		ctx := context.TODO() // Think about it
-		tsdErr := tryScheduleDag(ctx, d, queue, cache, dbClient)
+
+		// Check if there is space on the queue to schedule a new dag run
+		for queue.Capacity() <= 0 {
+			log.Warn().Msgf("The dag run queue is currently full. Will try again in %v", QueueIsFullInterval)
+			time.Sleep(QueueIsFullInterval)
+		}
+
+		tsdErr := tryScheduleDag(ctx, d, now, queue, nextSchedules, dbClient)
 		if tsdErr != nil {
-			log.Error().Err(tsdErr).Str("dagId", string(d.Id)).Msg("Error while trying to schedule dag")
+			// TODO(dskrzypiec): implement some kind of second queue for retries when there was an error when trying to
+			// schedule new dag run.
+			log.Error().Err(tsdErr).Str("dagId", string(d.Id)).Msg("Error while trying to schedule new dag run")
 		}
 	}
 }
 
+// Function tryScheduleDag tries to schedule new dag run for given DAG. When new dag run is scheduled new entry is
+// pushed onto the queue and into database dagruns table. When scheduling new dag run fails in any of steps, then
+// non-nil error is returned and function try to clean up as much as possible. When necessary pop new entry from the
+// queue and revert next schedule time from the cache (nextSchedules).
 func tryScheduleDag(
-	ctx context.Context, dag dag.Dag, queue ds.Queue[DagRun], nextSchedules map[dag.Id]*time.Time, dbClient *db.Client,
+	ctx context.Context,
+	dag dag.Dag,
+	currentTime time.Time,
+	queue ds.Queue[DagRun],
+	nextSchedules map[dag.Id]*time.Time,
+	dbClient *db.Client,
 ) error {
-	shouldBe, schedule := shouldBeSheduled(dag, nextSchedules, time.Now())
+	shouldBe, schedule := shouldBeSheduled(dag, nextSchedules, currentTime)
 	if !shouldBe {
 		return nil
 	}
 	log.Info().Str("dagId", string(dag.Id)).Time("execTs", schedule).Msg("About to try scheduling new dag run")
 
-	// Check the cache first
-	if latestTs, isInCache := nextSchedules[dag.Id]; isInCache && schedule.Equal(*latestTs) {
-		return nil
-	}
 	execTs := timeutils.ToString(schedule)
 	alreadyScheduled, dreErr := dbClient.DagRunExists(ctx, string(dag.Id), execTs)
 	if dreErr != nil {
-		// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
 		return dreErr
 	}
 	if alreadyScheduled {
+		alreadyInQueue := queue.Contains(DagRun{DagId: dag.Id, AtTime: schedule})
+		if !alreadyInQueue {
+			// When dag run is already in the database but it's not on the queue (perhaps due to scheduler restart).
+			qErr := queue.Put(DagRun{DagId: dag.Id, AtTime: schedule})
+			if qErr != nil {
+				log.Error().Err(qErr).Str("dagId", string(dag.Id)).Time("execTime", schedule).
+					Msg("Cannot put dag run on the queue")
+				return qErr
+			}
+		}
 		return nil
 	}
 	runId, iErr := dbClient.InsertDagRun(ctx, string(dag.Id), execTs)
 	if iErr != nil {
-		// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
+		// Revert next schedule
+		nextSchedules[dag.Id] = &schedule
 		return iErr
 	}
 	uErr := dbClient.UpdateDagRunStatus(ctx, runId, StatusReadyToSchedule)
 	if uErr != nil {
-		// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
-		return uErr
-	}
-	if queue.Capacity() <= 0 {
-		// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
-		return ds.ErrQueueIsFull
+		log.Warn().Err(uErr).Str("dagId", string(dag.Id)).Time("execTime", schedule).
+			Msg("Cannot update dag run status to READY_TO_SCHEDULE")
+		// We don't need to block the process because of this error. In worst case we can omit having this status.
 	}
 	qErr := queue.Put(DagRun{DagId: dag.Id, AtTime: schedule})
 	if qErr != nil {
+		// Revert next schedule
+		nextSchedules[dag.Id] = &schedule
+		// We don't remove entry from dagruns table, based on this it would be put on the queue in the next iteration.
+		log.Error().Err(qErr).Str("dagId", string(dag.Id)).Time("execTime", schedule).
+			Msg("Cannot put dag run on the queue")
 		return qErr
 	}
 	uErr = dbClient.UpdateDagRunStatus(ctx, runId, StatusScheduled)
 	if uErr != nil {
-		// TODO: Think in general how do we want handle DB errors in here? Retry? Skip? How? Something generic?
+		// Revert next schedule
+		nextSchedules[dag.Id] = &schedule
+		// Pop item from the queue
+		_, pErr := queue.Pop()
+		if pErr != nil && pErr != ds.ErrQueueIsEmpty {
+			log.Error().Err(pErr).Msg("Cannot pop latest item from the queue")
+		}
 		return uErr
 	}
 	return nil
 }
 
+// Check if givne DAG should be scheduled at given current time. If it should be scheduled then true and execution time
+// is returned.
 func shouldBeSheduled(dag dag.Dag, nextSchedules map[dag.Id]*time.Time, currentTime time.Time) (bool, time.Time) {
 	if dag.Schedule == nil {
 		return false, time.Time{}

@@ -19,6 +19,7 @@ var ErrQueueIsEmpty = errors.New("queue is empty")
 type Queue[T comparable] interface {
 	Put(t T) error
 	Pop() (T, error)
+	Contains(T) bool
 	Capacity() int
 	Size() int
 }
@@ -61,6 +62,18 @@ func (stq *SimpleQueue[T]) Pop() (T, error) {
 	obj := stq.buffer[0]
 	stq.buffer = stq.buffer[1:]
 	return obj, nil
+}
+
+// Contains verifies whenever queue contains given element.
+func (stq *SimpleQueue[T]) Contains(elem T) bool {
+	stq.Lock()
+	defer stq.Unlock()
+	for _, item := range stq.buffer {
+		if item == elem {
+			return true
+		}
+	}
+	return false
 }
 
 func (stq *SimpleQueue[T]) Capacity() int {

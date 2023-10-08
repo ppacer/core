@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go_shed/src/dag"
 	"go_shed/src/db"
+	"go_shed/src/ds"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -14,7 +15,7 @@ import (
 const StartContextTimeout = 30 * time.Second
 
 // This function is called on scheduler start up. TODO: more docs.
-func start(dbClient *db.Client) {
+func start(queue ds.Queue[DagRun], dbClient *db.Client) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
 		StartContextTimeout,
@@ -25,6 +26,11 @@ func start(dbClient *db.Client) {
 	if dagTasksSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
 		log.Panic().Err(dagTasksSyncErr).Msg("Cannot sync up dag.registry and dagtasks")
+	}
+	queueSyncErr := syncDagRunsQueue(ctx, queue, dbClient)
+	if queueSyncErr != nil {
+		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
+		log.Panic().Err(queueSyncErr).Msg("Cannot sync up dag runs queue")
 	}
 }
 
@@ -93,5 +99,11 @@ func syncDag(ctx context.Context, dbClient *db.Client, d dag.Dag) error {
 			return dtErr
 		}
 	}
+	return nil
+}
+
+func syncDagRunsQueue(ctx context.Context, q ds.Queue[DagRun], dbClient *db.Client) error {
+	// TODO(dskrzypiec): Implement syncing DagRun queue to get tasks that were scheduled but not yet pick up by
+	// executors in case when scheduler is restarted.
 	return nil
 }

@@ -168,8 +168,8 @@ func (c *Client) DagRunExists(ctx context.Context, dagId, execTs string) (bool, 
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Str("execTs", execTs).Msgf("[%s] Start DagRunExists query.", LOG_PREFIX)
 
-	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=?"
-	row := c.dbConn.QueryRowContext(ctx, q, dagId, execTs)
+	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=? AND Status=?"
+	row := c.dbConn.QueryRowContext(ctx, q, dagId, execTs, DagRunStatusScheduled)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
