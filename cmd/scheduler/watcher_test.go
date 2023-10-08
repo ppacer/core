@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_shed/src/dag"
 	"go_shed/src/db"
+	"go_shed/src/ds"
 	"go_shed/src/timeutils"
 	"math/rand"
 	"testing"
@@ -297,6 +298,79 @@ func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
 		shouldBe, _ := shouldBeSheduled(d1, map[dag.Id]*time.Time{}, ct)
 		if shouldBe {
 			t.Error("Expected DAG to not be sheduled when map of next schedules is empty, but shouldBeScheduled return true")
+		}
+	}
+}
+
+func TestTryScheduleDagSimple(t *testing.T) {
+	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+
+	d1 := emptyDag("dag1", &sched1, attr)
+
+	d1ns := time.Date(2023, time.October, 5, 14, 0, 0, 0, time.UTC)
+	nextSchedules := map[dag.Id]*time.Time{d1.Id: &d1ns}
+	queue := ds.NewSimpleQueue[DagRun](100)
+
+	timePoints := []time.Time{
+		time.Date(2023, time.October, 5, 13, 0, 0, 0, time.UTC),   // no schedule
+		time.Date(2023, time.October, 5, 14, 0, 1, 0, time.UTC),   // new dag run
+		time.Date(2023, time.October, 5, 14, 59, 59, 0, time.UTC), // no action
+		time.Date(2023, time.October, 5, 15, 1, 1, 0, time.UTC),   // new dag run
+		time.Date(2023, time.October, 5, 15, 2, 0, 0, time.UTC),   // no action
+		time.Date(2023, time.October, 5, 16, 30, 0, 0, time.UTC),  // new dag run
+	}
+
+	// test
+	for _, currTime := range timePoints {
+		ctx := context.Background()
+		err := tryScheduleDag(ctx, d1, currTime, &queue, nextSchedules, c)
+		if err != nil {
+			t.Errorf("Error while trying to schedule new dag run: %s", err.Error())
+		}
+	}
+	const expectedDagRuns = 3
+	dbDagruns := c.Count("dagruns")
+	if dbDagruns != expectedDagRuns {
+		t.Errorf("Expected %d dag runs in dagruns table, got: %d", expectedDagRuns, dbDagruns)
+	}
+	if queue.Size() != expectedDagRuns {
+		t.Errorf("Expected %d dag runs on the queue, got: %d", expectedDagRuns, queue.Size())
+	}
+	expectedExecTimes := []time.Time{
+		time.Date(2023, time.October, 5, 14, 0, 0, 0, time.UTC),
+		time.Date(2023, time.October, 5, 15, 0, 0, 0, time.UTC),
+		time.Date(2023, time.October, 5, 16, 0, 0, 0, time.UTC),
+	}
+	for idx, expExecTime := range expectedExecTimes {
+		dr, pErr := queue.Pop()
+		if pErr != nil {
+			t.Errorf("Error while trying to pop element %d from the queue: %s", idx+1, pErr.Error())
+		}
+		if expExecTime.Compare(dr.AtTime) != 0 {
+			t.Errorf("Expected for dag run %d exec time %v, got: %v", idx+1, expExecTime, dr.AtTime)
+		}
+	}
+
+	ctx := context.Background()
+	dbDagRuns, dbErr := c.ReadDagRuns(ctx, string(d1.Id), expectedDagRuns)
+	if dbErr != nil {
+		t.Errorf("Error while reading dagruns from database: %s", dbErr.Error())
+	}
+	if len(dbDagRuns) != expectedDagRuns {
+		t.Fatalf("Expected %d dag runs in dagruns table, got: %d", expectedDagRuns, len(dbDagRuns))
+	}
+	for i := 0; i < expectedDagRuns; i++ {
+		expTimeStr := timeutils.ToString(expectedExecTimes[expectedDagRuns-i-1])
+		if dbDagRuns[i].ExecTs != expTimeStr {
+			t.Errorf("Expected for dag run %d exec time %s, got %s in database", expectedDagRuns-i-1, expTimeStr,
+				dbDagRuns[i].ExecTs)
 		}
 	}
 }
