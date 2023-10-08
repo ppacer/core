@@ -285,6 +285,22 @@ func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
 	}
 }
 
+func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
+	const N = 25
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	d1 := emptyDag("dag1", &sched1, attr)
+
+	for i := 0; i < N; i++ {
+		ct := timeutils.RandomUtcTime(2020)
+		shouldBe, _ := shouldBeSheduled(d1, map[dag.Id]*time.Time{}, ct)
+		if shouldBe {
+			t.Error("Expected DAG to not be sheduled when map of next schedules is empty, but shouldBeScheduled return true")
+		}
+	}
+}
+
 func emptyDag(dagId string, sched dag.Schedule, attr dag.Attr) dag.Dag {
 	return dag.New(dag.Id(dagId)).AddSchedule(sched).AddAttributes(attr).Done()
 }
