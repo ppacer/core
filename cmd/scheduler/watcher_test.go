@@ -200,6 +200,91 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 	}
 }
 
+func TestShouldBeScheduledSimple(t *testing.T) {
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+
+	d1 := emptyDag("dag1", &sched1, attr)
+	d2 := dag.New(dag.Id("dag4")).Done()
+
+	d1ns := time.Date(2023, time.October, 5, 14, 0, 0, 0, time.UTC)
+	nextSchedules := map[dag.Id]*time.Time{
+		d1.Id: &d1ns,
+		d2.Id: nil,
+	}
+
+	// test
+	currTime1 := time.Date(2023, time.October, 5, 13, 59, 0, 0, time.UTC)
+	currTime2 := time.Date(2023, time.October, 5, 14, 0, 1, 0, time.UTC)
+
+	shouldBe1, execTime1 := shouldBeSheduled(d1, nextSchedules, currTime1)
+	if shouldBe1 {
+		t.Errorf("Dag %s should not be scheduled at %v, but shouldBeScheduled returned true, %v",
+			string(d1.Id), currTime1, execTime1)
+	}
+	shouldBe2, execTime2 := shouldBeSheduled(d1, nextSchedules, currTime2)
+	if !shouldBe2 {
+		t.Errorf("Dag %s should be scheduled at %v, but shouldBeSheduled returned false",
+			string(d1.Id), currTime2)
+	}
+	if execTime2.Compare(d1ns) != 0 {
+		t.Errorf("Expected DAG %s to be scheduled at %v, but got %v", string(d1.Id), d1ns, execTime2)
+	}
+	expectedUpdatedNextSched := time.Date(2023, time.October, 5, 15, 0, 0, 0, time.UTC)
+	ds1NextNextSched, exists := nextSchedules[d1.Id]
+	if !exists {
+		t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not", string(d1.Id))
+	}
+	if ds1NextNextSched == nil {
+		t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s", string(d1.Id))
+	}
+	if expectedUpdatedNextSched.Compare(*ds1NextNextSched) != 0 {
+		t.Errorf("Expected next schedule after once checking shouldBeScheduled for DAG %s, to be %v, got %v",
+			string(d1.Id), expectedUpdatedNextSched, *ds1NextNextSched)
+	}
+
+	for _, ct := range []time.Time{currTime1, currTime2} {
+		shouldBe, execTime := shouldBeSheduled(d2, nextSchedules, ct)
+		if shouldBe {
+			t.Errorf("Expected no next schedule time for DAG without schedule, got: %v", execTime)
+		}
+	}
+}
+
+func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+
+	d1 := emptyDag("dag1", &sched1, attr)
+	d1ns := start
+	nextSchedules := map[dag.Id]*time.Time{d1.Id: &d1ns}
+
+	// test
+	const iterations = 25
+	currTime := start
+
+	for i := 0; i < iterations; i++ {
+		shouldBe, execTime := shouldBeSheduled(d1, nextSchedules, currTime)
+		if !shouldBe {
+			t.Errorf("Dag %s should be scheduled at %v, but shouldBeSheduled returned false",
+				string(d1.Id), currTime)
+		}
+		if currTime.Compare(execTime) != 0 {
+			t.Errorf("Expected execTime for DAG %s to be %v, got %v", string(d1.Id), currTime, execTime)
+		}
+		nextCurrTime, exists := nextSchedules[d1.Id]
+		if !exists {
+			t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not", string(d1.Id))
+		}
+		if nextCurrTime == nil {
+			t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s", string(d1.Id))
+		}
+		currTime = *nextCurrTime
+	}
+}
+
 func emptyDag(dagId string, sched dag.Schedule, attr dag.Attr) dag.Dag {
 	return dag.New(dag.Id(dagId)).AddSchedule(sched).AddAttributes(attr).Done()
 }
