@@ -22,9 +22,11 @@ type DagRun struct {
 }
 
 const (
-	DagRunStatusScheduled = "SCHEDULED"
+	DagRunStatusReadyToSchedule = "READY_TO_SCHEDULE"
+	DagRunStatusScheduled       = "SCHEDULED"
 )
 
+// ReadDagRuns reads topN latest dag runs for given DAG ID.
 func (c *Client) ReadDagRuns(ctx context.Context, dagId string, topN int) ([]DagRun, error) {
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Int("topN", topN).Msgf("[%s] Start reading DAG runs...", LOG_PREFIX)
@@ -51,22 +53,10 @@ func (c *Client) ReadDagRuns(ctx context.Context, dagId string, topN int) ([]Dag
 		default:
 		}
 
-		var runId int64
-		var dagId, execTs, insertTs, status, statusTs, version string
-
-		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
+		dagrun, scanErr := parseDagRun(rows)
 		if scanErr != nil {
 			log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
 			return nil, scanErr
-		}
-		dagrun := DagRun{
-			RunId:          runId,
-			DagId:          dagId,
-			ExecTs:         execTs,
-			InsertTs:       insertTs,
-			Status:         status,
-			StatusUpdateTs: statusTs,
-			Version:        version,
 		}
 		dagruns = append(dagruns, dagrun)
 	}
@@ -115,24 +105,12 @@ func (c *Client) ReadLatestDagRuns(ctx context.Context) (map[string]DagRun, erro
 		default:
 		}
 
-		var runId int64
-		var dagId, execTs, insertTs, status, statusTs, version string
-
-		scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
+		dagrun, scanErr := parseDagRun(rows)
 		if scanErr != nil {
 			log.Error().Err(scanErr).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
 			return nil, scanErr
 		}
-		dagrun := DagRun{
-			RunId:          runId,
-			DagId:          dagId,
-			ExecTs:         execTs,
-			InsertTs:       insertTs,
-			Status:         status,
-			StatusUpdateTs: statusTs,
-			Version:        version,
-		}
-		dagruns[dagId] = dagrun
+		dagruns[dagrun.DagId] = dagrun
 	}
 
 	log.Info().Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading latest DAG runs.", LOG_PREFIX)
@@ -168,8 +146,8 @@ func (c *Client) DagRunExists(ctx context.Context, dagId, execTs string) (bool, 
 	start := time.Now()
 	log.Info().Str("dagId", dagId).Str("execTs", execTs).Msgf("[%s] Start DagRunExists query.", LOG_PREFIX)
 
-	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=? AND Status=?"
-	row := c.dbConn.QueryRowContext(ctx, q, dagId, execTs, DagRunStatusScheduled)
+	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=? AND (Status=? OR Status=?)"
+	row := c.dbConn.QueryRowContext(ctx, q, dagId, execTs, DagRunStatusScheduled, DagRunStatusReadyToSchedule)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
@@ -180,6 +158,61 @@ func (c *Client) DagRunExists(ctx context.Context, dagId, execTs string) (bool, 
 	log.Info().Str("dagId", dagId).Str("execTs", execTs).Dur("durationMs", time.Since(start)).
 		Msgf("[%s] Finished DagRunExists query", LOG_PREFIX)
 	return count > 0, nil
+}
+
+// Reads dag run from dagruns table which are in statuse READY_TO_SCHEDULE and SCHEDULED.
+func (c *Client) ReadDagRunsToBeScheduled(ctx context.Context) ([]DagRun, error) {
+	start := time.Now()
+	log.Info().Msgf("[%s] Start reading dag runs that should be scheduled...", LOG_PREFIX)
+	dagruns := make([]DagRun, 0, 100)
+
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunToBeScheduledQuery(), DagRunStatusReadyToSchedule,
+		DagRunStatusScheduled)
+	if qErr != nil {
+		log.Error().Err(qErr).Msgf("[%s] Failed querying dag runs to be scheduled.", LOG_PREFIX)
+		return nil, qErr
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			// Handle context cancellation or deadline exceeded
+			log.Warn().Err(ctx.Err()).Msgf("[%s] Context done while processing rows.", LOG_PREFIX)
+			return nil, ctx.Err()
+		default:
+		}
+
+		dagrun, scanErr := parseDagRun(rows)
+		if scanErr != nil {
+			log.Error().Err(scanErr).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
+			return nil, scanErr
+		}
+		dagruns = append(dagruns, dagrun)
+	}
+	log.Info().Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading dag runs to be scheduled.", LOG_PREFIX)
+	return dagruns, nil
+}
+
+func parseDagRun(rows *sql.Rows) (DagRun, error) {
+	var runId int64
+	var dagId, execTs, insertTs, status, statusTs, version string
+
+	scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
+	if scanErr != nil {
+		log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
+		return DagRun{}, scanErr
+	}
+	dagrun := DagRun{
+		RunId:          runId,
+		DagId:          dagId,
+		ExecTs:         execTs,
+		InsertTs:       insertTs,
+		Status:         status,
+		StatusUpdateTs: statusTs,
+		Version:        version,
+	}
+	return dagrun, nil
 }
 
 func (c *Client) readDagRunsQuery(topN int) string {
@@ -263,5 +296,24 @@ func (c *Client) updateDagRunStatusQuery() string {
 		StatusUpdateTs = ?
 	WHERE
 		RunId = ?
+	`
+}
+
+func (c *Client) readDagRunToBeScheduledQuery() string {
+	return `
+		SELECT
+			RunId,
+			DagId,
+			ExecTs,
+			InsertTs,
+			Status,
+			StatusUpdateTs,
+			Version
+		FROM
+			dagruns
+		WHERE
+			Status = ? OR Status = ?
+		ORDER BY
+			RunId ASC
 	`
 }

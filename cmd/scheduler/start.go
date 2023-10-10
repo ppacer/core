@@ -7,6 +7,7 @@ import (
 	"go_shed/src/dag"
 	"go_shed/src/db"
 	"go_shed/src/ds"
+	"go_shed/src/timeutils"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -102,8 +103,20 @@ func syncDag(ctx context.Context, dbClient *db.Client, d dag.Dag) error {
 	return nil
 }
 
+// Synchronize dag runs with statuses SCHEDULED and READY_TO_SCHEDULE in the database, to be put on the queue. This
+// might happen when dag runs were scheduled but before they started to run scheduler restarted or something else
+// happened.
 func syncDagRunsQueue(ctx context.Context, q ds.Queue[DagRun], dbClient *db.Client) error {
-	// TODO(dskrzypiec): Implement syncing DagRun queue to get tasks that were scheduled but not yet pick up by
-	// executors in case when scheduler is restarted.
+	dagrunsToSchedule, dbErr := dbClient.ReadDagRunsToBeScheduled(ctx)
+	if dbErr != nil {
+		return dbErr
+	}
+	for _, dr := range dagrunsToSchedule {
+		for q.Capacity() <= 0 {
+			log.Warn().Msgf("The dag run queue is currently full. Will try again in %v", QueueIsFullInterval)
+			time.Sleep(QueueIsFullInterval)
+		}
+		q.Put(DagRun{DagId: dag.Id(dr.DagId), AtTime: timeutils.FromStringMust(dr.ExecTs)})
+	}
 	return nil
 }

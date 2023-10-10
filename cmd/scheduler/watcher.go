@@ -12,8 +12,6 @@ import (
 )
 
 const LOG_PREFIX = "scheduler"
-const StatusReadyToSchedule = "READY_TO_SCHEDULE"
-const StatusScheduled = "SCHEDULED"
 const WatchInterval = 1 * time.Second
 const QueueIsFullInterval = 100 * time.Millisecond
 
@@ -104,7 +102,7 @@ func tryScheduleDag(
 		nextSchedules[dag.Id] = &schedule
 		return iErr
 	}
-	uErr := dbClient.UpdateDagRunStatus(ctx, runId, StatusReadyToSchedule)
+	uErr := dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusReadyToSchedule)
 	if uErr != nil {
 		log.Warn().Err(uErr).Str("dagId", string(dag.Id)).Time("execTime", schedule).
 			Msg("Cannot update dag run status to READY_TO_SCHEDULE")
@@ -119,7 +117,7 @@ func tryScheduleDag(
 			Msg("Cannot put dag run on the queue")
 		return qErr
 	}
-	uErr = dbClient.UpdateDagRunStatus(ctx, runId, StatusScheduled)
+	uErr = dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusScheduled)
 	if uErr != nil {
 		// Revert next schedule
 		nextSchedules[dag.Id] = &schedule

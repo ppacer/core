@@ -384,6 +384,41 @@ func TestDagRunExistsSimple(t *testing.T) {
 	}
 }
 
+func TestDagRunsToBeScheduledSimple(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag"
+	timestamps := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+		"2023-09-23T11:00:00",
+	}
+	for idx, ts := range timestamps {
+		insertDagRun(c, ctx, dagId, ts, t)
+		if idx != 2 {
+			c.UpdateDagRunStatus(ctx, int64(idx+1), "ANOTHER_STATUS")
+		}
+	}
+
+	dagRunsToBeScheduled, err := c.ReadDagRunsToBeScheduled(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(dagRunsToBeScheduled) != 1 {
+		t.Errorf("Expected 1 dag run to be scheduled, got: %d", len(dagRunsToBeScheduled))
+	}
+	dr := dagRunsToBeScheduled[0]
+	if dr.RunId != 3 {
+		t.Errorf("Expected DAG with SCHEDULED status to have RunId=3, got: %d", dr.RunId)
+	}
+}
+
 func insertDagRun(c *Client, ctx context.Context, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
