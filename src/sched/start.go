@@ -1,4 +1,4 @@
-package main
+package sched
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 const StartContextTimeout = 30 * time.Second
 
 // This function is called on scheduler start up. TODO: more docs.
-func start(queue ds.Queue[DagRun], dbClient *db.Client) {
+func syncWithDatabase(queue ds.Queue[DagRun], dbClient *db.Client) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
 		StartContextTimeout,

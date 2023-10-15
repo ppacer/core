@@ -13,4 +13,8 @@ func init() {
 	if err != nil {
 		log.Error().Err(err).Msg("Could not add hello DAG")
 	}
+	err = dag.Add(createPrintDag())
+	if err != nil {
+		log.Error().Err(err).Msg("Could not add print DAG")
+	}
 }

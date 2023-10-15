@@ -1,4 +1,4 @@
-package main
+package sched
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type DagRun struct {
 
 // Watch watches DAG registry and check whenever DAGs should be scheduled. In that case they are sent onto the given
 // channel. Watch checks DAG registry every WatchInterval period. This function runs indefinitely.
-func Watch(dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client) {
+func WatchDagRuns(dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client) {
 	ctx := context.TODO() // Think about it
 	nextSchedules := nextScheduleForDagRuns(ctx, dag.List(), time.Now(), dbClient)
 	for {

@@ -24,6 +24,7 @@ type DagRun struct {
 const (
 	DagRunStatusReadyToSchedule = "READY_TO_SCHEDULE"
 	DagRunStatusScheduled       = "SCHEDULED"
+	DagRunStatusRunning         = "RUNNING"
 )
 
 // ReadDagRuns reads topN latest dag runs for given DAG ID.
