@@ -3,11 +3,11 @@ package sched_client
 import (
 	"encoding/json"
 	"fmt"
-	"go_shed/src/models"
 	"io/ioutil"
 	"net/http"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/src/models"
 	"github.com/rs/zerolog/log"
 )
 

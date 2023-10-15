@@ -3,10 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
-	"go_shed/src/version"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/version"
 )
 
 var sqlSchemaPath = path.Join("..", "..", "schema.sql")

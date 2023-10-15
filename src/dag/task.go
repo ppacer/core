@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"go_shed/src/meta"
 	"reflect"
 	"strings"
 
+	"github.com/dskrzypiec/scheduler/src/meta"
 	"github.com/rs/zerolog/log"
 )
 

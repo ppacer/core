@@ -2,10 +2,11 @@ package sched
 
 import (
 	"fmt"
-	"go_shed/src/dag"
-	"go_shed/src/db"
-	"go_shed/src/ds"
 	"net/http"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/db"
+	"github.com/dskrzypiec/scheduler/src/ds"
 )
 
 type Scheduler struct {
@@ -23,6 +24,7 @@ func (s *Scheduler) Start() http.Handler {
 	drQueue := ds.NewSimpleQueue[DagRun](1000)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](1000)
 
+	// Syncing queues with the database in case of program restarts.
 	syncWithDatabase(&drQueue, s.dbClient)
 
 	taskScheduler := taskScheduler{

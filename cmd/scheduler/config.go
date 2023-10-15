@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"go_shed/src/version"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/src/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

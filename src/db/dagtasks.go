@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"go_shed/src/dag"
-	"go_shed/src/timeutils"
-	"go_shed/src/version"
 	"reflect"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/timeutils"
+	"github.com/dskrzypiec/scheduler/src/version"
 	"github.com/rs/zerolog/log"
 )
 

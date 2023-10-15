@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"go_shed/src/dag"
-	"go_shed/src/timeutils"
-	"go_shed/src/version"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/timeutils"
+	"github.com/dskrzypiec/scheduler/src/version"
 
 	"github.com/rs/zerolog/log"
 )

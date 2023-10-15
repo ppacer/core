@@ -2,12 +2,13 @@ package sched
 
 import (
 	"context"
-	"go_shed/src/dag"
-	"go_shed/src/db"
-	"go_shed/src/user/tasks"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/db"
+	"github.com/dskrzypiec/scheduler/src/user/tasks"
 )
 
 var sqlSchemaPath = path.Join("..", "..", "schema.sql")

@@ -2,9 +2,10 @@ package db
 
 import (
 	"context"
-	"go_shed/src/timeutils"
 	"testing"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/timeutils"
 )
 
 func TestInsertDagRunSimple(t *testing.T) {

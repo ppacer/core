@@ -1,8 +1,9 @@
 package user
 
 import (
-	"go_shed/src/dag"
 	"testing"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
 )
 
 // Test whenever all dags added in dag.registry are valid DAGs.

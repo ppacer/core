@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"go_shed/src/dag"
-	"go_shed/src/timeutils"
-	"go_shed/src/user/tasks"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/timeutils"
+	"github.com/dskrzypiec/scheduler/src/user/tasks"
 )
 
 var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)

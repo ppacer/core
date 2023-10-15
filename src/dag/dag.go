@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go_shed/src/timeutils"
 
+	"github.com/dskrzypiec/scheduler/src/timeutils"
 	"github.com/rs/zerolog/log"
 )
 

@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"go_shed/src/db"
-	"go_shed/src/sched"
-	_ "go_shed/src/user"
 	"net/http"
 
+	_ "github.com/dskrzypiec/scheduler/src/user"
+
+	"github.com/dskrzypiec/scheduler/src/db"
+	"github.com/dskrzypiec/scheduler/src/sched"
 	"github.com/rs/zerolog/log"
 )
 

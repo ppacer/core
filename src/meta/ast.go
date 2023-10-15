@@ -5,9 +5,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"go_shed/src"
 	"strings"
 
+	"github.com/dskrzypiec/scheduler/src"
 	"github.com/rs/zerolog/log"
 )
 

@@ -1,4 +1,4 @@
-module go_shed
+module github.com/dskrzypiec/scheduler
 
 go 1.21
 

@@ -1,8 +1,7 @@
 package user
 
 import (
-	"go_shed/src/dag"
-
+	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/rs/zerolog/log"
 )
 

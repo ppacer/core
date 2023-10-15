@@ -1,10 +1,9 @@
 package sched
 
 import (
-	"go_shed/src/ds"
-	"sync/atomic"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/src/ds"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,9 +31,8 @@ func defaultTaskSchedulerConfig() taskSchedulerConfig {
 }
 
 func (ts *taskScheduler) Start() {
-	var runningDagRuns *atomic.Int32
 	for {
-		if ts.DagRunQueue.Size() == 0 || runningDagRuns.Load() >= int32(ts.Config.MaxConcurrentDagRuns) {
+		if ts.DagRunQueue.Size() == 0 {
 			time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
 			continue
 		}
@@ -47,11 +45,11 @@ func (ts *taskScheduler) Start() {
 			log.Error().Err(err).Msgf("[%s] Error while getting dag run from the queue", LOG_PREFIX)
 			continue
 		}
-		go ts.scheduleDagTasks(dagrun, ts.TaskQueue, runningDagRuns)
+		go ts.scheduleDagTasks(dagrun, ts.TaskQueue)
 	}
 }
 
-func (ts *taskScheduler) scheduleDagTasks(dagrun DagRun, tasks ds.Queue[DagRunTask], runningDagRuns *atomic.Int32) {
+func (ts *taskScheduler) scheduleDagTasks(dagrun DagRun, tasks ds.Queue[DagRunTask]) {
 	//start := time.Now()
 	log.Debug().Str("dagId", string(dagrun.DagId)).Time("execTs", dagrun.AtTime).Msgf("[%s] Start scheduling tasks...", LOG_PREFIX)
 
@@ -62,5 +60,4 @@ func (ts *taskScheduler) scheduleDagTasks(dagrun DagRun, tasks ds.Queue[DagRunTa
 	// Step 3: Check (how?) whenever dependencies for the next task are met. Go to Step 2.
 
 	// Step 4: Update dagrun state to finished
-	runningDagRuns.Add(-1)
 }

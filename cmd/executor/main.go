@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"go_shed/cmd/executor/sched_client"
-	"go_shed/src/dag"
-	_ "go_shed/src/user"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/cmd/executor/sched_client"
+	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/rs/zerolog/log"
+
+	_ "github.com/dskrzypiec/scheduler/src/user"
 )
 
 func main() {

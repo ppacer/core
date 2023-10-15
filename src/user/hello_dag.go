@@ -1,9 +1,10 @@
 package user
 
 import (
-	"go_shed/src/dag"
-	"go_shed/src/user/tasks"
 	"time"
+
+	"github.com/dskrzypiec/scheduler/src/dag"
+	"github.com/dskrzypiec/scheduler/src/user/tasks"
 )
 
 func createHelloDag() dag.Dag {
