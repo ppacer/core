@@ -118,7 +118,7 @@ func (c *Client) ReadLatestDagRuns(ctx context.Context) (map[string]DagRun, erro
 	return dagruns, nil
 }
 
-// Updates dagrun for given runId and status.
+// Updates dagrun status for given runId.
 func (c *Client) UpdateDagRunStatus(ctx context.Context, runId int64, status string) error {
 	start := time.Now()
 	updateTs := timeutils.ToString(time.Now())
@@ -134,10 +134,37 @@ func (c *Client) UpdateDagRunStatus(ctx context.Context, runId int64, status str
 	}
 	if rowsUpdated > 1 {
 		log.Error().Int64("runId", runId).Int64("rowsUpdated", rowsUpdated).
-			Msgf("[%s] Seems to many rows be updated. Expected to be only one.", LOG_PREFIX)
+			Msgf("[%s] Seems that too many rows were updated. Expected exactly only one.", LOG_PREFIX)
 		return errors.New("too many rows updated")
 	}
 	log.Info().Int64("runId", runId).Str("status", status).Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished updating dag run.", LOG_PREFIX)
+	return nil
+}
+
+// Updates dagrun status for given dagId and execTs (when runId is not available). Pair (dagId, execTs) is unique in
+// dagrun table.
+func (c *Client) UpdateDagRunStatusByExecTs(ctx context.Context, dagId, execTs, status string) error {
+	start := time.Now()
+	updateTs := timeutils.ToString(time.Now())
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("status", status).
+		Msgf("[%s] Start updating dag run status...", LOG_PREFIX)
+	res, err := c.dbConn.ExecContext(ctx, c.updateDagRunStatusByExecTsQuery(), status, updateTs, dagId, execTs)
+	if err != nil {
+		log.Error().Err(err).Str("dagId", dagId).Str("execTs", execTs).Str("status", status).
+			Msgf("[%s] Cannot update dag run", LOG_PREFIX)
+		return err
+	}
+	rowsUpdated, _ := res.RowsAffected()
+	if rowsUpdated == 0 {
+		return sql.ErrNoRows
+	}
+	if rowsUpdated > 1 {
+		log.Error().Str("dagId", dagId).Str("execTs", execTs).Str("status", status).Int64("rowsUpdated", rowsUpdated).
+			Msgf("[%s] Seems that too many rows were updated. Expected exactly only one.", LOG_PREFIX)
+		return errors.New("too many rows updated")
+	}
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("status", status).Dur("durationMs", time.Since(start)).
 		Msgf("[%s] Finished updating dag run.", LOG_PREFIX)
 	return nil
 }
@@ -297,6 +324,19 @@ func (c *Client) updateDagRunStatusQuery() string {
 		StatusUpdateTs = ?
 	WHERE
 		RunId = ?
+	`
+}
+
+func (c *Client) updateDagRunStatusByExecTsQuery() string {
+	return `
+	UPDATE
+		dagruns
+	SET
+		Status = ?,
+		StatusUpdateTs = ?
+	WHERE
+			DagId = ?
+		AND ExecTs = ?
 	`
 }
 

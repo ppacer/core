@@ -323,6 +323,57 @@ func TestDagRunUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestDagRunUpdateStatusByExecTs(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag_1"
+	timestamp := timeutils.ToString(time.Date(2023, 10, 5, 12, 0, 0, 0, time.UTC))
+	insertDagRun(c, ctx, dagId, timestamp, t)
+
+	cnt := c.Count("dagruns")
+	if cnt != 1 {
+		t.Errorf("Expected 1 dag runs for %s, got %d", dagId, cnt)
+	}
+	dagruns, err := c.ReadDagRuns(ctx, dagId, 1)
+	if err != nil {
+		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err.Error())
+	}
+
+	dr := dagruns[0]
+	t1, tErr := timeutils.FromString(dr.StatusUpdateTs)
+	if tErr != nil {
+		t.Errorf("Cannot convert to time.Time from %s", dr.StatusUpdateTs)
+	}
+	if dr.Status != DagRunStatusScheduled {
+		t.Errorf("Expected status %s for the dag run before update, got: %s", DagRunStatusScheduled, dr.Status)
+	}
+
+	time.Sleep(1 * time.Millisecond)
+	const updateStatus1 = "TEST_STATUS_1"
+	uErr := c.UpdateDagRunStatusByExecTs(ctx, dagId, timestamp, updateStatus1)
+	if uErr != nil {
+		t.Fatalf("Error while updating dagrun for DagId=%s and ExecTs=%s: %s", dagId, timestamp, uErr.Error())
+	}
+	dagruns2, err2 := c.ReadDagRuns(ctx, dagId, 1)
+	if err2 != nil {
+		t.Fatalf("Error while reading dagruns for DagId=%s: %s", dagId, err2.Error())
+	}
+	dr = dagruns2[0]
+	if dr.Status != updateStatus1 {
+		t.Errorf("Expected status %s after the update, but got: %s", updateStatus1, dr.Status)
+	}
+	t2, tErr2 := timeutils.FromString(dr.StatusUpdateTs)
+	if tErr2 != nil {
+		t.Errorf("Cannot convert to time.Time from %s after the update", dr.StatusUpdateTs)
+	}
+	if t1.Compare(t2) != -1 {
+		t.Errorf("Expecte to be %v earlier than %v", t1, t2)
+	}
+}
+
 func TestDagRunUpdateStatusNoRun(t *testing.T) {
 	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
@@ -332,6 +383,20 @@ func TestDagRunUpdateStatusNoRun(t *testing.T) {
 	ctx := context.Background()
 	const status = "TEST_STATUS"
 	uErr := c.UpdateDagRunStatus(ctx, 1234, status)
+	if uErr == nil {
+		t.Error("Expected non-empty error while updating dag run state for non existing runId")
+	}
+}
+
+func TestDagRunUpdateStatusByExecTsNoRun(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	// There is no dagruns rows at all at this point
+	ctx := context.Background()
+	const status = "TEST_STATUS"
+	uErr := c.UpdateDagRunStatusByExecTs(ctx, "test_dag", timeutils.ToString(time.Now()), status)
 	if uErr == nil {
 		t.Error("Expected non-empty error while updating dag run state for non existing runId")
 	}
