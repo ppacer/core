@@ -24,7 +24,9 @@ type Dag struct {
 }
 
 type Attr struct {
-	// If set to true schedule dag run would be catch up since the last run or Start.
+
+	// If set to true schedule dag run would be catch up since the last run or
+	// Start.
 	CatchUp bool     `json:"catchUp"`
 	Tags    []string `json:"tags"`
 }
@@ -59,11 +61,13 @@ func (d *Dag) Done() Dag {
 //   - Task identifiers are unique within the graph
 //   - Graph is no deeper then MAX_RECURSION
 func (d *Dag) IsValid() bool {
-	return d.Root.isAcyclic() && d.Root.taskIdsUnique() && d.Root.depth() <= MAX_RECURSION
+	return d.Root.isAcyclic() && d.Root.taskIdsUnique() &&
+		d.Root.depth() <= MAX_RECURSION
 }
 
-// GetTask return task by its identifier. In case when there is no Task within the DAG of given taskId, then non-nil
-// error will be returned (ErrTaskNotFoundInDag).
+// GetTask return task by its identifier. In case when there is no Task within
+// the DAG of given taskId, then non-nil error will be returned
+// (ErrTaskNotFoundInDag).
 func (d *Dag) GetTask(taskId string) (Task, error) {
 	nodesInfo := d.Root.flatten()
 	for _, ni := range nodesInfo {
@@ -92,7 +96,8 @@ func (d *Dag) Flatten() []Task {
 func (d *Dag) HashDagMeta() string {
 	attrJson, jErr := json.Marshal(d.Attr)
 	if jErr != nil {
-		log.Error().Err(jErr).Msgf("[%s] Cannot serialize DAG attributes [%v]", LOG_PREFIX, d.Attr)
+		log.Error().Err(jErr).Msgf("[%s] Cannot serialize DAG attributes [%v]",
+			LOG_PREFIX, d.Attr)
 		return "CANNOT SERIALIZE DAG ATTRIBUTES"
 	}
 	sched := ""
@@ -109,7 +114,8 @@ func (d *Dag) HashDagMeta() string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// HashTasks calculates SHA256 hash based on concatanated body sources of Execute methods for all tasks.
+// HashTasks calculates SHA256 hash based on concatanated body sources of
+// Execute methods for all tasks.
 func (d *Dag) HashTasks() string {
 	if d.Root == nil {
 		hasher := sha256.New()
@@ -120,5 +126,6 @@ func (d *Dag) HashTasks() string {
 }
 
 func (d *Dag) String() string {
-	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Id, (*d.Schedule).String(), d.Root.String(0))
+	return fmt.Sprintf("Dag: %s (%s)\nTasks:\n%s", d.Id,
+		(*d.Schedule).String(), d.Root.String(0))
 }

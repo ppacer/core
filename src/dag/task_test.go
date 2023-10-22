@@ -118,13 +118,16 @@ func TestFlattenSimple(t *testing.T) {
 	expectedNumOfParents := []int{0, 1, 1, 1, 1}
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedIds[idx], ni.Node.Task.Id())
+			t.Errorf("For task %d expected ID=%s, got: %s",
+				idx, expectedIds[idx], ni.Node.Task.Id())
 		}
 		if ni.Depth != expectedLevels[idx] {
-			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+			t.Errorf("Expected task %s to be on depth %d, but got %d",
+				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
-			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+			t.Errorf("Expected task %s to has %d parents, got %d",
+				ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 }
@@ -146,16 +149,20 @@ func TestFlattenLinkedList(t *testing.T) {
 
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedTaskIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+			t.Errorf("For task %d expected ID=%s, got: %s",
+				idx, expectedTaskIds[idx], ni.Node.Task.Id())
 		}
 		if idx == 0 && len(ni.Parents) != 0 {
-			t.Errorf("Expected 0 parents for the first node, but got: %d", len(ni.Parents))
+			t.Errorf("Expected 0 parents for the first node, but got: %d",
+				len(ni.Parents))
 		}
 		if idx > 0 && len(ni.Parents) != 1 {
-			t.Errorf("Expected 1 parent for a node inside linked list, got %d", len(ni.Parents))
+			t.Errorf("Expected 1 parent for a node inside linked list, got %d",
+				len(ni.Parents))
 		}
 		if ni.Depth != idx+1 {
-			t.Errorf("Expected Task %s to be on depth %d, got %d", ni.Node.Task.Id(), idx+1, ni.Depth)
+			t.Errorf("Expected Task %s to be on depth %d, got %d",
+				ni.Node.Task.Id(), idx+1, ni.Depth)
 		}
 	}
 }
@@ -164,18 +171,24 @@ func TestFlattenBinaryTree(t *testing.T) {
 	g := binaryTree(2)
 	nodesInfo := g.flatten()
 
-	expectedTaskIds := []string{"Node", "Node_0", "Node_1", "Node_0_0", "Node_0_1", "Node_1_0", "Node_1_1"}
+	expectedTaskIds := []string{
+		"Node", "Node_0", "Node_1", "Node_0_0", "Node_0_1", "Node_1_0",
+		"Node_1_1",
+	}
 	expectedLevels := []int{1, 2, 2, 3, 3, 3, 3}
 	expectedNumOfParents := []int{0, 1, 1, 1, 1, 1, 1}
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedTaskIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+			t.Errorf("For task %d expected ID=%s, got: %s", idx,
+				expectedTaskIds[idx], ni.Node.Task.Id())
 		}
 		if ni.Depth != expectedLevels[idx] {
-			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+			t.Errorf("Expected task %s to be on depth %d, but got %d",
+				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
-			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+			t.Errorf("Expected task %s to has %d parents, got %d",
+				ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 }
@@ -188,25 +201,30 @@ func TestFlattenBranchoutAndMerge(t *testing.T) {
 	expectedNumOfParents := []int{0, 1, 1, 1, 3}
 
 	if len(nodesInfo) != len(expectedTaskIds) {
-		t.Errorf("Expected flatten %d tasks, but got %d", len(expectedTaskIds), len(nodesInfo))
+		t.Errorf("Expected flatten %d tasks, but got %d",
+			len(expectedTaskIds), len(nodesInfo))
 		return
 	}
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedTaskIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+			t.Errorf("For task %d expected ID=%s, got: %s",
+				idx, expectedTaskIds[idx], ni.Node.Task.Id())
 		}
 		if ni.Depth != expectedLevels[idx] {
-			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+			t.Errorf("Expected task %s to be on depth %d, but got %d",
+				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
-			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+			t.Errorf("Expected task %s to has %d parents, got %d",
+				ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 
 	n3ExpectedParentIds := []string{"n21", "n22", "n23"}
 	for idx, parent := range nodesInfo[len(nodesInfo)-1].Parents {
 		if parent.Task.Id() != n3ExpectedParentIds[idx] {
-			t.Errorf("n3 parent %d expected to have ID=%s, but got: %s", idx, n3ExpectedParentIds[idx], parent.Task.Id())
+			t.Errorf("n3 parent %d expected to have ID=%s, but got: %s", idx,
+				n3ExpectedParentIds[idx], parent.Task.Id())
 		}
 	}
 }
@@ -241,25 +259,30 @@ func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
 	}
 
 	if len(nodesInfo) != len(expectedTaskIds) {
-		t.Errorf("Expected flatten %d tasks, but got %d", len(expectedTaskIds), len(nodesInfo))
+		t.Errorf("Expected flatten %d tasks, but got %d",
+			len(expectedTaskIds), len(nodesInfo))
 		return
 	}
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedTaskIds[idx] {
-			t.Errorf("For task %d expected ID=%s, got: %s", idx, expectedTaskIds[idx], ni.Node.Task.Id())
+			t.Errorf("For task %d expected ID=%s, got: %s", idx,
+				expectedTaskIds[idx], ni.Node.Task.Id())
 		}
 		if ni.Depth != expectedLevels[idx] {
-			t.Errorf("Expected task %s to be on depth %d, but got %d", ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+			t.Errorf("Expected task %s to be on depth %d, but got %d",
+				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
-			t.Errorf("Expected task %s to has %d parents, got %d", ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
+			t.Errorf("Expected task %s to has %d parents, got %d",
+				ni.Node.Task.Id(), expectedNumOfParents[idx], len(ni.Parents))
 		}
 	}
 
 	finishExpectedParentIds := []string{"g3", "g1n3", "g2Merge"}
 	for idx, parent := range nodesInfo[len(nodesInfo)-1].Parents {
 		if parent.Task.Id() != finishExpectedParentIds[idx] {
-			t.Errorf("finish parent %d expected to have ID=%s, but got: %s", idx, finishExpectedParentIds[idx], parent.Task.Id())
+			t.Errorf("finish parent %d expected to have ID=%s, but got: %s",
+				idx, finishExpectedParentIds[idx], parent.Task.Id())
 		}
 	}
 }
@@ -298,7 +321,8 @@ func TestDepthLinkedLong(t *testing.T) {
 func TestDepthBranchoutAndJoin(t *testing.T) {
 	g := branchOutAndMergeGraph()
 	if g.depth() != 3 {
-		t.Errorf("Expected branch-out-and-merge graph to has depth=3, got: %d", g.depth())
+		t.Errorf("Expected branch-out-and-merge graph to has depth=3, got: %d",
+			g.depth())
 	}
 }
 
@@ -318,7 +342,8 @@ func TestJointTasksExecSources(t *testing.T) {
 	fmt.Println("Executing...")
 }`
 	if string(execSources) != expectedExecSources {
-		t.Errorf("Expected %s, but got %s", expectedExecSources, string(execSources))
+		t.Errorf("Expected %s, but got %s", expectedExecSources,
+			string(execSources))
 	}
 }
 
@@ -336,7 +361,8 @@ func TestJointTasksExecSourcesBroad(t *testing.T) {
 }EmptyTask:{
 }`
 	if string(execSources) != expectedExecSources {
-		t.Errorf("Expected %s, but got %s", expectedExecSources, string(execSources))
+		t.Errorf("Expected %s, but got %s", expectedExecSources,
+			string(execSources))
 	}
 }
 
@@ -359,7 +385,8 @@ func TestNodeHashesForSimilarNodes(t *testing.T) {
 	}
 }
 
-// It's exactly the same as aTask but differes in one char in Execute implementation.
+// It's exactly the same as aTask but differes in one char in Execute
+// implementation.
 type aTaskWithSpace struct{}
 
 func (at aTaskWithSpace) Id() string { return "A" }
@@ -392,13 +419,15 @@ func TestNodeTheSameExecute(t *testing.T) {
 	}
 }
 
-//      n21
-//    /    \
-//   /      \
+//	   n21
+//	 /    \
+//	/      \
+//
 // n1 - n22 - n3
-//   \      /
-//    \    /
-//      n23
+//
+//	\      /
+//	 \    /
+//	   n23
 func branchOutAndMergeGraph() *Node {
 	n1 := nameTaskNode("n1")
 	n21 := nameTaskNode("n21")
@@ -410,26 +439,25 @@ func branchOutAndMergeGraph() *Node {
 	return n1
 }
 
+//	        g1n21
+//	      /       \
+//	   g1n1       g1n3 -----------
+//	   /  \       /               \
+//	  /     g1n21                  \
+//	 /                              \
+//	/                                \
 //
-//           g1n21
-//         /       \
-//      g1n1       g1n3 -----------
-//      /  \       /               \
-//     /     g1n21                  \
-//    /                              \
-//   /                                \
 // n1---g3---------------------------finish
-//   \                                /
-//    \      g2n21                   /
-//     \    /     \                 /
-//      \  /       \               /
-//      g2n1--g2n22-g2n31         /
-//         \              \      /
-//          \             g2Merge
-//           \            /
-//            g2n23--g2n32
 //
-//
+//	\                                /
+//	 \      g2n21                   /
+//	  \    /     \                 /
+//	   \  /       \               /
+//	   g2n1--g2n22-g2n31         /
+//	      \              \      /
+//	       \             g2Merge
+//	        \            /
+//	         g2n23--g2n32
 func fewBranchoutsAndMergesGraph() *Node {
 	n1 := nameTaskNode("n1")
 

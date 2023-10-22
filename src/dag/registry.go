@@ -4,15 +4,16 @@ import (
 	"fmt"
 )
 
-// Registry is a package-level map storing all defined and added DAGs. This registry is used both by scheduler and
-// executors.
+// Registry is a package-level map storing all defined and added DAGs. This
+// registry is used both by scheduler and executors.
 var registry map[Id]Dag = map[Id]Dag{}
 
 // DAG string identifier.
 type Id string
 
-// Add adds new DAG to the registry. If dag is already added in the registry, which means dag.Attr.Id is already a key
-// in the registry map, then non-nil error is returned.
+// Add adds new DAG to the registry. If dag is already added in the registry,
+// which means dag.Attr.Id is already a key in the registry map, then non-nil
+// error is returned.
 func Add(dag Dag) error {
 	if _, exists := registry[dag.Id]; exists {
 		return fmt.Errorf("Dag %s is already registered", dag.Id)
@@ -21,7 +22,8 @@ func Add(dag Dag) error {
 	return nil
 }
 
-// Get gets a DAG by its identifier. If given identifier is no in the registry, then non-nil error will be returned.
+// Get gets a DAG by its identifier. If given identifier is no in the registry,
+// then non-nil error will be returned.
 func Get(dagId Id) (Dag, error) {
 	if _, exists := registry[dagId]; !exists {
 		return Dag{}, fmt.Errorf("Dag %s is not in the registry", dagId)

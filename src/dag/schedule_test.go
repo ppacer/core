@@ -34,7 +34,8 @@ func TestFixedScheduleBeforeStart(t *testing.T) {
 	fs := FixedSchedule{Start: start, Interval: 10 * time.Minute}
 	next := fs.Next(beforeStart)
 	if next != start {
-		t.Errorf("Next timestamp for input before Start should return start, got: %v", next)
+		t.Errorf("Next timestamp for input before Start should return start, got: %v",
+			next)
 	}
 }
 
