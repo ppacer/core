@@ -17,8 +17,9 @@ func New(dbClient *db.Client) *Scheduler {
 	return &Scheduler{dbClient: dbClient}
 }
 
-// Start starts scheduler. It syncs queues with the database, fires up DAG watcher and task scheduler and finally
-// returns HTTP ServeMux with attached HTTP endpoints for communication between scheduler and executors.
+// Start starts scheduler. It syncs queues with the database, fires up DAG
+// watcher and task scheduler and finally returns HTTP ServeMux with attached
+// HTTP endpoints for communication between scheduler and executors.
 // TODO(dskrzypiec): more docs
 func (s *Scheduler) Start() http.Handler {
 	drQueue := ds.NewSimpleQueue[DagRun](1000)
@@ -28,16 +29,19 @@ func (s *Scheduler) Start() http.Handler {
 	syncWithDatabase(&drQueue, s.dbClient)
 
 	taskScheduler := taskScheduler{
+		DbClient:    s.dbClient,
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,
 		Config:      defaultTaskSchedulerConfig(),
 	}
 
 	go func() {
+		// Running in the background dag run watcher
 		WatchDagRuns(dag.List(), &drQueue, s.dbClient)
 	}()
 
 	go func() {
+		// Running in the background task scheduler
 		taskScheduler.Start()
 	}()
 
@@ -49,6 +53,7 @@ func (s *Scheduler) Start() http.Handler {
 
 func (s *Scheduler) RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/hello", helloHandler) // TODO
+	// TODO: the rest of endpoints in here
 }
 
 func helloHandler(w http.ResponseWriter, _ *http.Request) {

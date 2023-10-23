@@ -28,7 +28,8 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	d := emptyDag(dagId, &sched, attr)
 
 	for i := 0; i < dagRuns; i++ {
-		_, err := c.InsertDagRun(ctx, dagId, timeutils.ToString(startTs.Add(time.Duration(i)*time.Hour)))
+		_, err := c.InsertDagRun(ctx, dagId,
+			timeutils.ToString(startTs.Add(time.Duration(i)*time.Hour)))
 		if err != nil {
 			t.Errorf("Error while inserting dagrun: %s", err.Error())
 		}
@@ -38,12 +39,14 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d}, currentTime, c)
 
 	if len(nextSchedulesMap) != 1 {
-		t.Errorf("Expected to got next schedule for single DAG, got for %d", len(nextSchedulesMap))
+		t.Errorf("Expected to got next schedule for single DAG, got for %d",
+			len(nextSchedulesMap))
 	}
 
 	nextSchedule, exists := nextSchedulesMap[d.Id]
 	if !exists {
-		t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not", dagId)
+		t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
+			dagId)
 	}
 	expectedNextSchedule := startTs.Add(time.Duration(dagRuns+1) * time.Hour)
 	if nextSchedule.Compare(expectedNextSchedule) != 0 {
@@ -67,7 +70,8 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 	d := emptyDag(dagId, &sched, attr)
 
 	for i := 0; i < dagRuns; i++ {
-		_, err := c.InsertDagRun(ctx, dagId, timeutils.ToString(startTs.Add(time.Duration(i)*time.Hour)))
+		_, err := c.InsertDagRun(ctx, dagId,
+			timeutils.ToString(startTs.Add(time.Duration(i)*time.Hour)))
 		if err != nil {
 			t.Errorf("Error while inserting dagrun: %s", err.Error())
 		}
@@ -77,12 +81,14 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d}, currentTime, c)
 
 	if len(nextSchedulesMap) != 1 {
-		t.Errorf("Expected to got next schedule for single DAG, got for %d", len(nextSchedulesMap))
+		t.Errorf("Expected to got next schedule for single DAG, got for %d",
+			len(nextSchedulesMap))
 	}
 
 	nextSchedule, exists := nextSchedulesMap[d.Id]
 	if !exists {
-		t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not", dagId)
+		t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
+			dagId)
 	}
 	expectedNextSchedule := startTs.Add(1 * time.Hour)
 	if nextSchedule.Compare(expectedNextSchedule) != 0 {
@@ -116,10 +122,12 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 	}
 
 	currentTime := start.Add(5 * time.Minute)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2, d3}, currentTime, c)
+	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2, d3},
+		currentTime, c)
 
 	if len(nextSchedulesMap) != 3 {
-		t.Errorf("Expected to got next schedule for single DAG, got for %d", len(nextSchedulesMap))
+		t.Errorf("Expected to got next schedule for single DAG, got for %d",
+			len(nextSchedulesMap))
 	}
 
 	expectedNextScheds := []time.Time{
@@ -131,7 +139,8 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 	for idx, d := range []dag.Dag{d1, d2, d3} {
 		nextSched, exists := nextSchedulesMap[d.Id]
 		if !exists {
-			t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not", string(d.Id))
+			t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
+				string(d.Id))
 		}
 		if nextSched.Compare(expectedNextScheds[idx]) != 0 {
 			t.Errorf("Expected next schedule for DAG %s for the current time %v to be %v, but got %v",
@@ -153,7 +162,10 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	for i := 0; i < dagNumber; i++ {
 		start := timeutils.RandomUtcTime(2010)
 		h := rand.Intn(1000)
-		sched := dag.FixedSchedule{Interval: time.Duration(h) * time.Hour, Start: start}
+		sched := dag.FixedSchedule{
+			Interval: time.Duration(h) * time.Hour,
+			Start:    start,
+		}
 		d := emptyDag(fmt.Sprintf("d_%d", i), &sched, attr)
 		dags = append(dags, d)
 	}
@@ -162,13 +174,15 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	nextSchedulesMap := nextScheduleForDagRuns(ctx, dags, currentTime, c)
 
 	if len(nextSchedulesMap) != dagNumber {
-		t.Errorf("Expected to got next schedule for %d DAGs, got for %d", dagNumber, len(nextSchedulesMap))
+		t.Errorf("Expected to got next schedule for %d DAGs, got for %d",
+			dagNumber, len(nextSchedulesMap))
 	}
 
 	for _, d := range dags {
 		nextSched, exists := nextSchedulesMap[d.Id]
 		if !exists {
-			t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not", string(d.Id))
+			t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
+				string(d.Id))
 		}
 		expectedNextSched := (*d.Schedule).StartTime()
 		if nextSched.Compare(expectedNextSched) != 0 {
@@ -189,15 +203,18 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 	d2 := dag.New(dag.Id("s2")).Done()
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2}, currentTime, c)
+	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2},
+		currentTime, c)
 
 	if len(nextSchedulesMap) != 2 {
-		t.Errorf("Expected to got next schedule for %d DAGs, got for %d", 2, len(nextSchedulesMap))
+		t.Errorf("Expected to got next schedule for %d DAGs, got for %d", 2,
+			len(nextSchedulesMap))
 	}
 
 	for dagId, nextSched := range nextSchedulesMap {
 		if nextSched != nil {
-			t.Errorf("Expected nil next schedule for %s DAG, got %v", string(dagId), nextSched)
+			t.Errorf("Expected nil next schedule for %s DAG, got %v",
+				string(dagId), nextSched)
 		}
 	}
 }
@@ -231,15 +248,18 @@ func TestShouldBeScheduledSimple(t *testing.T) {
 			string(d1.Id), currTime2)
 	}
 	if execTime2.Compare(d1ns) != 0 {
-		t.Errorf("Expected DAG %s to be scheduled at %v, but got %v", string(d1.Id), d1ns, execTime2)
+		t.Errorf("Expected DAG %s to be scheduled at %v, but got %v",
+			string(d1.Id), d1ns, execTime2)
 	}
 	expectedUpdatedNextSched := time.Date(2023, time.October, 5, 15, 0, 0, 0, time.UTC)
 	ds1NextNextSched, exists := nextSchedules[d1.Id]
 	if !exists {
-		t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not", string(d1.Id))
+		t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not",
+			string(d1.Id))
 	}
 	if ds1NextNextSched == nil {
-		t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s", string(d1.Id))
+		t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s",
+			string(d1.Id))
 	}
 	if expectedUpdatedNextSched.Compare(*ds1NextNextSched) != 0 {
 		t.Errorf("Expected next schedule after once checking shouldBeScheduled for DAG %s, to be %v, got %v",
@@ -249,7 +269,8 @@ func TestShouldBeScheduledSimple(t *testing.T) {
 	for _, ct := range []time.Time{currTime1, currTime2} {
 		shouldBe, execTime := shouldBeSheduled(d2, nextSchedules, ct)
 		if shouldBe {
-			t.Errorf("Expected no next schedule time for DAG without schedule, got: %v", execTime)
+			t.Errorf("Expected no next schedule time for DAG without schedule, got: %v",
+				execTime)
 		}
 	}
 }
@@ -274,14 +295,17 @@ func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
 				string(d1.Id), currTime)
 		}
 		if currTime.Compare(execTime) != 0 {
-			t.Errorf("Expected execTime for DAG %s to be %v, got %v", string(d1.Id), currTime, execTime)
+			t.Errorf("Expected execTime for DAG %s to be %v, got %v",
+				string(d1.Id), currTime, execTime)
 		}
 		nextCurrTime, exists := nextSchedules[d1.Id]
 		if !exists {
-			t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not", string(d1.Id))
+			t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not",
+				string(d1.Id))
 		}
 		if nextCurrTime == nil {
-			t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s", string(d1.Id))
+			t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s",
+				string(d1.Id))
 		}
 		currTime = *nextCurrTime
 	}
@@ -333,16 +357,19 @@ func TestTryScheduleDagSimple(t *testing.T) {
 		ctx := context.Background()
 		err := tryScheduleDag(ctx, d1, currTime, &queue, nextSchedules, c)
 		if err != nil {
-			t.Errorf("Error while trying to schedule new dag run: %s", err.Error())
+			t.Errorf("Error while trying to schedule new dag run: %s",
+				err.Error())
 		}
 	}
 	const expectedDagRuns = 3
 	dbDagruns := c.Count("dagruns")
 	if dbDagruns != expectedDagRuns {
-		t.Errorf("Expected %d dag runs in dagruns table, got: %d", expectedDagRuns, dbDagruns)
+		t.Errorf("Expected %d dag runs in dagruns table, got: %d",
+			expectedDagRuns, dbDagruns)
 	}
 	if queue.Size() != expectedDagRuns {
-		t.Errorf("Expected %d dag runs on the queue, got: %d", expectedDagRuns, queue.Size())
+		t.Errorf("Expected %d dag runs on the queue, got: %d",
+			expectedDagRuns, queue.Size())
 	}
 	expectedExecTimes := []time.Time{
 		time.Date(2023, time.October, 5, 14, 0, 0, 0, time.UTC),
@@ -352,10 +379,12 @@ func TestTryScheduleDagSimple(t *testing.T) {
 	for idx, expExecTime := range expectedExecTimes {
 		dr, pErr := queue.Pop()
 		if pErr != nil {
-			t.Errorf("Error while trying to pop element %d from the queue: %s", idx+1, pErr.Error())
+			t.Errorf("Error while trying to pop element %d from the queue: %s",
+				idx+1, pErr.Error())
 		}
 		if expExecTime.Compare(dr.AtTime) != 0 {
-			t.Errorf("Expected for dag run %d exec time %v, got: %v", idx+1, expExecTime, dr.AtTime)
+			t.Errorf("Expected for dag run %d exec time %v, got: %v", idx+1,
+				expExecTime, dr.AtTime)
 		}
 	}
 
@@ -365,13 +394,14 @@ func TestTryScheduleDagSimple(t *testing.T) {
 		t.Errorf("Error while reading dagruns from database: %s", dbErr.Error())
 	}
 	if len(dbDagRuns) != expectedDagRuns {
-		t.Fatalf("Expected %d dag runs in dagruns table, got: %d", expectedDagRuns, len(dbDagRuns))
+		t.Fatalf("Expected %d dag runs in dagruns table, got: %d",
+			expectedDagRuns, len(dbDagRuns))
 	}
 	for i := 0; i < expectedDagRuns; i++ {
 		expTimeStr := timeutils.ToString(expectedExecTimes[expectedDagRuns-i-1])
 		if dbDagRuns[i].ExecTs != expTimeStr {
-			t.Errorf("Expected for dag run %d exec time %s, got %s in database", expectedDagRuns-i-1, expTimeStr,
-				dbDagRuns[i].ExecTs)
+			t.Errorf("Expected for dag run %d exec time %s, got %s in database",
+				expectedDagRuns-i-1, expTimeStr, dbDagRuns[i].ExecTs)
 		}
 	}
 }

@@ -38,14 +38,17 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 
 	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
-		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
+		t.Fatalf("Unexpected error while reading dag from dags table: %s",
+			rErr.Error())
 	}
 	dagtasksDb1, dtErr := c.ReadDagTasks(ctx, dagId)
 	if dtErr != nil {
-		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s", dtErr.Error())
+		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s",
+			dtErr.Error())
 	}
 	if len(dagtasksDb1) != tasksNum {
-		t.Fatalf("Expected %d dag tasks in dagtasks table, got: %d", tasksNum, len(dagtasksDb1))
+		t.Fatalf("Expected %d dag tasks in dagtasks table, got: %d",
+			tasksNum, len(dagtasksDb1))
 	}
 
 	// Second sync - should not change anything
@@ -59,15 +62,18 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 
 	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if r2Err != nil {
-		t.Fatalf("Unexpected error while reading dag from dags table: %s", r2Err.Error())
+		t.Fatalf("Unexpected error while reading dag from dags table: %s",
+			r2Err.Error())
 	}
 
 	dagtasksDb2, dt2Err := c.ReadDagTasks(ctx, dagId)
 	if dt2Err != nil {
-		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s", dt2Err.Error())
+		t.Fatalf("Unexpected error while reading dag tasks from dagtasks table: %s",
+			dt2Err.Error())
 	}
 	if len(dagtasksDb2) != tasksNum {
-		t.Fatalf("Expected %d dag tasks in dagtasks table, got: %d", tasksNum, len(dagtasksDb1))
+		t.Fatalf("Expected %d dag tasks in dagtasks table, got: %d",
+			tasksNum, len(dagtasksDb1))
 	}
 
 	if !dagDb1.Equals(dagDb2) {
@@ -134,7 +140,8 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 
 	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
-		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
+		t.Fatalf("Unexpected error while reading dag from dags table: %s",
+			rErr.Error())
 	}
 
 	// Update DAG attributes
@@ -151,16 +158,19 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 
 	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if rErr != nil {
-		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
+		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s",
+			r2Err.Error())
 	}
 	if dagDb1.Equals(dagDb2) {
 		t.Fatal("Expected the row in dags table to be different after DAG's attr were updated")
 	}
 	if dagDb1.HashDagMeta == dagDb2.HashDagMeta {
-		t.Errorf("Expected different HashDagMeta after the updated, but is unchanged: %s", dagDb1.HashDagMeta)
+		t.Errorf("Expected different HashDagMeta after the updated, but is unchanged: %s",
+			dagDb1.HashDagMeta)
 	}
 	if dagDb1.Attributes == dagDb2.Attributes {
-		t.Errorf("Expected different Attributes after the updated, but is unchanged: %s", dagDb1.Attributes)
+		t.Errorf("Expected different Attributes after the updated, but is unchanged: %s",
+			dagDb1.Attributes)
 	}
 	if dagDb1.HashTasks != dagDb2.HashTasks {
 		t.Errorf("Expected HashTasks to be unchanged after the update, got different - before: %s, after: %s",
@@ -194,7 +204,8 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 
 	dagDb1, rErr := c.ReadDag(ctx, dagId)
 	if rErr != nil {
-		t.Fatalf("Unexpected error while reading dag from dags table: %s", rErr.Error())
+		t.Fatalf("Unexpected error while reading dag from dags table: %s",
+			rErr.Error())
 	}
 
 	// Update DAG tasks
@@ -212,18 +223,21 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 
 	currentDagTasks := c.CountWhere("dagtasks", "IsCurrent=1")
 	if currentDagTasks != tasksNum+1 {
-		t.Fatalf("Expected %d current rows in dagtasks table after the update, got: %d", tasksNum+1, currentDagTasks)
+		t.Fatalf("Expected %d current rows in dagtasks table after the update, got: %d",
+			tasksNum+1, currentDagTasks)
 	}
 
 	dagDb2, r2Err := c.ReadDag(ctx, dagId)
 	if rErr != nil {
-		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s", r2Err.Error())
+		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s",
+			r2Err.Error())
 	}
 	if dagDb1.Equals(dagDb2) {
 		t.Fatal("Expected the row in dags table to be different after DAG's attr were updated")
 	}
 	if dagDb1.HashTasks == dagDb2.HashTasks {
-		t.Errorf("Expected different HashTasks after the update, but is unchanged: %s", dagDb1.HashTasks)
+		t.Errorf("Expected different HashTasks after the update, but is unchanged: %s",
+			dagDb1.HashTasks)
 	}
 	if dagDb1.HashDagMeta != dagDb2.HashDagMeta {
 		t.Errorf("Expected HashDagMeta to be unchanged after the update, got different - before: %s, after: %s",
@@ -235,27 +249,47 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	}
 }
 
-func dagtasksCountCheck(expDagCnt, expDagTasksCnt int, c *db.Client, t *testing.T) {
+func dagtasksCountCheck(
+	expDagCnt,
+	expDagTasksCnt int,
+	c *db.Client,
+	t *testing.T,
+) {
 	dagCount := c.Count("dags")
 	if dagCount != expDagCnt {
 		t.Fatalf("Expected %d row in dags table, got: %d", expDagCnt, dagCount)
 	}
 	dagtasksCount := c.Count("dagtasks")
 	if dagtasksCount != expDagTasksCnt {
-		t.Fatalf("Expected %d rows in dagtasks table, got: %d", expDagTasksCnt, dagtasksCount)
+		t.Fatalf("Expected %d rows in dagtasks table, got: %d", expDagTasksCnt,
+			dagtasksCount)
 	}
 }
 
 func verySimpleDag(dagId string) dag.Dag {
-	start := dag.Node{Task: tasks.WaitTask{TaskId: "start", Interval: 3 * time.Second}}
+	start := dag.Node{
+		Task: tasks.WaitTask{
+			TaskId:   "start",
+			Interval: 3 * time.Second,
+		},
+	}
 	t := dag.Node{Task: tasks.PrintTask{Name: "t_1"}}
-	end := dag.Node{Task: tasks.WaitTask{TaskId: "end", Interval: 1 * time.Second}}
+	end := dag.Node{
+		Task: tasks.WaitTask{
+			TaskId:   "end",
+			Interval: 1 * time.Second,
+		},
+	}
 	start.Next(&t)
 	t.Next(&end)
 
 	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	sched := dag.FixedSchedule{Interval: 5 * time.Minute, Start: startTs}
 	attr := dag.Attr{Tags: []string{"test"}}
-	dag := dag.New(dag.Id(dagId)).AddSchedule(&sched).AddRoot(&start).AddAttributes(attr).Done()
+	dag := dag.New(dag.Id(dagId)).
+		AddSchedule(&sched).
+		AddRoot(&start).
+		AddAttributes(attr).
+		Done()
 	return dag
 }
