@@ -228,7 +228,6 @@ func parseDagRun(rows *sql.Rows) (DagRun, error) {
 
 	scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
 	if scanErr != nil {
-		log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] Failed scanning a DagRun record.", LOG_PREFIX)
 		return DagRun{}, scanErr
 	}
 	dagrun := DagRun{

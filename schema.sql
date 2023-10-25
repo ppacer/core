@@ -41,6 +41,18 @@ CREATE TABLE IF NOT EXISTS dagruns (
     Version TEXT NOT NULL           -- Scheduler Version
 );
 
+-- Table dagruntasks stores information about tasks state of DAG runs.
+CREATE TABLE IF NOT EXISTS dagruntasks (
+    DagId TEXT NOT NULL,            -- DAG ID
+    ExecTs TEXT NOT NULL,           -- Execution timestamp
+    TaskId TEXT NOT NULL,           -- Task ID
+    InsertTs TEXT NOT NULL,         -- Insert timestamp
+    Status TEXT NOT NULL,           -- DAG task execution status
+    StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
+    Version TEXT NOT NULL,          -- Scheduler version
+
+    PRIMARY KEY (DagId, ExecTs, TaskId)
+);
 
 -- TODO: Think about caching latest dagrun into a separate table with PK(DagId)
 
