@@ -5,7 +5,13 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/dskrzypiec/scheduler/src/timeutils"
+	"github.com/dskrzypiec/scheduler/src/version"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	DagRunTaskStatusScheduled = "SCHEDULED"
 )
 
 type DagRunTask struct {
@@ -60,7 +66,23 @@ func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]D
 
 // Inserts new DagRunTask with default status SCHEDULED.
 func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId string) error {
-	// TODO
+	start := time.Now()
+	insertTs := timeutils.ToString(start)
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
+		Msgf("[%s] Start inserting new dag run task...", LOG_PREFIX)
+	_, iErr := c.dbConn.ExecContext(
+		ctx, c.insertDagRunTaskQuery(),
+		dagId, execTs, taskId, insertTs, DagRunTaskStatusScheduled, insertTs,
+		version.Version,
+	)
+	if iErr != nil {
+		log.Error().Err(iErr).Str("dagId", dagId).Str("execTs", execTs).
+			Str("taskId", taskId).
+			Msgf("[%s] Failed to insert new dag run task", LOG_PREFIX)
+	}
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
+		Dur("durationMs", time.Since(start)).
+		Msgf("[%s] New dag run task inserted", LOG_PREFIX)
 	return nil
 }
 
@@ -98,5 +120,14 @@ func (c *Client) readDagRunTasksQuery() string {
 	WHERE
 			DagId = ?
 		AND ExecTs = ?
+	`
+}
+
+func (c *Client) insertDagRunTaskQuery() string {
+	return `
+	INSERT INTO dagruntasks(
+		DagId, ExecTs, TaskId, InsertTs, Status, StatusUpdateTs, Version
+	)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 }
