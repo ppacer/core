@@ -142,3 +142,13 @@ func syncDagRunsQueue(
 	}
 	return nil
 }
+
+func syncDagRunTaskCache(
+	ctx context.Context,
+	cache map[DagRunTask]DagRunTaskState,
+	dbClient *db.Client,
+) error {
+	// TODO!
+	log.Error().Msg("TODO: syncDagRunTaskCache is not yet implemented!")
+	return nil
+}

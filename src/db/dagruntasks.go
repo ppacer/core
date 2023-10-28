@@ -86,6 +86,24 @@ func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId str
 	return nil
 }
 
+// TODO
+func (c *Client) ReadDagRunTaskStatus(
+	ctx context.Context,
+	dagId, execTs, taskId string,
+) (string, error) {
+	// TODO
+	return "success", nil
+}
+
+// TODO
+func (c *Client) UpdateDagRunTaskStatus(
+	ctx context.Context,
+	dagId, execTs, taskId, status string,
+) error {
+	// TODO
+	return nil
+}
+
 func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
 	var dagId, execTs, taskId, insertTs, status, statusTs, version string
 	scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &status,
