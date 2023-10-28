@@ -2,6 +2,7 @@ package dag
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 )
@@ -88,6 +89,95 @@ func TestDagIsValidSimpleNonuniqueIds(t *testing.T) {
 	d := New(Id("mock_dag")).AddRoot(&n1).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (have non unique task IDs), but is valid.")
+	}
+}
+
+func TestDagTaskParentsSimple(t *testing.T) {
+	g := fewBranchoutsAndMergesGraph()
+	d := New(Id("test_dag")).AddRoot(g).Done()
+	parents := d.TaskParents()
+
+	if len(parents) != len(d.Flatten()) {
+		t.Errorf("Expected %d tasks in map, got: %d", len(d.Flatten()),
+			len(parents))
+	}
+
+	expectedParentsNumber := map[string]int{
+		"n1":      0,
+		"g1n1":    1,
+		"g1n21":   1,
+		"g1n22":   1,
+		"g1n3":    2,
+		"g3":      1,
+		"finish":  3,
+		"g2n1":    1,
+		"g2n21":   1,
+		"g2n22":   1,
+		"g2n23":   1,
+		"g2n31":   2,
+		"g2n32":   1,
+		"g2Merge": 2,
+	}
+
+	for taskId, expParentsNum := range expectedParentsNumber {
+		par, exists := parents[taskId]
+		if !exists {
+			t.Errorf("Task %s does not exist in parents map", taskId)
+		}
+		if len(par) != expParentsNum {
+			t.Errorf("Expected %d parents for %s, got %d (%v)", expParentsNum,
+				taskId, len(par), par)
+		}
+	}
+
+	expectedFinishParents := []string{"g1n3", "g3", "g2Merge"}
+	finishPar := parents["finish"]
+	sort.Strings(expectedFinishParents)
+	sort.Strings(finishPar)
+	for idx, taskId := range expectedFinishParents {
+		if taskId != finishPar[idx] {
+			t.Errorf("Expected parent[%d] %s, got %s", idx, taskId,
+				finishPar[idx])
+		}
+	}
+
+}
+
+func TestDagTaskParentsEmpty(t *testing.T) {
+	d := New(Id("test_dag")).Done()
+	parents := d.TaskParents()
+	if len(parents) != 0 {
+		t.Errorf("Expected empty parents map for empty DAg, got: %v", parents)
+	}
+}
+
+func TestDagTaskParentsLL(t *testing.T) {
+	const N = 100
+	g := linkedList(N)
+	d := New(Id("test_dag")).AddRoot(g).Done()
+	parents := d.TaskParents()
+
+	if len(parents) != N {
+		t.Errorf("Expected %d tasks in parents map, got: %d", N, len(parents))
+	}
+
+	startPar, exists := parents["Start"]
+	if !exists {
+		t.Error("Start should be the root, but does not exist in parents map")
+	}
+	if len(startPar) != 0 {
+		t.Errorf("Start should not have parents but got: %d (%v)",
+			len(startPar), startPar)
+	}
+
+	for taskId, par := range parents {
+		if taskId == "Start" {
+			continue
+		}
+		if len(par) != 1 {
+			t.Errorf("Task %s should have only 1 parent, got: %d (%v)",
+				taskId, len(par), par)
+		}
 	}
 }
 

@@ -91,6 +91,40 @@ func (d *Dag) Flatten() []Task {
 	return tasks
 }
 
+// FlattenNodes flatten DAG into list of Nodes with enriched information in BFS
+// order.
+func (d *Dag) FlattenNodes() []NodeInfo {
+	if d.Root == nil {
+		return []NodeInfo{}
+	}
+	return d.Root.flatten()
+}
+
+// TaskParents returns mapping of DAG task IDs onto its parents task IDs.
+func (d *Dag) TaskParents() map[string][]string {
+	if d.Root == nil {
+		return map[string][]string{}
+	}
+	_, parentsNodeMap := d.Root.flattenBFS() // This does not include the root
+	taskParents := make(map[string][]string, len(parentsNodeMap))
+	taskParents[d.Root.Task.Id()] = []string{}
+
+	for node, nodeParents := range parentsNodeMap {
+		if node == nil {
+			// This should not happen
+			continue
+		}
+		parentTaskIds := make([]string, 0, len(nodeParents))
+		for _, parent := range nodeParents {
+			if parent != nil {
+				parentTaskIds = append(parentTaskIds, parent.Task.Id())
+			}
+		}
+		taskParents[node.Task.Id()] = parentTaskIds
+	}
+	return taskParents
+}
+
 // HashAttr calculates SHA256 hash based on DAG attribues, start time and
 // schedule.
 func (d *Dag) HashDagMeta() string {
