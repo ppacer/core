@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -88,6 +89,44 @@ func TestReadDagRunTasks(t *testing.T) {
 			t.Errorf("Expeted status=%s, got: %s", DagRunTaskStatusScheduled,
 				dagTask.Status)
 		}
+	}
+}
+
+func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task")
+	if rErr != sql.ErrNoRows {
+		t.Errorf("Expected no rows error, got: %s", rErr.Error())
+	}
+}
+
+func TestReadDagRunTaskSingle(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId := "test_dag_1"
+	execTs := timeutils.ToString(time.Now())
+	taskId := "my_task_1"
+	ctx := context.Background()
+	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
+
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	if rErr != nil {
+		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
+	}
+	if dagId != drt.DagId {
+		t.Errorf("Expected dagId=%s, got: %s", dagId, drt.DagId)
+	}
+	if execTs != drt.ExecTs {
+		t.Errorf("Expected execTs=%s, got: %s", execTs, drt.ExecTs)
+	}
+	if taskId != drt.TaskId {
+		t.Errorf("Expected taskId=%s, got: %s", taskId, drt.TaskId)
 	}
 }
 

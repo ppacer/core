@@ -86,13 +86,40 @@ func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId str
 	return nil
 }
 
-// TODO
-func (c *Client) ReadDagRunTaskStatus(
+// ReadDagRunTask reads information about given taskId in given dag run.
+func (c *Client) ReadDagRunTask(
 	ctx context.Context,
 	dagId, execTs, taskId string,
-) (string, error) {
-	// TODO
-	return "success", nil
+) (DagRunTask, error) {
+	start := time.Now()
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
+		Msgf("[%s] Start reading DagRunTask.", LOG_PREFIX)
+
+	row := c.dbConn.QueryRowContext(ctx, c.readDagRunTaskQuery(), dagId,
+		execTs, taskId)
+	var insertTs, status, statusTs, version string
+	scanErr := row.Scan(&insertTs, &status, &statusTs, &version)
+	if scanErr != nil {
+		log.Error().Str("dagId", dagId).Str("execTs", execTs).
+			Str("taskId", taskId).
+			Msgf("[%s] failed scanning dagtask record", LOG_PREFIX)
+		return DagRunTask{}, scanErr
+	}
+
+	dagRunTask := DagRunTask{
+		DagId:          dagId,
+		ExecTs:         execTs,
+		TaskId:         taskId,
+		InsertTs:       insertTs,
+		Status:         status,
+		StatusUpdateTs: statusTs,
+		Version:        version,
+	}
+
+	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
+		Dur("durationMs", time.Since(start)).
+		Msgf("[%s] Finished reading DagRunTask.", LOG_PREFIX)
+	return dagRunTask, nil
 }
 
 // TODO
@@ -138,6 +165,22 @@ func (c *Client) readDagRunTasksQuery() string {
 	WHERE
 			DagId = ?
 		AND ExecTs = ?
+	`
+}
+
+func (c *Client) readDagRunTaskQuery() string {
+	return `
+	SELECT
+		InsertTs,
+		Status,
+		StatusUpdateTs,
+		Version
+	FROM
+		dagruntasks
+	WHERE
+			DagId = ?
+		AND ExecTs = ?
+		AND TaskId = ?
 	`
 }
 

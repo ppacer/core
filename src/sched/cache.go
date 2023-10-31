@@ -101,19 +101,19 @@ func (sc *simpleCache[K, V]) PullFromDatabase(
 ) error {
 	switch obj := any(key).(type) {
 	case DagRunTask:
-		statusStr, statusUpdateTs, err := dbClient.ReadDagRunTaskStatus(
+		dagruntask, err := dbClient.ReadDagRunTask(
 			ctx, string(obj.DagId), timeutils.ToString(obj.AtTime), obj.TaskId,
 		)
 		if err != nil {
 			return err
 		}
-		status, sErr := stringToDagRunTaskStatus(statusStr)
+		status, sErr := stringToDagRunTaskStatus(dagruntask.Status)
 		if sErr != nil {
 			return sErr
 		}
 		v := DagRunTaskState{
 			Status:         status,
-			StatusUpdateTs: timeutils.FromStringMust(statusUpdateTs),
+			StatusUpdateTs: timeutils.FromStringMust(dagruntask.StatusUpdateTs),
 		}
 
 		_, getErr := sc.Get(key)

@@ -28,21 +28,22 @@ type taskScheduler struct {
 	DbClient    *db.Client
 	DagRunQueue ds.Queue[DagRun]
 	TaskQueue   ds.Queue[DagRunTask]
-	TaskCache   map[DagRunTask]DagRunTaskState
-	Config      taskSchedulerConfig
+	// TODO: Add mutex and pull out to another type
+	TaskCache map[DagRunTask]DagRunTaskState
+	Config    taskSchedulerConfig
 }
 
 type taskSchedulerConfig struct {
-	MaxConcurrentDagRuns            int
-	HeartbeatMs                     int
-	CheckDependenciesStatusInterval time.Duration
+	MaxConcurrentDagRuns      int
+	HeartbeatMs               int
+	CheckDependenciesStatusMs int
 }
 
 func defaultTaskSchedulerConfig() taskSchedulerConfig {
 	return taskSchedulerConfig{
-		MaxConcurrentDagRuns:            1000,
-		HeartbeatMs:                     1,
-		CheckDependenciesStatusInterval: 10 * time.Millisecond,
+		MaxConcurrentDagRuns:      1000,
+		HeartbeatMs:               1,
+		CheckDependenciesStatusMs: 10,
 	}
 }
 
@@ -167,7 +168,7 @@ func (ts *taskScheduler) walkAndSchedule(
 			ts.scheduleSingleTask(dagrun, taskId)
 			break
 		}
-		time.Sleep(ts.Config.CheckDependenciesStatusInterval)
+		time.Sleep(time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond)
 	}
 
 	for _, child := range node.Children {
@@ -217,9 +218,15 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 		if exists && !statusFromCache.Status.CanProceed() {
 			return false
 		}
+		if exists && statusFromCache.Status.CanProceed() {
+			continue
+		}
 		// If there is no entry in the cache, we need to query database
+		log.Debug().Str("dagId", string(dagrun.DagId)).
+			Time("atTime", dagrun.AtTime).Str("taskId", taskId).
+			Msg("There is no entry in TaskCache, need to query database")
 		ctx := context.TODO()
-		status, err := ts.DbClient.ReadDagRunTaskStatus(
+		dagruntask, err := ts.DbClient.ReadDagRunTask(
 			ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
 			parentTaskId,
 		)
@@ -228,7 +235,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			log.Error().Err(err).Msg("Cannot read DagRunTask status from DB")
 			return false
 		}
-		drtStatus, sErr := stringToDagRunTaskStatus(status)
+		drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
 		if sErr != nil {
 			log.Error().Err(sErr).Msg("Cannot convert string to DagRunTaskStatus")
 			return false
