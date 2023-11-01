@@ -4,10 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 type DB interface {
@@ -29,7 +28,8 @@ type Client struct {
 func NewClient(connString string) (*Client, error) {
 	db, dbErr := sql.Open("sqlite", connString)
 	if dbErr != nil {
-		log.Error().Err(dbErr).Msgf("Couldn't connect to SQLite [%s]", connString)
+		slog.Error("Could not connect to SQLite", "connString", connString,
+			"err", dbErr)
 		return nil, fmt.Errorf("cannot connect to SQLite DB: %w", dbErr)
 	}
 	sqliteDB := SqliteDB{dbConn: db}

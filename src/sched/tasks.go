@@ -69,7 +69,7 @@ func (ts *taskScheduler) Start() {
 			time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
 			continue
 		}
-		dagrun, err := ts.DagRunQueue.Pop()
+		/*dagrun*/ _, err := ts.DagRunQueue.Pop()
 		if err == ds.ErrQueueIsEmpty {
 			continue
 		}
@@ -83,8 +83,9 @@ func (ts *taskScheduler) Start() {
 		// TODO(dskrzypiec): Think about the context. At least we need to add
 		// timeout for overall DAG run timeout. Start scheduling new DAG run in
 		// a separate goroutine.
-		go ts.scheduleDagTasks(context.TODO(), dagrun, ts.TaskQueue,
-			taskSchedulerErrors)
+		// TODO(dskrzypiec): uncomment when logging will be fixed
+		//go ts.scheduleDagTasks(context.TODO(), dagrun, ts.TaskQueue,
+		//	taskSchedulerErrors)
 	}
 }
 
@@ -231,7 +232,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 		)
 		if err != nil {
 			// No need to handle it, this function will be retried.
-			log.Error().Err(err).Msg("Cannot read DagRunTask status from DB")
+			// TODO!!!! log.Error().Err(err).Msg("Cannot read DagRunTask status from DB")
 			return false
 		}
 		drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)

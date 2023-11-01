@@ -4,13 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/dskrzypiec/scheduler/src/timeutils"
 	"github.com/dskrzypiec/scheduler/src/version"
-
-	"github.com/rs/zerolog/log"
 )
 
 type Dag struct {
@@ -32,7 +31,7 @@ func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 	d, err := c.readDagTx(ctx, tx, dagId)
 	cErr := tx.Commit()
 	if cErr != nil {
-		log.Error().Err(cErr).Str("dagId", dagId).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
+		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
 		return Dag{}, cErr
 	}
 	return d, err
@@ -43,7 +42,8 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
-	log.Info().Str("dagId", dagId).Str("insertTs", insertTs).Msgf("[%s] Start upserting dag...", LOG_PREFIX)
+	slog.Debug("Start upserting dag in dags table...", "dagId", dagId,
+		"insertTs", insertTs)
 	tx, _ := c.dbConn.Begin()
 
 	// Check if there is already a record for given DAG
@@ -54,11 +54,12 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 		iErr := c.insertDag(ctx, tx, dag, insertTs)
 		cErr := tx.Commit()
 		if cErr != nil {
-			log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Err(cErr).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
+			slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
 			tx.Rollback()
 			return cErr
 		}
-		log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Msgf("[%s] Inserted new DAG into dags table", LOG_PREFIX)
+		slog.Info("Inserted new DAG into dags table", "dagId", dagId, "duration",
+			time.Since(start))
 		return iErr
 	}
 	// Otherwise we need to update existing entry in dags table
@@ -67,30 +68,31 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 
 	cErr := tx.Commit()
 	if cErr != nil {
-		log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Err(cErr).Msgf("[%s] Could not commit SQL transaction", LOG_PREFIX)
+		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
 		tx.Rollback()
 		return cErr
 	}
-	log.Info().Str("dagId", dagId).Dur("durationMs", time.Since(start)).Msgf("[%s] Updateing DAG row in dags table", LOG_PREFIX)
+	slog.Info("Updating DAG row in dags table", "dagId", dagId, "duration",
+		time.Since(start))
 	return uErr
 }
 
 // readDag reads a row from dags table within SQL transaction.
 func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, error) {
 	start := time.Now()
-	log.Info().Str("dagId", dagId).Msgf("[%s] Start reading Dag.", LOG_PREFIX)
+	slog.Debug("Start reading dag from dags table", "dagId", dagId)
 
 	row := tx.QueryRowContext(ctx, c.readDagQuery(), dagId)
 	var dId, createTs, createVersion, hashMeta, hashTasks, attr string
 	var startTs, schedule, latestUpdateTs, latestUpdateVersion *string
 
-	scanErr := row.Scan(&dId, &startTs, &schedule, &createTs, &latestUpdateTs, &createVersion, &latestUpdateVersion,
-		&hashMeta, &hashTasks, &attr)
+	scanErr := row.Scan(&dId, &startTs, &schedule, &createTs, &latestUpdateTs,
+		&createVersion, &latestUpdateVersion, &hashMeta, &hashTasks, &attr)
 	if scanErr == sql.ErrNoRows {
 		return Dag{}, scanErr
 	}
 	if scanErr != nil {
-		log.Error().Err(scanErr).Str("dagId", dagId).Msgf("[%s] failed scanning dag record", LOG_PREFIX)
+		slog.Error("Failed scanning dag record", "dagId", dagId, "err", scanErr)
 		return Dag{}, scanErr
 	}
 	dag := Dag{
@@ -105,7 +107,8 @@ func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, 
 		HashTasks:           hashTasks,
 		Attributes:          attr,
 	}
-	log.Info().Dur("durationMs", time.Since(start)).Msgf("[%s] Finished reading Dag.", LOG_PREFIX)
+	slog.Debug("Finished reading dag from dags table", "dagId", dagId, "duration",
+		time.Since(start))
 	return dag, nil
 }
 
@@ -204,7 +207,8 @@ func (c *Client) readDagQuery() string {
 func (c *Client) dagInsertQuery() string {
 	return `
 		INSERT INTO dags (
-			DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion, LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
+			DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion,
+			LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
 		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
