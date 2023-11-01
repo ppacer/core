@@ -28,9 +28,8 @@ type taskScheduler struct {
 	DbClient    *db.Client
 	DagRunQueue ds.Queue[DagRun]
 	TaskQueue   ds.Queue[DagRunTask]
-	// TODO: Add mutex and pull out to another type
-	TaskCache map[DagRunTask]DagRunTaskState
-	Config    taskSchedulerConfig
+	TaskCache   cache[DagRunTask, DagRunTaskState]
+	Config      taskSchedulerConfig
 }
 
 type taskSchedulerConfig struct {
@@ -214,7 +213,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			AtTime: dagrun.AtTime,
 			TaskId: parentTaskId,
 		}
-		statusFromCache, exists := ts.TaskCache[key]
+		statusFromCache, exists := ts.TaskCache.Get(key)
 		if exists && !statusFromCache.Status.CanProceed() {
 			return false
 		}

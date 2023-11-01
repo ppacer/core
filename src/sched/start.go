@@ -143,12 +143,14 @@ func syncDagRunsQueue(
 	return nil
 }
 
+// TODO
 func syncDagRunTaskCache(
 	ctx context.Context,
-	cache map[DagRunTask]DagRunTaskState,
+	cache cache[DagRunTask, DagRunTaskState],
 	dbClient *db.Client,
 ) error {
-	// TODO!
+	// TODO: We want to sync DagRunTasks which are not in terminal states
+	// (failed, success)
 	log.Error().Msg("TODO: syncDagRunTaskCache is not yet implemented!")
 	return nil
 }

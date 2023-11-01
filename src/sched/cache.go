@@ -27,9 +27,10 @@ type cacheableValues interface {
 // to database and get missing entry.
 type cache[K cacheableKeys, V cacheableValues] interface {
 	Add(key K, val V) error
-	Get(key K) (V, error)
+	Get(key K) (V, bool)
 	Remove(key K)
 	Update(key K, newValue V) error
+	Len() int
 	PullFromDatabase(ctx context.Context, key K, dbClient *db.Client) error
 }
 
@@ -60,16 +61,12 @@ func (sc *simpleCache[K, V]) Add(key K, val V) error {
 }
 
 // Get gets value for given key. If key is not present in the cache, then
-// ErrCacheKeyDoesNotExist is returned.
-func (sc *simpleCache[K, V]) Get(key K) (V, error) {
-	var res V
-	var exists bool
+// the second return variable will be false, like in case of map[K]V.
+func (sc *simpleCache[K, V]) Get(key K) (V, bool) {
 	sc.Lock()
 	defer sc.Unlock()
-	if res, exists = sc.data[key]; exists {
-		return res, nil
-	}
-	return res, ErrCacheKeyDoesNotExist
+	res, exists := sc.data[key]
+	return res, exists
 }
 
 // Remove removes given key from the cache. If key does not exist it does
@@ -90,6 +87,13 @@ func (sc *simpleCache[K, V]) Update(key K, newVal V) error {
 		return nil
 	}
 	return ErrCacheKeyDoesNotExist
+}
+
+// Len returns number of items in the cache.
+func (sc *simpleCache[K, V]) Len() int {
+	sc.Lock()
+	defer sc.Unlock()
+	return len(sc.data)
 }
 
 // PullFromDatabase pulls data to be put into the cache based on type of given
@@ -116,8 +120,7 @@ func (sc *simpleCache[K, V]) PullFromDatabase(
 			StatusUpdateTs: timeutils.FromStringMust(dagruntask.StatusUpdateTs),
 		}
 
-		_, getErr := sc.Get(key)
-		if getErr == ErrCacheKeyDoesNotExist {
+		if _, exists := sc.Get(key); !exists {
 			return sc.Add(key, any(v).(V))
 		}
 		return sc.Update(key, any(v).(V))

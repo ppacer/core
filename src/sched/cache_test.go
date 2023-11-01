@@ -28,13 +28,16 @@ func TestCacheSimple(t *testing.T) {
 		t.Errorf("Error while adding new element: %s", addErr.Error())
 	}
 
-	drts2, getErr := cache.Get(drt)
-	if getErr != nil {
-		t.Errorf("Error while getting existing element: %s", getErr.Error())
+	drts2, exists := cache.Get(drt)
+	if !exists {
+		t.Errorf("Expected %v to exists in the cache, but it doesn not", drt)
 	}
 	if drts != drts2 {
 		t.Errorf("Value from the cache is different. Expected %v, got %v",
 			drts, drts2)
+	}
+	if cache.Len() != 1 {
+		t.Errorf("Expected %d items in the cache, got: %d", 1, cache.Len())
 	}
 
 	drtsNew := DagRunTaskState{
@@ -46,21 +49,29 @@ func TestCacheSimple(t *testing.T) {
 		t.Errorf("Error while updating value for existing key: %s",
 			updateErr.Error())
 	}
+	if cache.Len() != 1 {
+		t.Errorf("Expected %d items in the cache, got: %d", 1, cache.Len())
+	}
 
-	drts3, get2Err := cache.Get(drt)
-	if get2Err != nil {
-		t.Errorf("Error while getting item after the update: %s",
-			get2Err.Error())
+	drts3, exists2 := cache.Get(drt)
+	if !exists2 {
+		t.Errorf("Expected %v to exists in the cache, but it doesn not", drt)
 	}
 	if drts3 != drtsNew {
 		t.Errorf("Value from the cache is different. Expected %v, got %v",
 			drtsNew, drts3)
 	}
+	if cache.Len() != 1 {
+		t.Errorf("Expected %d items in the cache, got: %d", 1, cache.Len())
+	}
 
 	cache.Remove(drt)
-	_, get3Err := cache.Get(drt)
-	if get3Err != ErrCacheKeyDoesNotExist {
-		t.Errorf("Expected <key does not exist> error, got: %v", get3Err)
+	if _, exists3 := cache.Get(drt); exists3 {
+		t.Errorf("Expected %v to be removed from the cache, but it's still there",
+			drt)
+	}
+	if cache.Len() != 0 {
+		t.Errorf("Expected %d items in the cache, got: %d", 0, cache.Len())
 	}
 }
 
@@ -72,6 +83,7 @@ func TestCachePullFromDbDagRunTask(t *testing.T) {
 	ctx := context.Background()
 	cache := newSimpleCache[DagRunTask, DagRunTaskState]()
 
+	timestampBeforeInsert := time.Now()
 	dagId := "mock_dag_1"
 	ts := time.Date(2023, 10, 5, 12, 0, 0, 0, time.UTC)
 	timestamp := timeutils.ToString(ts)
@@ -88,12 +100,6 @@ func TestCachePullFromDbDagRunTask(t *testing.T) {
 		AtTime: ts,
 		TaskId: taskId,
 	}
-	/*
-		drts := DagRunTaskState{
-			Status:         Scheduled,
-			StatusUpdateTs: drt.AtTime,
-		}
-	*/
 
 	pullErr := cache.PullFromDatabase(ctx, drt, c)
 	if pullErr != nil {
@@ -101,13 +107,15 @@ func TestCachePullFromDbDagRunTask(t *testing.T) {
 			pullErr.Error())
 	}
 
-	/* This fails as expected. I need to implement db.ReadDagRunTaskStatus...
-	drtC, getErr := cache.Get(drt)
-	if getErr != nil {
-		t.Errorf("Error while getting item from the cache: %s", getErr.Error())
+	drtC, exists := cache.Get(drt)
+	if !exists {
+		t.Errorf("Expected %v to exists in the cache, but it doesn not", drt)
 	}
-	if drtC != drts {
+	if drtC.Status != Scheduled {
 		t.Errorf("Expected %v, got: %v", drt, drtC)
 	}
-	*/
+	if drtC.StatusUpdateTs.Compare(timestampBeforeInsert) <= 0 {
+		t.Errorf("Expected StatusUpdateTs (%v) to be after timestampBeforeInsert (%v)",
+			drtC.StatusUpdateTs, timestampBeforeInsert)
+	}
 }

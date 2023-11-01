@@ -25,17 +25,17 @@ func New(dbClient *db.Client) *Scheduler {
 func (s *Scheduler) Start() http.Handler {
 	drQueue := ds.NewSimpleQueue[DagRun](1000)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](1000)
-	taskCache := make(map[DagRunTask]DagRunTaskState)
+	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
 
 	// Syncing queues with the database in case of program restarts.
 	syncWithDatabase(&drQueue, s.dbClient)
-	syncDagRunTaskCache(context.TODO(), taskCache, s.dbClient)
+	syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient)
 
 	taskScheduler := taskScheduler{
 		DbClient:    s.dbClient,
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,
-		TaskCache:   taskCache,
+		TaskCache:   &taskCache,
 		Config:      defaultTaskSchedulerConfig(),
 	}
 
