@@ -5,15 +5,17 @@ import (
 	"errors"
 	"go/ast"
 	"go/printer"
-
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 var ErrMethodNotFound = errors.New("method not found in ASTs")
 
-// MethodBodySource finds given method for given type in the AST and return it's body AST and source code as string. If
-// given type or method does not exist in given ASTs map, then non nil error would be returned.
-func MethodBodySource(astMap map[string]PackageASTs, typeName, methodName string) (*ast.BlockStmt, string, error) {
+// MethodBodySource finds given method for given type in the AST and return
+// it's body AST and source code as string. If given type or method does not
+// exist in given ASTs map, then non nil error would be returned.
+func MethodBodySource(
+	astMap map[string]PackageASTs, typeName, methodName string,
+) (*ast.BlockStmt, string, error) {
 	for pkg := range astMap {
 		for fileName, astFile := range astMap[pkg].FileToASTs {
 			funcDecl := findMethodInAST(astFile, typeName, methodName)
@@ -23,7 +25,8 @@ func MethodBodySource(astMap map[string]PackageASTs, typeName, methodName string
 			var buf bytes.Buffer
 			err := printer.Fprint(&buf, astMap[pkg].Fset, funcDecl.Body)
 			if err != nil {
-				log.Error().Err(err).Msgf("Error while printing source code for %s.%s method from %s", typeName, methodName, fileName)
+				slog.Error("Error while printing source code", "type", typeName,
+					"methodName", methodName, "fileName", fileName)
 				return nil, "", err
 			}
 			return funcDecl.Body, buf.String(), nil

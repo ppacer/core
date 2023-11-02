@@ -1,10 +1,9 @@
 package timeutils
 
 import (
+	"log/slog"
 	"math/rand"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 const LOG_PREFIX = "timeutils"
@@ -24,14 +23,15 @@ func FromString(s string) (time.Time, error) {
 	return time.Parse(TimestampFormat, s)
 }
 
-// In most cases FromString should be called on strings created by ToString and should succeed. In cases when we are
-// pretty sure that FromString will succeed, we can use FromStringMust. If FromString would fail for given input, error
-// would be logged and time.Time{} would be returned.
+// In most cases FromString should be called on strings created by ToString and
+// should succeed. In cases when we are pretty sure that FromString will
+// succeed, we can use FromStringMust. If FromString would fail for given
+// input, error would be logged and time.Time{} would be returned.
 func FromStringMust(s string) time.Time {
 	t, err := FromString(s)
 	if err != nil {
-		log.Error().Str("timestamp", s).Msgf("[%s] Cannot deserialize to time.Time based on format %s",
-			LOG_PREFIX, TimestampFormat)
+		slog.Error("Cannot deserialize to time.Time", "timestamp", s, "format",
+			TimestampFormat)
 		return time.Time{}
 	}
 	return t
@@ -47,5 +47,6 @@ func RandomUtcTime(minYear int) time.Time {
 	second := rand.Intn(60)
 	ns := rand.Intn(10000000) * 1000
 
-	return time.Date(year, time.Month(month), day, hour, minute, second, ns, time.UTC)
+	return time.Date(year, time.Month(month), day, hour, minute, second, ns,
+		time.UTC)
 }
