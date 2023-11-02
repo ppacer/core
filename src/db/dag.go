@@ -31,7 +31,8 @@ func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 	d, err := c.readDagTx(ctx, tx, dagId)
 	cErr := tx.Commit()
 	if cErr != nil {
-		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
+		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err",
+			cErr)
 		return Dag{}, cErr
 	}
 	return d, err
@@ -54,12 +55,13 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 		iErr := c.insertDag(ctx, tx, dag, insertTs)
 		cErr := tx.Commit()
 		if cErr != nil {
-			slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
+			slog.Error("Could not commit SQL transaction", "dagId", dagId,
+				"err", cErr)
 			tx.Rollback()
 			return cErr
 		}
-		slog.Info("Inserted new DAG into dags table", "dagId", dagId, "duration",
-			time.Since(start))
+		slog.Debug("Inserted new DAG into dags table", "dagId", dagId,
+			"duration", time.Since(start))
 		return iErr
 	}
 	// Otherwise we need to update existing entry in dags table
@@ -68,11 +70,12 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 
 	cErr := tx.Commit()
 	if cErr != nil {
-		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err", cErr)
+		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err",
+			cErr)
 		tx.Rollback()
 		return cErr
 	}
-	slog.Info("Updating DAG row in dags table", "dagId", dagId, "duration",
+	slog.Debug("Updating DAG row in dags table", "dagId", dagId, "duration",
 		time.Since(start))
 	return uErr
 }

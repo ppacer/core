@@ -66,8 +66,9 @@ func (c *Client) ReadDagRuns(ctx context.Context, dagId string, topN int) ([]Dag
 	return dagruns, nil
 }
 
-// InsertDagRun inserts new row into dagruns table for given DagId and execution timestamp. Initial status is set to
-// DagRunStatusScheduled. RunId for just inserted dag run is returned or -1 in case when error is not nil.
+// InsertDagRun inserts new row into dagruns table for given DagId and
+// execution timestamp. Initial status is set to DagRunStatusScheduled. RunId
+// for just inserted dag run is returned or -1 in case when error is not nil.
 func (c *Client) InsertDagRun(ctx context.Context, dagId, execTs string) (int64, error) {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
@@ -82,12 +83,13 @@ func (c *Client) InsertDagRun(ctx context.Context, dagId, execTs string) (int64,
 			"err", err)
 		return -1, err
 	}
-	slog.Info("Finished inserting dag run in state SCHEDULED", "dagId", dagId,
+	slog.Debug("Finished inserting dag run in state SCHEDULED", "dagId", dagId,
 		"execTs", execTs, "duration", time.Since(start))
 	return res.LastInsertId()
 }
 
-// ReadLatestDagRuns reads latest dag run for each Dag. Returns map from DagId to DagRun.
+// ReadLatestDagRuns reads latest dag run for each Dag. Returns map from DagId
+// to DagRun.
 func (c *Client) ReadLatestDagRuns(ctx context.Context) (map[string]DagRun, error) {
 	start := time.Now()
 	slog.Debug("Start reading latest run for each DAG from dagruns table")
@@ -150,8 +152,8 @@ func (c *Client) UpdateDagRunStatus(
 	return nil
 }
 
-// Updates dagrun status for given dagId and execTs (when runId is not available). Pair (dagId, execTs) is unique in
-// dagrun table.
+// Updates dagrun status for given dagId and execTs (when runId is not
+// available). Pair (dagId, execTs) is unique in dagrun table.
 func (c *Client) UpdateDagRunStatusByExecTs(
 	ctx context.Context, dagId, execTs, status string,
 ) error {
@@ -174,7 +176,8 @@ func (c *Client) UpdateDagRunStatusByExecTs(
 	}
 	if rowsUpdated > 1 {
 		slog.Error("Seems that too many rows were updated. Expected exactly one",
-			"dagId", dagId, "execTs", execTs, "status", status, "rowsUpdated", rowsUpdated)
+			"dagId", dagId, "execTs", execTs, "status", status, "rowsUpdated",
+			rowsUpdated)
 		return errors.New("too many rows updated")
 	}
 	slog.Debug("Finished updating dag run", "dagId", dagId, "execTs", execTs,
@@ -182,7 +185,8 @@ func (c *Client) UpdateDagRunStatusByExecTs(
 	return nil
 }
 
-// DagRunExists checks whenever dagrun already exists for given DAG ID and schedule timestamp.
+// DagRunExists checks whenever dagrun already exists for given DAG ID and
+// schedule timestamp.
 func (c *Client) DagRunExists(
 	ctx context.Context, dagId, execTs string,
 ) (bool, error) {
@@ -206,7 +210,8 @@ func (c *Client) DagRunExists(
 	return count > 0, nil
 }
 
-// Reads dag run from dagruns table which are in statuse READY_TO_SCHEDULE and SCHEDULED.
+// Reads dag run from dagruns table which are in statuse READY_TO_SCHEDULE and
+// SCHEDULED.
 func (c *Client) ReadDagRunsToBeScheduled(ctx context.Context) ([]DagRun, error) {
 	start := time.Now()
 	slog.Debug("Start reading dag runs that should be scheduled")
@@ -244,7 +249,8 @@ func parseDagRun(rows *sql.Rows) (DagRun, error) {
 	var runId int64
 	var dagId, execTs, insertTs, status, statusTs, version string
 
-	scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status, &statusTs, &version)
+	scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status,
+		&statusTs, &version)
 	if scanErr != nil {
 		return DagRun{}, scanErr
 	}

@@ -3,11 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/timeutils"
 	"github.com/dskrzypiec/scheduler/src/version"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -25,16 +25,18 @@ type DagRunTask struct {
 }
 
 // Reads DAG run tasks information from dagruntasks table for given DAG run.
-func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]DagRunTask, error) {
+func (c *Client) ReadDagRunTasks(
+	ctx context.Context, dagId, execTs string,
+) ([]DagRunTask, error) {
 	start := time.Now()
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).
-		Msgf("[%s] Start reading DAG run tasks...", LOG_PREFIX)
+	slog.Debug("Start reading dag run tasks", "dagId", dagId, "execTs", execTs)
 	dagruntasks := make([]DagRunTask, 0, 100)
 
-	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunTasksQuery(), dagId, execTs)
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunTasksQuery(), dagId,
+		execTs)
 	if qErr != nil {
-		log.Error().Err(qErr).Str("dagId", dagId).Str("execTs", execTs).
-			Msgf("[%s] Failed querying DAG runs.", LOG_PREFIX)
+		slog.Error("Failed querying dag run tasks", "dagId", dagId, "execTs",
+			execTs, "err", qErr)
 		return nil, qErr
 	}
 	defer rows.Close()
@@ -42,47 +44,43 @@ func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]D
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
-			// Handle context cancellation or deadline exceeded
-			log.Warn().Err(ctx.Err()).Str("dagId", dagId).Str("execTs", execTs).
-				Msgf("[%s] Context done while processing rows.", LOG_PREFIX)
+			slog.Warn("Context done while processing dag run tasks", "dagId",
+				dagId, "execTs", execTs, "err", ctx.Err())
 			return nil, ctx.Err()
 		default:
 		}
-
 		dagruntask, scanErr := parseDagRunTask(rows)
 		if scanErr != nil {
-			log.Error().Err(scanErr).Str("dagId", dagId).Str("execTs", execTs).
-				Msgf("[%s] Failed scanning a DagRunTask record.", LOG_PREFIX)
+			slog.Error("Failed scanning a DagRunTask record", "dagId", dagId,
+				"execTs", execTs, "err", scanErr)
 			return nil, scanErr
 		}
 		dagruntasks = append(dagruntasks, dagruntask)
 	}
-
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).
-		Dur("durationMs", time.Since(start)).
-		Msgf("[%s] Finished reading DAG runs.", LOG_PREFIX)
+	slog.Debug("Finished reading dag run tasks", "dagId", dagId, "execTs",
+		execTs, "duration", time.Since(start))
 	return dagruntasks, nil
 }
 
 // Inserts new DagRunTask with default status SCHEDULED.
-func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId string) error {
+func (c *Client) InsertDagRunTask(
+	ctx context.Context, dagId, execTs, taskId string,
+) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(start)
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
-		Msgf("[%s] Start inserting new dag run task...", LOG_PREFIX)
+	slog.Debug("Start inserting new dag run task", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId)
 	_, iErr := c.dbConn.ExecContext(
 		ctx, c.insertDagRunTaskQuery(),
 		dagId, execTs, taskId, insertTs, DagRunTaskStatusScheduled, insertTs,
 		version.Version,
 	)
 	if iErr != nil {
-		log.Error().Err(iErr).Str("dagId", dagId).Str("execTs", execTs).
-			Str("taskId", taskId).
-			Msgf("[%s] Failed to insert new dag run task", LOG_PREFIX)
+		slog.Error("Failed to insert new dag run task", "dagId", dagId,
+			"execTs", execTs, "taskId", taskId, "err", iErr)
 	}
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
-		Dur("durationMs", time.Since(start)).
-		Msgf("[%s] New dag run task inserted", LOG_PREFIX)
+	slog.Debug("Finished inserting new dag run task", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId, "duration", time.Since(start))
 	return nil
 }
 
@@ -92,17 +90,16 @@ func (c *Client) ReadDagRunTask(
 	dagId, execTs, taskId string,
 ) (DagRunTask, error) {
 	start := time.Now()
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
-		Msgf("[%s] Start reading DagRunTask.", LOG_PREFIX)
+	slog.Debug("Start reading single dag run task", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId)
 
 	row := c.dbConn.QueryRowContext(ctx, c.readDagRunTaskQuery(), dagId,
 		execTs, taskId)
 	var insertTs, status, statusTs, version string
 	scanErr := row.Scan(&insertTs, &status, &statusTs, &version)
 	if scanErr != nil {
-		log.Error().Str("dagId", dagId).Str("execTs", execTs).
-			Str("taskId", taskId).
-			Msgf("[%s] failed scanning dagtask record", LOG_PREFIX)
+		slog.Error("Failed scanning a DagRunTask record", "dagId", dagId,
+			"execTs", execTs, "taskId", taskId, "err", scanErr)
 		return DagRunTask{}, scanErr
 	}
 
@@ -115,10 +112,8 @@ func (c *Client) ReadDagRunTask(
 		StatusUpdateTs: statusTs,
 		Version:        version,
 	}
-
-	log.Info().Str("dagId", dagId).Str("execTs", execTs).Str("taskId", taskId).
-		Dur("durationMs", time.Since(start)).
-		Msgf("[%s] Finished reading DagRunTask.", LOG_PREFIX)
+	slog.Debug("Finished reading dag run task", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId, "duration", time.Since(start))
 	return dagRunTask, nil
 }
 
