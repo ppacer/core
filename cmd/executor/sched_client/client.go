@@ -3,12 +3,12 @@ package sched_client
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/models"
-	"github.com/rs/zerolog/log"
 )
 
 const prefix = "sched_client"
@@ -37,32 +37,31 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 	resp, err := c.httpClient.Get(c.getTaskUrl())
 	if err != nil {
-		log.Error().Err(err).Dur("durationMs", time.Since(startTs)).Msgf("[%s] GetTask failed", prefix)
+		slog.Error("GetTask failed", "err", err)
 		return taskToExec, err
 	}
 
-	body, rErr := ioutil.ReadAll(resp.Body)
+	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
-		log.Error().Err(rErr).Dur("durationMs", time.Since(startTs)).
-			Msgf("[%s] couldn't read GetTask response body", prefix)
+		slog.Error("Could not read GetTask response body", "err", rErr)
 		return taskToExec, rErr
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Int("statuscode", resp.StatusCode).
-			Str("respBody", string(body)).Dur("durationMs", time.Since(startTs)).
-			Msgf("[%s] got status code != 200 on GetTask response", prefix)
-		return taskToExec, fmt.Errorf("got %d status code in GetTask response", resp.StatusCode)
+		slog.Error("Got status code != 200 on GetTask response", "statuscode",
+			resp.StatusCode, "body", string(body))
+		return taskToExec, fmt.Errorf("got %d status code in GetTask response",
+			resp.StatusCode)
 	}
 
 	jErr := json.Unmarshal(body, &taskToExec)
 	if jErr != nil {
-		log.Error().Err(jErr).Str("respBody", string(body)).Dur("durationMs", time.Since(startTs)).
-			Msgf("[%s] unmarshal into APIResponse failed", prefix)
-		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram models.TaskToExec: %s", jErr.Error())
+		slog.Error("Unmarshal into APIResponse failed", "body", string(body),
+			"err", jErr)
+		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram models.TaskToExec: %s",
+			jErr.Error())
 	}
-
-	log.Info().Dur("durationMs", time.Since(startTs)).Msg("GetTask finished")
+	slog.Debug("GetTask finished", "duration", time.Since(startTs))
 	return taskToExec, nil
 }
 
