@@ -3,13 +3,13 @@ package sched
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/dskrzypiec/scheduler/src/db"
 	"github.com/dskrzypiec/scheduler/src/ds"
 	"github.com/dskrzypiec/scheduler/src/timeutils"
-	"github.com/rs/zerolog/log"
 )
 
 type DagRunTask struct {
@@ -60,8 +60,8 @@ func (ts *taskScheduler) Start() {
 		select {
 		case err := <-taskSchedulerErrors:
 			// TODO(dskrzypiec): What do we want to do with those errors?
-			log.Error().Str("dagId", string(err.DagId)).
-				Time("execTs", err.ExecTs).Err(err.Err)
+			slog.Error("Error while scheduling new tasks", "dagId",
+				string(err.DagId), "execTs", err.ExecTs, "err", err.Err)
 		default:
 		}
 		if ts.DagRunQueue.Size() == 0 {
@@ -76,8 +76,7 @@ func (ts *taskScheduler) Start() {
 		if err != nil {
 			// TODO: should we do anything else? Probably not, because item
 			// should be probably still on the queue
-			log.Error().Err(err).Msgf("[%s] Error while getting dag run from the queue. Will try again.",
-				LOG_PREFIX)
+			slog.Error("Error while getting dag run from the queue", "err", err)
 			continue
 		}
 		// TODO(dskrzypiec): Think about the context. At least we need to add
@@ -99,8 +98,8 @@ func (ts *taskScheduler) scheduleDagTasks(
 	errorsChan chan taskSchedulerError,
 ) {
 	dagId := string(dagrun.DagId)
-	log.Debug().Str("dagId", dagId).Time("execTs", dagrun.AtTime).
-		Msgf("[%s] Start scheduling tasks...", LOG_PREFIX)
+	slog.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
+		dagrun.AtTime)
 	execTs := timeutils.ToString(dagrun.AtTime)
 
 	// Update dagrun state to running
@@ -131,9 +130,8 @@ func (ts *taskScheduler) scheduleDagTasks(
 		return
 	}
 	if dag.Root == nil {
-		log.Warn().Str("dagId", string(dagrun.DagId)).
-			Msgf("[%s] DAG %s has no tasks. There is nothing to schedule",
-				LOG_PREFIX, string(dagrun.DagId))
+		slog.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
+			dagrun.DagId)
 		return
 	}
 
@@ -158,7 +156,8 @@ func (ts *taskScheduler) walkAndSchedule(
 		select {
 		case <-ctx.Done():
 			// TODO: Handle cancelation
-			log.Error().Err(ctx.Err())
+			slog.Error("Context canceled while walkAndSchedule", "err",
+				ctx.Err())
 			return ctx.Err()
 		default:
 		}
@@ -200,7 +199,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 ) bool {
 	parents, exists := taskParents[taskId]
 	if !exists {
-		log.Error().Msgf("Task %s does not exists in parents map", taskId)
+		slog.Error("Task doesn not exist in parents map", "taskId", taskId)
 		return false
 	}
 	if len(parents) == 0 {
@@ -222,9 +221,8 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			continue
 		}
 		// If there is no entry in the cache, we need to query database
-		log.Debug().Str("dagId", string(dagrun.DagId)).
-			Time("atTime", dagrun.AtTime).Str("taskId", taskId).
-			Msg("There is no entry in TaskCache, need to query database")
+		slog.Debug("There is no entry in TaskCache, need to query database",
+			"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", taskId)
 		ctx := context.TODO()
 		dagruntask, err := ts.DbClient.ReadDagRunTask(
 			ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
@@ -237,7 +235,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 		}
 		drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
 		if sErr != nil {
-			log.Error().Err(sErr).Msg("Cannot convert string to DagRunTaskStatus")
+			slog.Error("Cannot convert string to DagRunTaskStatus", "err", sErr)
 			return false
 		}
 		if !drtStatus.CanProceed() {

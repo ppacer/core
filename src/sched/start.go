@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/dskrzypiec/scheduler/src/db"
 	"github.com/dskrzypiec/scheduler/src/ds"
 	"github.com/dskrzypiec/scheduler/src/timeutils"
-	"github.com/rs/zerolog/log"
 )
 
 const StartContextTimeout = 30 * time.Second
@@ -26,12 +26,13 @@ func syncWithDatabase(queue ds.Queue[DagRun], dbClient *db.Client) {
 	dagTasksSyncErr := syncDags(ctx, dbClient)
 	if dagTasksSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
-		log.Panic().Err(dagTasksSyncErr).Msg("Cannot sync up dag.registry and dagtasks")
+		slog.Error("Cannot sync up dag.registry and dagtasks", "err",
+			dagTasksSyncErr)
 	}
 	queueSyncErr := syncDagRunsQueue(ctx, queue, dbClient)
 	if queueSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
-		log.Panic().Err(queueSyncErr).Msg("Cannot sync up dag runs queue")
+		slog.Error("Cannot sync up dag runs queue", "err", queueSyncErr)
 	}
 }
 
@@ -40,14 +41,14 @@ func syncWithDatabase(queue ds.Queue[DagRun], dbClient *db.Client) {
 // would be updated and dagtasks would not.
 func syncDags(ctx context.Context, dbClient *db.Client) error {
 	start := time.Now()
-	log.Info().Msg("Start syncing dag.registry with dags and dagtasks tables...")
+	slog.Info("Start syncing dag.registry with dags and dagtasks tables")
 	for _, d := range dag.List() {
 		select {
 		case <-ctx.Done():
 			// TODO(dskrzypiec): what now? Probably retries... and eventually
 			// panic
-			log.Panic().Err(ctx.Err()).
-				Msg("Context for Scheduler initial sync timeouted")
+			slog.Error("Context for Scheduler initial sync timeouted", "err",
+				ctx.Err())
 		default:
 		}
 		syncErr := syncDag(ctx, dbClient, d)
@@ -59,8 +60,8 @@ func syncDags(ctx context.Context, dbClient *db.Client) error {
 			return syncErr
 		}
 	}
-	log.Info().Dur("durationMs", time.Since(start)).
-		Msg("Finished syncing dag.Registry with dags and dagtasks tables")
+	slog.Info("Finished syncing dag.Registry with dags and dagtasks tables",
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -69,47 +70,47 @@ func syncDag(ctx context.Context, dbClient *db.Client, d dag.Dag) error {
 	dagId := string(d.Id)
 	dbDag, dbRErr := dbClient.ReadDag(ctx, dagId)
 	if dbRErr != nil && dbRErr != sql.ErrNoRows {
-		log.Error().Err(dbRErr).Str("dagId", dagId).
-			Msgf("Could not get Dag metadata from dags table")
+		slog.Error("Could not get Dag metadata from dags table", "dagId", dagId,
+			"err", dbRErr)
 		return dbRErr
 	}
 	if dbRErr == sql.ErrNoRows {
 		// There is no DAG in the database yet
 		uErr := dbClient.UpsertDag(ctx, d)
 		if uErr != nil {
-			log.Error().Err(uErr).Str("dagId", dagId).
-				Msgf("Could no insert DAG into dags table")
+			slog.Error("Could not insert DAG into dags table", "dagId", dagId,
+				"err", uErr)
 			return uErr
 		}
 		dtErr := dbClient.InsertDagTasks(ctx, d)
 		if dtErr != nil {
-			log.Error().Err(dtErr).Str("dagId", dagId).
-				Msgf("Could not insert DAG tasks into dagtasks table")
+			slog.Error("Could not insert DAG tasks into dagtasks table",
+				"dagId", dagId, "err", dtErr)
 			return dtErr
 		}
 		return nil
 	}
 	// Check if update is needed
 	if dbDag.HashDagMeta == d.HashDagMeta() && dbDag.HashTasks == d.HashTasks() {
-		log.Debug().Str("dagId", dagId).
-			Msg("There is no need for update. HashAttr and HashTasks are not changed")
+		slog.Debug("There is no need for update. HashAttr and HashTasks are "+
+			"not changed", "dagId", dagId)
 		return nil
 	}
 	// Either attributes or tasks for this DAG were modified
 	uErr := dbClient.UpsertDag(ctx, d)
 	if uErr != nil {
-		log.Error().Err(uErr).Str("dagId", dagId).
-			Msgf("Could no update DAG in dags table")
+		slog.Error("Could not update DAG in dags table", "dagId", dagId, "err",
+			uErr)
 		return uErr
 	}
 	if dbDag.HashTasks != d.HashTasks() {
-		log.Info().Str("dagId", dagId).Str("prevHashTasks", dbDag.HashTasks).
-			Str("currHashTasks", d.HashTasks()).
-			Msg("Hash tasks has changed. New version of dagtasks will be inserted.")
+		slog.Info("Hash tasks has changed. New version of dagtasks will be inserted.",
+			"dagId", dagId, "prevHashTasks", dbDag.HashTasks, "currHashTasks",
+			d.HashTasks())
 		dtErr := dbClient.InsertDagTasks(ctx, d)
 		if dtErr != nil {
-			log.Error().Err(dtErr).Str("dagId", dagId).
-				Msgf("Could not insert DAG tasks into dagtasks table")
+			slog.Error("Could not insert DAG tasks into dagtasks table", "dagId",
+				dagId)
 			return dtErr
 		}
 	}
@@ -131,7 +132,7 @@ func syncDagRunsQueue(
 	}
 	for _, dr := range dagrunsToSchedule {
 		for q.Capacity() <= 0 {
-			log.Warn().Msgf("The dag run queue is currently full. Will try again in %v",
+			slog.Warn("The dag run queue is full. Will try in moment", "moment",
 				QueueIsFullInterval)
 			time.Sleep(QueueIsFullInterval)
 		}
@@ -151,6 +152,6 @@ func syncDagRunTaskCache(
 ) error {
 	// TODO: We want to sync DagRunTasks which are not in terminal states
 	// (failed, success)
-	log.Error().Msg("TODO: syncDagRunTaskCache is not yet implemented!")
+	slog.Error("TODO: syncDagRunTaskCache is not yet implemented!")
 	return nil
 }
