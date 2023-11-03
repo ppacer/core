@@ -2,23 +2,23 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/cmd/executor/sched_client"
 	"github.com/dskrzypiec/scheduler/src/dag"
-	"github.com/rs/zerolog/log"
 
 	_ "github.com/dskrzypiec/scheduler/src/user"
 )
 
 func main() {
 	cfg := ParseConfig()
-	cfg.setupZerolog()
+	cfg.setupLogger()
 
 	const dagId = "hello_dag"
 	helloDag, err := dag.Get(dag.Id(dagId))
 	if err != nil {
-		log.Error().Err(err).Msg("Could not get DAG hello_dag from registry")
+		slog.Error("Could no get DAG hello_dag from registry", "err", err)
 	}
 	fmt.Printf("hello_dag.%s.Execute() source:\n", helloDag.Root.Task.Id())
 	fmt.Println(dag.TaskExecuteSource(helloDag.Root.Task))
@@ -38,18 +38,19 @@ func main() {
 	for {
 		tte, err := schedClient.GetTask()
 		if err != nil {
-			log.Error().Err(err)
+			slog.Error("GetTask error", "err", err)
 			break
 		}
 		fmt.Printf("Executing %s.%s.Execute()...\n", tte.DagId, tte.TaskId)
 		d, dErr := dag.Get(dag.Id(tte.DagId))
 		if dErr != nil {
-			log.Error().Err(dErr).Msgf("Could not get DAG from registry: %s", tte.DagId)
+			slog.Error("Could not get DAG from registry", "dagId", tte.DagId)
 			break
 		}
 		task, tErr := d.GetTask(tte.TaskId)
 		if tErr != nil {
-			log.Error().Err(dErr).Msgf("Could not get task %s from DAG: %s", tte.TaskId, tte.DagId)
+			slog.Error("Could not get task from DAG", "dagId", tte.DagId,
+				"taskId", tte.TaskId)
 			break
 		}
 		task.Execute()

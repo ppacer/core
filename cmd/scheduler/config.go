@@ -25,7 +25,7 @@ func ParseConfig() Config {
 	logDebugLevel := flag.Bool("logDebug", false,
 		"Log events on at least debug level. Otherwise info level is assumed.")
 	logUseConsoleWriter := flag.Bool("logConsole", true,
-		"Use ConsoleWriter within zerolog - pretty but not efficient, mostly for development")
+		"Use ConsoleWriter - pretty but not efficient, mostly for development")
 	port := flag.Int("port", 8080, "Port on which Scheduler is exposed")
 	flag.Parse()
 
