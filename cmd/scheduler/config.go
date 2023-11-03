@@ -2,13 +2,11 @@ package main
 
 import (
 	"flag"
+	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dskrzypiec/scheduler/src/version"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type LoggerConfig struct {
@@ -24,10 +22,10 @@ type Config struct {
 
 // Parse Config or fail.
 func ParseConfig() Config {
-	logDebugLevel := flag.Bool("logDebug", true,
+	logDebugLevel := flag.Bool("logDebug", false,
 		"Log events on at least debug level. Otherwise info level is assumed.")
 	logUseConsoleWriter := flag.Bool("logConsole", true,
-		"Use ConsoleWriter within zerolog - pretty but not efficient, mostly for development")
+		"Use ConsoleWriter - pretty but not efficient, mostly for development")
 	port := flag.Int("port", 8080, "Port on which Scheduler is exposed")
 	flag.Parse()
 
@@ -43,15 +41,20 @@ func ParseConfig() Config {
 	}
 }
 
-func (c *Config) setupZerolog() {
-	zerolog.DurationFieldUnit = time.Millisecond
+func (c *Config) setupLogger() {
+	lvl := slog.LevelInfo
 	if c.Logger.UseDebugLevel {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		lvl = slog.LevelDebug
 	}
+	var logger *slog.Logger
 	if c.Logger.UseConsoleWriter {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+		logger = slog.New(
+			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}),
+		)
 	} else {
-		log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-		zerolog.TimeFieldFormat = time.RFC3339
+		logger = slog.New(
+			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}),
+		)
 	}
+	slog.SetDefault(logger)
 }

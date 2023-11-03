@@ -2,13 +2,13 @@ package sched
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/dskrzypiec/scheduler/src/db"
 	"github.com/dskrzypiec/scheduler/src/ds"
 	"github.com/dskrzypiec/scheduler/src/timeutils"
-	"github.com/rs/zerolog/log"
 )
 
 const LOG_PREFIX = "scheduler"
@@ -42,9 +42,9 @@ func trySchedule(
 
 	// Make sure we have next schedules for every dag in dags
 	if len(dags) != len(nextSchedules) {
-		log.Warn().Int("dag", len(dags)).Int("nextSchedules", len(nextSchedules)).
-			Msgf("Seems like number of next shedules does not match number of dags." +
-				"Will try refresh next schedules.")
+		slog.Warn("Seems like number of next shedules does not match number "+
+			"of dags. Will try refresh next schedules.", "dags", len(dags),
+			"nextSchedules", len(nextSchedules))
 		ctx := context.TODO() // Think about it
 		nextSchedules = nextScheduleForDagRuns(ctx, dags, now, dbClient)
 	}
@@ -54,7 +54,7 @@ func trySchedule(
 
 		// Check if there is space on the queue to schedule a new dag run
 		for queue.Capacity() <= 0 {
-			log.Warn().Msgf("The dag run queue is currently full. Will try again in %v",
+			slog.Warn("The dag run queue is full. Will try in moment", "moment",
 				QueueIsFullInterval)
 			time.Sleep(QueueIsFullInterval)
 		}
@@ -64,7 +64,8 @@ func trySchedule(
 			// TODO(dskrzypiec): implement some kind of second queue for
 			// retries when there was an error when trying to schedule new dag
 			// run.
-			log.Error().Err(tsdErr).Str("dagId", string(d.Id)).Msg("Error while trying to schedule new dag run")
+			slog.Error("Error while trying to schedule new dag run", "dagId",
+				string(d.Id), "err", tsdErr)
 		}
 	}
 }
@@ -87,8 +88,8 @@ func tryScheduleDag(
 	if !shouldBe {
 		return nil
 	}
-	log.Info().Str("dagId", string(dag.Id)).Time("execTs", schedule).
-		Msg("About to try scheduling new dag run")
+	slog.Info("About to try scheduling new dag run", "dagId", string(dag.Id),
+		"execTs", schedule)
 
 	execTs := timeutils.ToString(schedule)
 	alreadyScheduled, dreErr := dbClient.DagRunExists(ctx, string(dag.Id), execTs)
@@ -102,9 +103,8 @@ func tryScheduleDag(
 			// queue (perhaps due to scheduler restart).
 			qErr := queue.Put(DagRun{DagId: dag.Id, AtTime: schedule})
 			if qErr != nil {
-				log.Error().Err(qErr).Str("dagId", string(dag.Id)).
-					Time("execTime", schedule).
-					Msg("Cannot put dag run on the queue")
+				slog.Error("Cannot put dag run on the queue", "dagId",
+					string(dag.Id), "execTs", schedule, "err", qErr)
 				return qErr
 			}
 		}
@@ -118,9 +118,8 @@ func tryScheduleDag(
 	}
 	uErr := dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusReadyToSchedule)
 	if uErr != nil {
-		log.Warn().Err(uErr).Str("dagId", string(dag.Id)).
-			Time("execTime", schedule).
-			Msg("Cannot update dag run status to READY_TO_SCHEDULE")
+		slog.Warn("Cannot update dag run status to READY_TO_SCHEDULE", "dagId",
+			string(dag.Id), "execTs", schedule, "err", uErr)
 		// We don't need to block the process because of this error. In worst
 		// case we can omit having this status.
 	}
@@ -131,9 +130,8 @@ func tryScheduleDag(
 
 		// We don't remove entry from dagruns table, based on this it would be
 		// put on the queue in the next iteration.
-		log.Error().Err(qErr).Str("dagId", string(dag.Id)).
-			Time("execTime", schedule).
-			Msg("Cannot put dag run on the queue")
+		slog.Error("Cannot put dag run on the queue", "dagId", string(dag.Id),
+			"execTs", schedule, "err", qErr)
 		return qErr
 	}
 	uErr = dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusScheduled)
@@ -143,7 +141,7 @@ func tryScheduleDag(
 		// Pop item from the queue
 		_, pErr := queue.Pop()
 		if pErr != nil && pErr != ds.ErrQueueIsEmpty {
-			log.Error().Err(pErr).Msg("Cannot pop latest item from the queue")
+			slog.Error("Cannot pop latest item from the queue", "err", pErr)
 		}
 		return uErr
 	}
@@ -188,8 +186,7 @@ func nextScheduleForDagRuns(
 	latestDagRunTime := make(map[dag.Id]*time.Time, len(dags))
 	latestDagRuns, err := dbClient.ReadLatestDagRuns(ctx)
 	if err != nil {
-		log.Error().Msgf("[%s] Failed to load latest DAG runs to create a cache. Cache is empty.",
-			LOG_PREFIX)
+		slog.Error("Failed to load latest dag runs to create a cache. Cache is empty")
 		return latestDagRunTime
 	}
 

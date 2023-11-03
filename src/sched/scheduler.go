@@ -1,7 +1,6 @@
 package sched
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -29,7 +28,7 @@ func (s *Scheduler) Start() http.Handler {
 
 	// Syncing queues with the database in case of program restarts.
 	syncWithDatabase(&drQueue, s.dbClient)
-	syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient)
+	//syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient) // TODO
 
 	taskScheduler := taskScheduler{
 		DbClient:    s.dbClient,

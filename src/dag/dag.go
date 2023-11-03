@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/dskrzypiec/scheduler/src/timeutils"
-	"github.com/rs/zerolog/log"
 )
 
 const LOG_PREFIX = "dag"
@@ -130,8 +130,8 @@ func (d *Dag) TaskParents() map[string][]string {
 func (d *Dag) HashDagMeta() string {
 	attrJson, jErr := json.Marshal(d.Attr)
 	if jErr != nil {
-		log.Error().Err(jErr).Msgf("[%s] Cannot serialize DAG attributes [%v]",
-			LOG_PREFIX, d.Attr)
+		slog.Error("Cannot serialize DAG attributes", "attr", d.Attr, "err",
+			jErr)
 		return "CANNOT SERIALIZE DAG ATTRIBUTES"
 	}
 	sched := ""

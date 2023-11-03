@@ -4,11 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 
 	"github.com/dskrzypiec/scheduler/src/meta"
-	"github.com/rs/zerolog/log"
 )
 
 const MAX_RECURSION = 10000
@@ -31,7 +31,8 @@ func TaskExecuteSource(t Task) string {
 		meta.PackagesASTsMap, tTypeName, "Execute",
 	)
 	if err != nil {
-		log.Error().Err(err).Msgf("Could not get %s.Execute() source code", tTypeName)
+		slog.Error("Could not get source code of Execute()", "typeName",
+			tTypeName)
 		return fmt.Sprintf("NO IMPLEMENTATION FOUND FOR %s.Execute()", tTypeName)
 	}
 	return execMethodSource
@@ -109,8 +110,8 @@ func (dn *Node) isAcyclic() bool {
 // false is returned and further examination is stopped.
 func (dn *Node) isAcyclicImpl(traversed map[*Node]int, depth int) bool {
 	if depth > MAX_RECURSION {
-		log.Error().Msgf("Max recursion depth reached (%d). Cannot determine if grapth is acyclic.",
-			MAX_RECURSION)
+		slog.Error("Max recursion depth reached. Cannot determine if graph is acyclic",
+			"depth", MAX_RECURSION)
 		return false
 	}
 	// condition for traversedOnDepth < depth-1 is for case when there are
@@ -188,8 +189,8 @@ func (dn *Node) flattenBFS() ([]NodeInfo, map[*Node][]*Node) {
 		if current == depthMarker {
 			depth++
 			if depth > MAX_RECURSION {
-				msg := " Max level reached (%d). Returned result might be incomplete."
-				log.Error().Msgf(msg, MAX_RECURSION)
+				slog.Error("Max level reached. Returned result might be incomplete",
+					"level", MAX_RECURSION)
 				break
 			}
 			if len(queue) > 0 {

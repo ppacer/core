@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"net/http"
 
+	"log"
+	"log/slog"
+
 	_ "github.com/dskrzypiec/scheduler/src/user"
 
 	"github.com/dskrzypiec/scheduler/src/db"
 	"github.com/dskrzypiec/scheduler/src/sched"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
 	cfg := ParseConfig()
-	cfg.setupZerolog()
+	cfg.setupLogger()
 	dbClient, err := db.NewClient("/Users/ds/GoProjects/go_sched/test.db")
 	if err != nil {
-		log.Panic().Err(err).Msg("Cannot connect to the database")
+		slog.Error("Cannot connect to the database", "err", err)
+		log.Panic("Cannot connect to the database")
 	}
 	scheduler := sched.New(dbClient)
 	httpHandler := scheduler.Start()
@@ -25,9 +28,10 @@ func main() {
 		Handler: httpHandler,
 	}
 
-	log.Info().Msgf("Start Scheduler v%s on :%d...", cfg.AppVersion, cfg.Port)
+	slog.Info("Starting scheduler", "version", cfg.AppVersion, "port", cfg.Port)
 	lasErr := server.ListenAndServe()
 	if lasErr != nil {
-		log.Panic().Err(lasErr).Msg("Cannot start the server")
+		slog.Error("ListenAndServer failed", "err", lasErr)
+		log.Panic("Cannot start the server")
 	}
 }

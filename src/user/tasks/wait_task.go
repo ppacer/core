@@ -1,9 +1,8 @@
 package tasks
 
 import (
+	"log/slog"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 // WaitTask is a Task which just waits and logs.
@@ -15,7 +14,7 @@ type WaitTask struct {
 func (wt WaitTask) Id() string { return wt.TaskId }
 
 func (wt WaitTask) Execute() {
-	log.Info().Msgf("Task [%s] starts sleeping for %v...", wt.Id(), wt.Interval)
+	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
-	log.Info().Msgf("Task [%s] is done", wt.Id())
+	slog.Info("Task is done", "task", wt.Id())
 }
