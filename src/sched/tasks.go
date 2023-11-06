@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/src/dag"
@@ -69,7 +70,7 @@ func (ts *taskScheduler) Start() {
 			time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
 			continue
 		}
-		/*dagrun*/ _, err := ts.DagRunQueue.Pop()
+		dagrun, err := ts.DagRunQueue.Pop()
 		if err == ds.ErrQueueIsEmpty {
 			continue
 		}
@@ -82,9 +83,7 @@ func (ts *taskScheduler) Start() {
 		// TODO(dskrzypiec): Think about the context. At least we need to add
 		// timeout for overall DAG run timeout. Start scheduling new DAG run in
 		// a separate goroutine.
-		// TODO(dskrzypiec): uncomment when logging will be fixed
-		//go ts.scheduleDagTasks(context.TODO(), dagrun, ts.TaskQueue,
-		//	taskSchedulerErrors)
+		go ts.scheduleDagTasks(context.TODO(), dagrun, taskSchedulerErrors)
 	}
 }
 
@@ -94,7 +93,6 @@ func (ts *taskScheduler) Start() {
 func (ts *taskScheduler) scheduleDagTasks(
 	ctx context.Context,
 	dagrun DagRun,
-	tasks ds.Queue[DagRunTask],
 	errorsChan chan taskSchedulerError,
 ) {
 	dagId := string(dagrun.DagId)
@@ -136,45 +134,50 @@ func (ts *taskScheduler) scheduleDagTasks(
 	}
 
 	taskParents := dag.TaskParents()
-	err := ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents)
-	if err != nil {
-		// TODO: what now?
-	}
+	var wg sync.WaitGroup
+	wg.Add(len(taskParents))
+	ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents, &wg)
+	wg.Wait()
+	slog.Warn("[TODO: just for now] dagrun is done!", "dagrun", dagrun)
 
 	// Step 4: Update dagrun state to finished
+	//ts.DbClient.UpdateDagRunStatus(...)
 }
 
+// WalkAndSchedule wait for node.Task to be ready for scheduling, then
+// schedules it and then goes recursively for that node children.
+// TODO: More details when it become stable.
 func (ts *taskScheduler) walkAndSchedule(
 	ctx context.Context,
 	dagrun DagRun,
 	node *dag.Node,
 	taskParents map[string][]string,
-) error {
+	wg *sync.WaitGroup,
+) {
 	taskId := node.Task.Id()
 
 	for {
 		select {
 		case <-ctx.Done():
-			// TODO: Handle cancelation
-			slog.Error("Context canceled while walkAndSchedule", "err",
-				ctx.Err())
-			return ctx.Err()
+			// TODO: What to do with errors in here? Probably we should have a
+			// queue for retries on DagRunTasks level.
+			slog.Error("Context canceled while walkAndSchedule", "dagrun",
+				dagrun, "taskId", node.Task.Id(), "err", ctx.Err())
 		default:
 		}
 
 		canSchedule := ts.checkIfCanBeScheduled(dagrun, taskId, taskParents)
 		if canSchedule {
 			ts.scheduleSingleTask(dagrun, taskId)
+			wg.Done()
 			break
 		}
 		time.Sleep(time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond)
 	}
 
 	for _, child := range node.Children {
-		go ts.walkAndSchedule(ctx, dagrun, child, taskParents) // TODO: This won't work at the moment
+		go ts.walkAndSchedule(ctx, dagrun, child, taskParents, wg)
 	}
-
-	return nil
 }
 
 // Schedules single task. That means putting metadata on the queue, updating
@@ -187,7 +190,23 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	}
 	putErr := ts.TaskQueue.Put(drt)
 	if putErr != nil {
-		// TODO: handle if queue is full
+		// TODO: think about haveing RetryQueue for failed schedule task
+	}
+
+	// Update cache
+	drts := DagRunTaskState{Status: Scheduled, StatusUpdateTs: time.Now()}
+	cacheAddErr := ts.TaskCache.Add(drt, drts)
+	if cacheAddErr != nil {
+		// TODO: think about haveing RetryQueue for failed schedule task
+	}
+
+	// Insert info to database
+	ctx := context.TODO()
+	iErr := ts.DbClient.InsertDagRunTask(
+		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), taskId,
+	)
+	if iErr != nil {
+		// TODO: think about haveing RetryQueue for failed schedule task
 	}
 }
 
@@ -230,7 +249,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 		)
 		if err != nil {
 			// No need to handle it, this function will be retried.
-			// TODO!!!! log.Error().Err(err).Msg("Cannot read DagRunTask status from DB")
+			slog.Error("Cannot read DagRunTask status from DB", "err", err)
 			return false
 		}
 		drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
