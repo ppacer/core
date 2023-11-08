@@ -2,7 +2,9 @@
 package ds
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"sync"
 )
 
@@ -22,6 +24,25 @@ type Queue[T comparable] interface {
 	Contains(T) bool
 	Capacity() int
 	Size() int
+}
+
+// PutContext tries to put item onto the queue. In case of failures it tries
+// again and again until either successfully put item onto the queue or context
+// is done.
+func PutContext[T comparable](ctx context.Context, q Queue[T], item T) {
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Warn("Context is done before item could be put onto the queue",
+				"item", item)
+			return
+		default:
+		}
+		putErr := q.Put(item)
+		if putErr == nil {
+			return
+		}
+	}
 }
 
 // Simple buffer-based FIFO queue. It's safe for concurrent use.

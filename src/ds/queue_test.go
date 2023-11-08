@@ -1,6 +1,7 @@
 package ds
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -161,6 +162,24 @@ func BenchmarkQueuePutAndPop(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		q.Put(dr)
+		q.Pop()
+	}
+}
+
+func BenchmarkQueuePutContextAndPop(b *testing.B) {
+	const size = 1000
+	type dagrun struct {
+		RunId  string
+		DagId  string
+		TaskId string
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	q := NewSimpleQueue[dagrun](size)
+	dr := dagrun{"runid_123123", "sample_dag", "print_task"}
+
+	for i := 0; i < b.N; i++ {
+		PutContext(ctx, &q, dr)
 		q.Pop()
 	}
 }
