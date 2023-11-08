@@ -134,9 +134,10 @@ func (ts *taskScheduler) scheduleDagTasks(
 	}
 
 	taskParents := dag.TaskParents()
+	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
 	var wg sync.WaitGroup
 	wg.Add(len(taskParents))
-	ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents, &wg)
+	ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg)
 	wg.Wait()
 	slog.Warn("[TODO: just for now] dagrun is done!", "dagrun", dagrun)
 
@@ -152,6 +153,7 @@ func (ts *taskScheduler) walkAndSchedule(
 	dagrun DagRun,
 	node *dag.Node,
 	taskParents map[string][]string,
+	alreadyMarkedTasks *ds.AsyncMap[DagRunTask, any],
 	wg *sync.WaitGroup,
 ) {
 	taskId := node.Task.Id()
@@ -176,13 +178,29 @@ func (ts *taskScheduler) walkAndSchedule(
 	}
 
 	for _, child := range node.Children {
-		go ts.walkAndSchedule(ctx, dagrun, child, taskParents, wg)
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, child.Task.Id()}
+		// before we start walking down the tree, we need to check if the
+		// child has not been already started. Mostly for such cases:
+		// n21
+		//     \
+		// n22 - n3
+		//     /
+		// n23
+		// We don't need to start 3 separate goroutines for the same task,
+		// only because it has 3 parents.
+		if _, alreadyStarted := alreadyMarkedTasks.Get(drt); !alreadyStarted {
+			alreadyMarkedTasks.Add(drt, struct{}{})
+			go ts.walkAndSchedule(
+				ctx, dagrun, child, taskParents, alreadyMarkedTasks, wg,
+			)
+		}
 	}
 }
 
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
 func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
+	slog.Info("scheduleSingleTask", "dagrun", dagrun, "taskId", taskId) // TODO: remove it after testing
 	drt := DagRunTask{
 		DagId:  dagrun.DagId,
 		AtTime: dagrun.AtTime,

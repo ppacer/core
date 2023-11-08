@@ -55,5 +55,6 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 			return nil, err
 		}
 	}
-	return &Client{db}, nil
+	sqliteDB := SqliteDB{dbConn: db}
+	return &Client{&sqliteDB}, nil
 }
