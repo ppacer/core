@@ -2,6 +2,7 @@ package sched
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -85,6 +86,55 @@ func (ts *taskScheduler) Start() {
 		// a separate goroutine.
 		go ts.scheduleDagTasks(context.TODO(), dagrun, taskSchedulerErrors)
 	}
+}
+
+// UpdateTaskStatus updates given DAG run task status. That includes caches,
+// queues, database and every place that needs to be included regarding task
+// status update.
+func (ts *taskScheduler) UpsertTaskStatus(
+	ctx context.Context, drt DagRunTask, status DagRunTaskStatus,
+) error {
+	slog.Debug("Upserting dag run task status...", "dagruntask", drt, "status",
+		status.String())
+
+	// Insert/update info in the cache
+	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
+	_, entryExists := ts.TaskCache.Get(drt)
+	if entryExists {
+		cacheUpdateErr := ts.TaskCache.Update(drt, drts)
+		if cacheUpdateErr != nil {
+			return cacheUpdateErr
+		}
+	} else {
+		cacheAddErr := ts.TaskCache.Add(drt, drts)
+		if cacheAddErr != nil {
+			return cacheAddErr
+		}
+	}
+
+	// Insert/update info in the database
+	dagIdStr := string(drt.DagId)
+	execTs := timeutils.ToString(drt.AtTime)
+	_, getErr := ts.DbClient.ReadDagRunTask(ctx, dagIdStr, execTs, drt.TaskId)
+	switch getErr {
+	case sql.ErrNoRows:
+		iErr := ts.DbClient.InsertDagRunTask(ctx, dagIdStr, execTs, drt.TaskId)
+		if iErr != nil {
+			return iErr
+		}
+	case nil:
+		dbUpdateErr := ts.DbClient.UpdateDagRunTaskStatus(
+			ctx, dagIdStr, execTs, drt.TaskId, status.String(),
+		)
+		if dbUpdateErr != nil {
+			return dbUpdateErr
+		}
+	default:
+		slog.Error("Could not read from dagruntasks", "dagruntask", drt,
+			"status", status.String())
+		return getErr
+	}
+	return nil
 }
 
 // Function scheduleDagTasks is responsible for scheduling tasks of single DAG
@@ -200,31 +250,20 @@ func (ts *taskScheduler) walkAndSchedule(
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
 func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
-	slog.Info("scheduleSingleTask", "dagrun", dagrun, "taskId", taskId) // TODO: remove it after testing
 	drt := DagRunTask{
 		DagId:  dagrun.DagId,
 		AtTime: dagrun.AtTime,
 		TaskId: taskId,
 	}
+	ctx := context.TODO()
 	putErr := ts.TaskQueue.Put(drt)
 	if putErr != nil {
-		// TODO: think about haveing RetryQueue for failed schedule task
+		// TODO(dskrzypiec): Think about either using ds.PutContext or retrying
+		// on the higher level.
 	}
-
-	// Update cache
-	drts := DagRunTaskState{Status: Scheduled, StatusUpdateTs: time.Now()}
-	cacheAddErr := ts.TaskCache.Add(drt, drts)
-	if cacheAddErr != nil {
-		// TODO: think about haveing RetryQueue for failed schedule task
-	}
-
-	// Insert info to database
-	ctx := context.TODO()
-	iErr := ts.DbClient.InsertDagRunTask(
-		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), taskId,
-	)
-	if iErr != nil {
-		// TODO: think about haveing RetryQueue for failed schedule task
+	usErr := ts.UpsertTaskStatus(ctx, drt, Scheduled)
+	if usErr != nil {
+		// Consider putting those on the TaskToRetryQueue
 	}
 }
 

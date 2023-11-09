@@ -23,6 +23,7 @@ func (et EmptyTask) Execute()   { fmt.Println(et.TaskId) }
 
 func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	ts := defaultTaskScheduler(t) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	start := dag.Node{Task: EmptyTask{"start"}}
 	end := dag.Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
@@ -48,6 +49,7 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 
 func TestScheduleSingleTaskSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	start := dag.Node{Task: EmptyTask{"start"}}
 	end := dag.Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
@@ -101,6 +103,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	// Prepare scenario
 	ts := defaultTaskScheduler(t) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	start := dag.Node{Task: EmptyTask{"start"}}
 	end := dag.Node{Task: EmptyTask{"end"}}
 	start.Next(&end)
@@ -118,9 +121,12 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 
 	// Execute
 	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks, &wg)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	// Manually mark "start" task as success, to go to another task
-	ts.TaskCache.Update(drtStart, DagRunTaskState{Status: Success})
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
+	if uErr != nil {
+		t.Errorf("Error while marking <start> as Success: %s", uErr.Error())
+	}
 	wg.Wait()
 
 	// Assert
@@ -140,8 +146,9 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 //	 \     /
 //	   n23
 func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
-	// Prepare scenario
+	t.Logf("Preparing scenario...")
 	ts := defaultTaskScheduler(t) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
@@ -157,12 +164,15 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	drtN23 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n23"}
 	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
 
-	// Execute and assert
+	t.Logf("Start ts.walkAndSchedule...")
 	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks, &wg)
 	time.Sleep(50 * time.Millisecond)
 
-	// Manually mark "n1" task as success, to go to another tasks.
-	ts.TaskCache.Update(drtStart, DagRunTaskState{Status: Success})
+	t.Logf("Manually mark n1 as success")
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
+	if uErr != nil {
+		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
+	}
 	time.Sleep(50 * time.Millisecond)
 
 	// At this point n1 should have status Success, and n21, n22 and n23 should
@@ -174,8 +184,12 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 			drtN3)
 	}
 
-	// Mark n22 (just one of three scheduled tasks at the same time) as Success
-	ts.TaskCache.Update(drtN22, DagRunTaskState{Status: Success})
+	t.Logf("Manually mark n22 (just one of three scheduled tasks at the same time) as success")
+	uErr = ts.UpsertTaskStatus(ctx, drtN22, Success)
+	if uErr != nil {
+		t.Errorf("Error while updating dag run task %v status: %s", drtN22,
+			uErr.Error())
+	}
 	time.Sleep(50 * time.Millisecond)
 
 	// n3 still should not be scheduled yet
@@ -183,22 +197,33 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	testTaskStatusInCache(ts, drtN21, Scheduled, t)
 	testTaskStatusInDB(ts, drtN21, Scheduled, t)
 	testTaskStatusInCache(ts, drtN22, Success, t)
-	testTaskStatusInDB(ts, drtN22, Scheduled, t) // it's been updated only in the cache
+	testTaskStatusInDB(ts, drtN22, Success, t)
 	if _, n3Exists := ts.TaskCache.Get(drtN3); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
 
-	// Mark n21 and n23 (the rest of async tasks) as Success
-	ts.TaskCache.Update(drtN21, DagRunTaskState{Status: Success})
-	ts.TaskCache.Update(drtN23, DagRunTaskState{Status: Success})
+	t.Logf("Mark n21 and n23 (the rest of async tasks) as Success")
+	uErr = ts.UpsertTaskStatus(ctx, drtN21, Success)
+	if uErr != nil {
+		t.Errorf("Error while updating dag run task %v status: %s", drtN21,
+			uErr.Error())
+	}
+	uErr = ts.UpsertTaskStatus(ctx, drtN23, Success)
+	if uErr != nil {
+		t.Errorf("Error while updating dag run task %v status: %s", drtN23,
+			uErr.Error())
+	}
 	time.Sleep(50 * time.Millisecond)
 
 	// n3 should be scheduled now, n21, n22 and n23 are done
 	testTaskCacheQueueTableSize(ts, 5, t)
 	testTaskStatusInCache(ts, drtN21, Success, t)
+	testTaskStatusInDB(ts, drtN21, Success, t)
 	testTaskStatusInCache(ts, drtN22, Success, t)
+	testTaskStatusInDB(ts, drtN22, Success, t)
 	testTaskStatusInCache(ts, drtN23, Success, t)
+	testTaskStatusInDB(ts, drtN23, Success, t)
 	testTaskStatusInCache(ts, drtN3, Scheduled, t)
 	testTaskStatusInDB(ts, drtN3, Scheduled, t)
 	wg.Wait()
@@ -257,7 +282,7 @@ func testTaskStatusInDB(
 
 // Initialize default TaskScheduler with in-memory DB client for testing.
 func defaultTaskScheduler(t *testing.T) *taskScheduler {
-	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	c, err := db.NewSqliteTmpClient(sqlSchemaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
