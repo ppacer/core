@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -97,6 +98,9 @@ func (c *Client) ReadDagRunTask(
 		execTs, taskId)
 	var insertTs, status, statusTs, version string
 	scanErr := row.Scan(&insertTs, &status, &statusTs, &version)
+	if scanErr == sql.ErrNoRows {
+		return DagRunTask{}, scanErr
+	}
 	if scanErr != nil {
 		slog.Error("Failed scanning a DagRunTask record", "dagId", dagId,
 			"execTs", execTs, "taskId", taskId, "err", scanErr)
@@ -117,12 +121,36 @@ func (c *Client) ReadDagRunTask(
 	return dagRunTask, nil
 }
 
-// TODO
+// Updates dagruntask status for given dag run task.
 func (c *Client) UpdateDagRunTaskStatus(
-	ctx context.Context,
-	dagId, execTs, taskId, status string,
+	ctx context.Context, dagId, execTs, taskId, status string,
 ) error {
-	// TODO
+	start := time.Now()
+	updateTs := timeutils.ToString(time.Now())
+	slog.Debug("Start updating dag run task status", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId, "status", status)
+	res, err := c.dbConn.ExecContext(
+		ctx, c.updateDagRunTaskStatusQuery(),
+		status, updateTs, dagId, execTs, taskId,
+	)
+	if err != nil {
+		slog.Error("Cannot update dag run task status", "dagId", dagId,
+			"execTs", execTs, "taskId", taskId, "status", status, "err", err)
+		return err
+	}
+	rowsUpdated, _ := res.RowsAffected()
+	if rowsUpdated == 0 {
+		return sql.ErrNoRows
+	}
+	if rowsUpdated > 1 {
+		slog.Error("Seems that too many rows were updated. Expected exactly one",
+			"dagId", dagId, "execTs", execTs, "taskId", taskId, "status",
+			status, "rowsUpdated", rowsUpdated)
+		return errors.New("too many rows updated")
+	}
+	slog.Debug("Finished updating dag run task status", "dagId", dagId,
+		"execTs", execTs, "taskId", taskId, "status", status, "duration",
+		time.Since(start))
 	return nil
 }
 
@@ -185,5 +213,19 @@ func (c *Client) insertDagRunTaskQuery() string {
 		DagId, ExecTs, TaskId, InsertTs, Status, StatusUpdateTs, Version
 	)
 	VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+}
+
+func (c *Client) updateDagRunTaskStatusQuery() string {
+	return `
+	UPDATE
+		dagruntasks
+	SET
+		Status = ?,
+		StatusUpdateTs = ?
+	WHERE
+			DagId = ?
+		AND ExecTs = ?
+		AND TaskId = ?
 	`
 }

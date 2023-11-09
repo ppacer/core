@@ -130,6 +130,57 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 	}
 }
 
+func TestReadDagRunTaskUpdate(t *testing.T) {
+	c, err := NewInMemoryClient(sqlSchemaPath)
+	if err != nil {
+		t.Error(err)
+	}
+	dagId := "test_dag_1"
+	execTs := timeutils.ToString(time.Now())
+	taskId := "my_task_1"
+	ctx := context.Background()
+	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
+
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	if rErr != nil {
+		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
+	}
+	if dagId != drt.DagId {
+		t.Errorf("Expected dagId=%s, got: %s", dagId, drt.DagId)
+	}
+	if execTs != drt.ExecTs {
+		t.Errorf("Expected execTs=%s, got: %s", execTs, drt.ExecTs)
+	}
+	if taskId != drt.TaskId {
+		t.Errorf("Expected taskId=%s, got: %s", taskId, drt.TaskId)
+	}
+	if drt.Status != DagRunTaskStatusScheduled {
+		t.Errorf("Expected status: %s, got: %s", DagRunTaskStatusScheduled,
+			drt.Status)
+	}
+
+	const newStatus = "NEW_STATUS"
+	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, execTs, taskId, newStatus)
+	if uErr != nil {
+		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
+	}
+
+	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	if rErr2 != nil {
+		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
+	}
+	if drt2.Status != newStatus {
+		t.Errorf("Expected status after update: %s, got: %s", newStatus,
+			drt2.Status)
+	}
+	sTime1 := timeutils.FromStringMust(drt.StatusUpdateTs)
+	sTime2 := timeutils.FromStringMust(drt2.StatusUpdateTs)
+	if sTime1.Compare(sTime2) > 0 {
+		t.Errorf("Expected new update timestamp %v to be later than %v",
+			sTime2, sTime1)
+	}
+}
+
 func insertDagRunTask(
 	c *Client,
 	ctx context.Context,
