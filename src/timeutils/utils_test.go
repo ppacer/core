@@ -146,6 +146,38 @@ func TestFuzzToAndFromString(t *testing.T) {
 	}
 }
 
+func TestFuzzToAndFromStringMust(t *testing.T) {
+	const N = 100
+	warsawTz := warsawTimeZone(t)
+	for i := 0; i < N; i++ {
+		randTs := randomTime(warsawTz)
+		str := ToString(randTs)
+		tsFromStr := FromStringMust(str)
+		if !tsFromStr.Equal(randTs) {
+			t.Errorf("FromString(ToString(%v))!=%v", randTs, tsFromStr)
+		}
+	}
+}
+
+func TestFromStringMustFailed(t *testing.T) {
+	incorrectTimestampStrings := []string{
+		"2023-08-22T15:00:00+00:00",
+		"2023-08-22 15:10:05.123456UTC+00:00",
+		"2023-08-22_15:10:05.123456CEST+02:00",
+		"2023-11-11 17:08:00",
+		"",
+		"notatimestamp",
+	}
+	expected := time.Time{}
+
+	for _, tsStr := range incorrectTimestampStrings {
+		ts := FromStringMust(tsStr)
+		if ts != expected {
+			t.Errorf("Expected empty time.Time{}, got: %v", ts)
+		}
+	}
+}
+
 func warsawTimeZone(t *testing.T) *time.Location {
 	location, err := time.LoadLocation("Europe/Warsaw")
 	if err != nil {
