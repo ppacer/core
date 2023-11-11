@@ -10,7 +10,7 @@ const LOG_PREFIX = "timeutils"
 
 // Timestamp format for time.Time serialization and deserialization. This
 // format is used to store timestamps in the database.
-const TimestampFormat = "2006-01-02T15:04:05.999999-07:00"
+const TimestampFormat = "2006-01-02T15:04:05.999999MST-07:00"
 
 // ToString serialize give time.Time to string based on TimestampFormat format.
 func ToString(t time.Time) string {
