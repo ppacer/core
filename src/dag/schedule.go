@@ -26,7 +26,7 @@ func (is FixedSchedule) StartTime() time.Time {
 }
 
 func (is FixedSchedule) Next(baseTime time.Time) time.Time {
-	if baseTime.Compare(is.Start) == -1 {
+	if baseTime.Before(is.Start) {
 		return is.Start
 	}
 	ts := is.Start
@@ -34,7 +34,7 @@ func (is FixedSchedule) Next(baseTime time.Time) time.Time {
 		// TODO(dskrzypiec): This algorithm can and should be improved
 		// regarding performance. It's good enough for first sketch but should
 		// be done properly eventually.
-		if baseTime.Compare(ts) == -1 {
+		if baseTime.Before(ts) {
 			return ts
 		}
 		ts = ts.Add(is.Interval)
