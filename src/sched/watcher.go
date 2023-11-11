@@ -211,7 +211,7 @@ func nextScheduleForDagRuns(
 			}
 		}
 		nextSched := sched.Next(timeutils.FromStringMust(latestDagRun.ExecTs))
-		if currentTime.Compare(nextSched) == 1 && !dag.Attr.CatchUp {
+		if currentTime.After(nextSched) && !dag.Attr.CatchUp {
 			// current time is after the supposed schedule and we don't want to catch up
 			nextSchedFromCurrent := sched.Next(currentTime)
 			latestDagRunTime[dag.Id] = &nextSchedFromCurrent

@@ -15,9 +15,9 @@ import (
 )
 
 type DagRunTask struct {
-	DagId  dag.Id
-	AtTime time.Time
-	TaskId string
+	DagId  dag.Id    `json:"dagId"`
+	AtTime time.Time `json:"execTs"`
+	TaskId string    `json:"taskId"`
 }
 
 type DagRunTaskState struct {
@@ -44,7 +44,7 @@ func defaultTaskSchedulerConfig() taskSchedulerConfig {
 	return taskSchedulerConfig{
 		MaxConcurrentDagRuns:      1000,
 		HeartbeatMs:               1,
-		CheckDependenciesStatusMs: 10,
+		CheckDependenciesStatusMs: 1,
 	}
 }
 
@@ -94,8 +94,8 @@ func (ts *taskScheduler) Start() {
 func (ts *taskScheduler) UpsertTaskStatus(
 	ctx context.Context, drt DagRunTask, status DagRunTaskStatus,
 ) error {
-	slog.Debug("Upserting dag run task status...", "dagruntask", drt, "status",
-		status.String())
+	slog.Info("Start upserting dag run task status", "dagruntask", drt,
+		"status", status.String())
 
 	// Insert/update info in the cache
 	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
@@ -189,10 +189,20 @@ func (ts *taskScheduler) scheduleDagTasks(
 	wg.Add(len(taskParents))
 	ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg)
 	wg.Wait()
-	slog.Warn("[TODO: just for now] dagrun is done!", "dagrun", dagrun)
 
-	// Step 4: Update dagrun state to finished
-	//ts.DbClient.UpdateDagRunStatus(...)
+	// Update dagrun state to finished
+	stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
+		ctx, dagId, execTs, db.DagRunStatusFinished,
+	)
+	if stateUpdateErr != nil {
+		// TODO(dskrzypiec): should we add retries? Probably...
+		errorsChan <- taskSchedulerError{
+			DagId:  dagrun.DagId,
+			ExecTs: dagrun.AtTime,
+			Err:    stateUpdateErr,
+		}
+	}
+	ts.cleanTaskCache(dagrun, dag.Flatten())
 }
 
 // WalkAndSchedule wait for node.Task to be ready for scheduling, then
@@ -207,6 +217,9 @@ func (ts *taskScheduler) walkAndSchedule(
 	wg *sync.WaitGroup,
 ) {
 	taskId := node.Task.Id()
+	slog.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
+	slog.Debug("Task parents:", "dagId", string(dagrun.DagId), "taskId",
+		taskId, "parents", taskParents[taskId])
 
 	for {
 		select {
@@ -250,6 +263,8 @@ func (ts *taskScheduler) walkAndSchedule(
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
 func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
+	slog.Info("Start scheduling new dag run task", "dagrun", dagrun, "taskId",
+		taskId)
 	drt := DagRunTask{
 		DagId:  dagrun.DagId,
 		AtTime: dagrun.AtTime,
@@ -258,11 +273,15 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	ctx := context.TODO()
 	putErr := ts.TaskQueue.Put(drt)
 	if putErr != nil {
+		slog.Error("Cannot put task on the queue", "dagruntask", drt, "err",
+			putErr)
 		// TODO(dskrzypiec): Think about either using ds.PutContext or retrying
 		// on the higher level.
 	}
 	usErr := ts.UpsertTaskStatus(ctx, drt, Scheduled)
 	if usErr != nil {
+		slog.Error("Cannot update dag run task status", "dagruntask", drt,
+			"status", Scheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
 	}
 }
@@ -294,10 +313,12 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			return false
 		}
 		if exists && statusFromCache.Status.CanProceed() {
+			slog.Info("Parent exists in cache and can proceed", "dagruntask",
+				key, "status", statusFromCache.Status.String())
 			continue
 		}
 		// If there is no entry in the cache, we need to query database
-		slog.Debug("There is no entry in TaskCache, need to query database",
+		slog.Warn("There is no entry in TaskCache, need to query database",
 			"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", taskId)
 		ctx := context.TODO()
 		dagruntask, err := ts.DbClient.ReadDagRunTask(
@@ -319,6 +340,19 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 		}
 	}
 	return true
+}
+
+// Removes bulk of tasks for given dag run from the TaskCache.
+func (ts *taskScheduler) cleanTaskCache(dagrun DagRun, tasks []dag.Task) {
+	for _, task := range tasks {
+		ts.TaskCache.Remove(
+			DagRunTask{
+				DagId:  dagrun.DagId,
+				AtTime: dagrun.AtTime,
+				TaskId: task.Id(),
+			},
+		)
+	}
 }
 
 type DagRunTaskStatus int
