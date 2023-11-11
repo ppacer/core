@@ -25,6 +25,7 @@ const (
 	DagRunStatusReadyToSchedule = "READY_TO_SCHEDULE"
 	DagRunStatusScheduled       = "SCHEDULED"
 	DagRunStatusRunning         = "RUNNING"
+	DagRunStatusFinished        = "FINISHED"
 )
 
 // ReadDagRuns reads topN latest dag runs for given DAG ID.
