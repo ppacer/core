@@ -2,7 +2,14 @@
 package models
 
 type TaskToExec struct {
-	RunId  string `json:"runId"`
 	DagId  string `json:"dagId"`
+	ExecTs string `json:"execTs"`
 	TaskId string `json:"taskId"`
+}
+
+type DagRunTaskStatus struct {
+	DagId  string `json:"dagId"`
+	ExecTs string `json:"execTs"`
+	TaskId string `json:"taskId"`
+	Status string `json:"status"`
 }
