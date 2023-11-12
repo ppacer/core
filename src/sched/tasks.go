@@ -155,14 +155,9 @@ func (ts *taskScheduler) scheduleDagTasks(
 		ctx, dagId, execTs, db.DagRunStatusRunning,
 	)
 	if stateUpdateErr != nil {
-		// TODO(dskrzypiec): should we add retries? Probably...
-		errorsChan <- taskSchedulerError{
-			DagId:  dagrun.DagId,
-			ExecTs: dagrun.AtTime,
-			Err:    stateUpdateErr,
-		}
 		// just send error, we don't want to stop scheduling because of dagrun
 		// status failure
+		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
 
 	// Schedule tasks, starting from root - put on the task queue
@@ -180,6 +175,14 @@ func (ts *taskScheduler) scheduleDagTasks(
 	if dag.Root == nil {
 		slog.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
 			dagrun.DagId)
+		// Update dagrun state to finished
+		stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
+			ctx, dagId, execTs, db.DagRunStatusSuccess,
+		)
+		if stateUpdateErr != nil {
+			// TODO(dskrzypiec): should we add retries? Probably...
+			sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
+		}
 		return
 	}
 
@@ -204,13 +207,21 @@ func (ts *taskScheduler) scheduleDagTasks(
 	)
 	if stateUpdateErr != nil {
 		// TODO(dskrzypiec): should we add retries? Probably...
-		errorsChan <- taskSchedulerError{
-			DagId:  dagrun.DagId,
-			ExecTs: dagrun.AtTime,
-			Err:    stateUpdateErr,
-		}
+		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
 	ts.cleanTaskCache(dagrun, dag.Flatten())
+}
+
+func sendTaskSchedulerErr(
+	errChan chan taskSchedulerError,
+	dagrun DagRun,
+	err error,
+) {
+	errChan <- taskSchedulerError{
+		DagId:  dagrun.DagId,
+		ExecTs: dagrun.AtTime,
+		Err:    err,
+	}
 }
 
 // WalkAndSchedule wait for node.Task to be ready for scheduling, then
