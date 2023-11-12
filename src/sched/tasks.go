@@ -187,12 +187,20 @@ func (ts *taskScheduler) scheduleDagTasks(
 	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
 	var wg sync.WaitGroup
 	wg.Add(len(taskParents))
-	ts.walkAndSchedule(ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg)
+	ts.walkAndSchedule(
+		ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg,
+	)
 	wg.Wait()
+
+	// At this point all tasks has been scheduled, but not necessarily done.
+	tasks := dag.Flatten()
+	for !ts.allTasksAreDone(dagrun, tasks) {
+		time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
+	}
 
 	// Update dagrun state to finished
 	stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
-		ctx, dagId, execTs, db.DagRunStatusFinished,
+		ctx, dagId, execTs, db.DagRunStatusSuccess,
 	)
 	if stateUpdateErr != nil {
 		// TODO(dskrzypiec): should we add retries? Probably...
@@ -216,6 +224,7 @@ func (ts *taskScheduler) walkAndSchedule(
 	alreadyMarkedTasks *ds.AsyncMap[DagRunTask, any],
 	wg *sync.WaitGroup,
 ) {
+	checkDelay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
 	taskId := node.Task.Id()
 	slog.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
 	slog.Debug("Task parents:", "dagId", string(dagrun.DagId), "taskId",
@@ -237,7 +246,7 @@ func (ts *taskScheduler) walkAndSchedule(
 			wg.Done()
 			break
 		}
-		time.Sleep(time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond)
+		time.Sleep(checkDelay)
 	}
 
 	for _, child := range node.Children {
@@ -313,8 +322,6 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			return false
 		}
 		if exists && statusFromCache.Status.CanProceed() {
-			slog.Info("Parent exists in cache and can proceed", "dagruntask",
-				key, "status", statusFromCache.Status.String())
 			continue
 		}
 		// If there is no entry in the cache, we need to query database
@@ -336,6 +343,47 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			return false
 		}
 		if !drtStatus.CanProceed() {
+			return false
+		}
+	}
+	return true
+}
+
+// Checks whenever all tasks within the dag run are in terminal states and thus
+// dag run is finished.
+func (ts *taskScheduler) allTasksAreDone(dagrun DagRun, tasks []dag.Task) bool {
+	for _, task := range tasks {
+		drt := DagRunTask{
+			DagId:  dagrun.DagId,
+			AtTime: dagrun.AtTime,
+			TaskId: task.Id(),
+		}
+		drts, exists := ts.TaskCache.Get(drt)
+		if !exists {
+			ctx := context.TODO()
+			dbErr := ts.TaskCache.PullFromDatabase(ctx, drt, ts.DbClient)
+			if dbErr == sql.ErrNoRows {
+				return false
+			}
+			if dbErr != nil {
+				slog.Error(
+					"Dag run task does not exist in the cache and cannot get it "+
+						"from database", "dagruntask", drt, "err", dbErr.Error())
+				return false
+			}
+			drts, exists := ts.TaskCache.Get(drt)
+			if !exists {
+				slog.Error("Dag run task still does not exist in the cache "+
+					"even after trying pull it from database", "dagruntask",
+					drt)
+				return false
+			}
+			if !drts.Status.IsTerminal() {
+				return false
+			}
+			continue
+		}
+		if !drts.Status.IsTerminal() {
 			return false
 		}
 	}
@@ -377,6 +425,10 @@ func (s DagRunTaskStatus) String() string {
 func (s DagRunTaskStatus) CanProceed() bool {
 	// TODO: more states
 	return s == Success
+}
+
+func (s DagRunTaskStatus) IsTerminal() bool {
+	return s == Success || s == Failed
 }
 
 func stringToDagRunTaskStatus(s string) (DagRunTaskStatus, error) {

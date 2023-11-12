@@ -115,13 +115,14 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	wg.Add(2)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
+	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
 	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start"}
 	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end"}
 
 	// Execute
 	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks, &wg)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(delay)
 	// Manually mark "start" task as success, to go to another task
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
 	if uErr != nil {
@@ -157,6 +158,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	wg.Add(5)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
+	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
 	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
 	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21"}
@@ -166,7 +168,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 
 	t.Logf("Start ts.walkAndSchedule...")
 	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks, &wg)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(delay)
 
 	t.Logf("Manually mark n1 as success")
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
@@ -267,14 +269,14 @@ func TestWalkAndScheduleOnAsyncTasksSmallQueue(t *testing.T) {
 
 	t.Logf("Start ts.walkAndSchedule...")
 	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks, &wg)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	t.Logf("Manually mark n1 as success")
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// At this point n1 should have status Success, and n21, n22 and n23 should
 	// be Scheduled.
@@ -291,7 +293,7 @@ func TestWalkAndScheduleOnAsyncTasksSmallQueue(t *testing.T) {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN22,
 			uErr.Error())
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// n3 still should not be scheduled yet
 	testTaskCacheQueueTableSize(ts, 4, t)
@@ -315,7 +317,7 @@ func TestWalkAndScheduleOnAsyncTasksSmallQueue(t *testing.T) {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN23,
 			uErr.Error())
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// n3 should be scheduled now, n21, n22 and n23 are done
 	testTaskCacheQueueTableSize(ts, 5, t)
@@ -379,6 +381,213 @@ func testTaskStatusInDB(
 	if drtDb.Status != expectedStatus.String() {
 		t.Errorf("DagRunTask %v in the database has status: %s, but expected %s",
 			drt, drtDb.Status, expectedStatus.String())
+	}
+}
+
+func TestScheduleDagTasksSimple131(t *testing.T) {
+	const delay = 50 * time.Millisecond
+	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	taskNum := len(d.Flatten())
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	errsChan := make(chan taskSchedulerError)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+	addErr := dag.Add(d)
+	if addErr != nil {
+		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
+	}
+	_, iErr := ts.DbClient.InsertDagRun(
+		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
+	)
+	if iErr != nil {
+		t.Errorf("Cannot insert dag run %v: %s", dagrun, iErr.Error())
+	}
+
+	go listenOnSchedulerErrors(errsChan, t)
+	go markSuccessAllTasks(ctx, ts, delay, t)
+	ts.scheduleDagTasks(ctx, dagrun, errsChan)
+	t.Log("Dag run is done!")
+
+	// Asssertions after the dag run is done
+	statusValue := fmt.Sprintf("Status='%s'", Success)
+	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
+	if cnt != taskNum {
+		t.Errorf("Expected %d tasks with %s status, got: %d",
+			taskNum, Success, cnt)
+	}
+	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
+	if cnt != 1 {
+		t.Errorf("Expected 1 successful dagrun %v, got: %d",
+			dagrun, cnt)
+	}
+}
+
+func TestAllTasksAreDoneSimple(t *testing.T) {
+	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	tasks := d.Flatten()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	ctx := context.Background()
+
+	areDoneBefore := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneBefore {
+		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
+	}
+
+	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, Success)
+	if uErr != nil {
+		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
+			Success.String())
+	}
+
+	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneAfterN1 {
+		t.Errorf("All dag run %v tasks should not yet be finished (after n1)",
+			dagrun)
+	}
+
+	for _, taskId := range []string{"n21", "n22", "n23"} {
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		if uErr != nil {
+			t.Errorf("Cannot upsert task status for %v and %s", drt,
+				Success.String())
+		}
+	}
+
+	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneAfterN2x {
+		t.Errorf("All dag run %v tasks should not yet be finished (after n2x)",
+			dagrun)
+	}
+
+	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
+	uErr = ts.UpsertTaskStatus(ctx, drtn3, Failed)
+	if uErr != nil {
+		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
+			Success.String())
+	}
+	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks)
+	if !areDoneAfterN3 {
+		t.Errorf("All dag run %v tasks should be finished after n3, but are not",
+			dagrun)
+	}
+}
+
+func TestAllTasksAreDoneDbFallback(t *testing.T) {
+	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	tasks := d.Flatten()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	ctx := context.Background()
+
+	areDoneBefore := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneBefore {
+		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
+	}
+
+	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, Success)
+	if uErr != nil {
+		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
+			Success.String())
+	}
+
+	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneAfterN1 {
+		t.Errorf("All dag run %v tasks should not yet be finished (after n1)",
+			dagrun)
+	}
+
+	for _, taskId := range []string{"n21", "n22", "n23"} {
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		if uErr != nil {
+			t.Errorf("Cannot upsert task status for %v and %s", drt,
+				Success.String())
+		}
+	}
+
+	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks)
+	if areDoneAfterN2x {
+		t.Errorf("All dag run %v tasks should not yet be finished (after n2x)",
+			dagrun)
+	}
+
+	// Insert drt n3 status into database but not cache
+	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
+	iErr := ts.DbClient.InsertDagRunTask(
+		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
+	)
+	if iErr != nil {
+		t.Errorf("Cannot insert dag run task %v: %s", drtn3, iErr.Error())
+	}
+	uErr = ts.DbClient.UpdateDagRunTaskStatus(
+		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
+		Success.String(),
+	)
+	if uErr != nil {
+		t.Errorf("Cannot update dag run task %v status %s: %s",
+			drtn3, Success.String(), uErr.Error())
+	}
+
+	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks)
+	if !areDoneAfterN3 {
+		t.Errorf("All dag run %v tasks should be finished after n3, but are not",
+			dagrun)
+	}
+}
+
+func markSuccessAllTasks(
+	ctx context.Context,
+	ts *taskScheduler,
+	taskExecutionDuration time.Duration,
+	t *testing.T,
+) {
+	delay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
+	for {
+		select {
+		case <-ctx.Done():
+			t.Log("Breaking markSuccessAllTasks, because context is done")
+			return
+		default:
+		}
+		drt, popErr := ts.TaskQueue.Pop()
+		if popErr == ds.ErrQueueIsEmpty {
+			time.Sleep(delay)
+			continue
+		}
+		if popErr != nil {
+			t.Errorf("Error while popping dag run task from the queue: %s",
+				popErr.Error())
+		}
+		t.Logf("Got %v from the TaskQueue. Simulating execution for %v",
+			drt, taskExecutionDuration)
+		time.Sleep(taskExecutionDuration) // executor work simulation
+		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		if uErr != nil {
+			t.Errorf("Error while marking %v as success: %s",
+				drt, uErr.Error())
+		}
+		t.Logf("Status updated to Success for %v", drt)
+	}
+}
+
+func listenOnSchedulerErrors(errChan chan taskSchedulerError, t *testing.T) {
+	for err := range errChan {
+		t.Errorf("Got error on taskScheduler error channel for (%s, %v): %s",
+			err.DagId, err.ExecTs, err.Err.Error())
 	}
 }
 
