@@ -426,6 +426,68 @@ func TestScheduleDagTasksSimple131(t *testing.T) {
 	}
 }
 
+func TestScheduleDagTasksLinkedListShort(t *testing.T) {
+	testScheduleDagTasksLinkedList(10, t, 3*time.Second)
+}
+
+func TestScheduleDagTasksLinkedListLong(t *testing.T) {
+	testScheduleDagTasksLinkedList(100, t, 30*time.Second)
+}
+
+func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
+	// TODO
+	t.Log("TODO!")
+}
+
+func testScheduleDagTasksLinkedList(
+	size int,
+	t *testing.T,
+	timeout time.Duration,
+) {
+	const delay = 10 * time.Millisecond
+	ts := defaultTaskScheduler(t, size) // cache and DB is empty at this point
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.
+		New(dag.Id(fmt.Sprintf("mock_dag_ll_%d", size))).
+		AddSchedule(schedule).
+		AddRoot(nodesLinkedList(size)).
+		Done()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	errsChan := make(chan taskSchedulerError)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFunc()
+	addErr := dag.Add(d)
+	if addErr != nil {
+		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
+	}
+	_, iErr := ts.DbClient.InsertDagRun(
+		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
+	)
+	if iErr != nil {
+		t.Errorf("Cannot insert dag run %v: %s", dagrun, iErr.Error())
+	}
+
+	go listenOnSchedulerErrors(errsChan, t)
+	go markSuccessAllTasks(ctx, ts, delay, t)
+	ts.scheduleDagTasks(ctx, dagrun, errsChan)
+	t.Log("Dag run is done!")
+
+	// Asssertions after the dag run is done
+	statusValue := fmt.Sprintf("Status='%s'", Success)
+	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
+	if cnt != size {
+		t.Errorf("Expected %d tasks with %s status, got: %d",
+			size, Success, cnt)
+	}
+	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
+	if cnt != 1 {
+		t.Errorf("Expected 1 successful dagrun %v, got: %d",
+			dagrun, cnt)
+	}
+}
+
 func TestAllTasksAreDoneSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
@@ -628,4 +690,15 @@ func nodes131() *dag.Node {
 
 	n1.NextAsyncAndMerge([]*dag.Node{&n21, &n22, &n23}, &n3)
 	return &n1
+}
+
+func nodesLinkedList(length int) *dag.Node {
+	s := dag.Node{Task: EmptyTask{TaskId: "Start"}}
+	prev := &s
+	for i := 0; i < length-1; i++ {
+		n := dag.Node{Task: EmptyTask{TaskId: fmt.Sprintf("step_%d", i)}}
+		prev.Next(&n)
+		prev = &n
+	}
+	return &s
 }
