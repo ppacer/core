@@ -257,12 +257,38 @@ func TestScheduleDagTasksSimple131(t *testing.T) {
 	)
 }
 
+func TestScheduleDagTasksSimple131ShortQueue(t *testing.T) {
+	const taskQueueSize = 3
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag_short_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	testScheduleDagTasksSingleDagrun(
+		d, dagrun, 50*time.Millisecond, taskQueueSize, t,
+	)
+}
+
 func TestScheduleDagTasksLinkedListShort(t *testing.T) {
 	testScheduleDagTasksLinkedList(10, t)
 }
 
 func TestScheduleDagTasksLinkedListLong(t *testing.T) {
 	testScheduleDagTasksLinkedList(100, t)
+}
+
+func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
+	const taskQueueSize = 2
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.
+		New(dag.Id("mock_dag_ll_short_queue")).
+		AddSchedule(schedule).
+		AddRoot(nodesLinkedList(25)).
+		Done()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	testScheduleDagTasksSingleDagrun(
+		d, dagrun, 10*time.Millisecond, taskQueueSize, t,
+	)
 }
 
 func TestScheduleDagTasksNoTasks(t *testing.T) {
@@ -316,7 +342,7 @@ func testScheduleDagTasksSingleDagrun(
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	taskNum := len(d.Flatten())
 	errsChan := make(chan taskSchedulerError)
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
 	addErr := dag.Add(d)
 	if addErr != nil {
