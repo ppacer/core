@@ -77,7 +77,7 @@ func TestInsertDagTimeout(t *testing.T) {
 		t.Error(err)
 	}
 
-	ctx, cancle := context.WithTimeout(context.Background(), 10*time.Microsecond)
+	ctx, cancle := context.WithTimeout(context.Background(), 1*time.Microsecond)
 	defer cancle()
 
 	dagId := "my_simple_dag"

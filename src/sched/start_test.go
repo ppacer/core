@@ -104,7 +104,7 @@ func TestSyncOneDagTimeout(t *testing.T) {
 	dagtasksCountCheck(0, 0, c, t)
 
 	// First sync
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Microsecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
 	defer cancel()
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
