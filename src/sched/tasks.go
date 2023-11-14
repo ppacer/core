@@ -291,13 +291,9 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 		TaskId: taskId,
 	}
 	ctx := context.TODO()
-	putErr := ts.TaskQueue.Put(drt)
-	if putErr != nil {
-		slog.Error("Cannot put task on the queue", "dagruntask", drt, "err",
-			putErr)
-		// TODO(dskrzypiec): Think about either using ds.PutContext or retrying
-		// on the higher level.
-	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: config
+	defer cancel()
+	ds.PutContext(ctx, ts.TaskQueue, drt)
 	usErr := ts.UpsertTaskStatus(ctx, drt, Scheduled)
 	if usErr != nil {
 		slog.Error("Cannot update dag run task status", "dagruntask", drt,
@@ -343,6 +339,12 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
 			parentTaskId,
 		)
+		if err == sql.ErrNoRows {
+			// There is no entry in the cache and in the database, we are
+			// probably a bit early - either task queue was full at the moment
+			// or the other goroutine is a bit slower. Will try again.
+			return false
+		}
 		if err != nil {
 			// No need to handle it, this function will be retried.
 			slog.Error("Cannot read DagRunTask status from DB", "err", err)

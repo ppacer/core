@@ -268,6 +268,19 @@ func TestScheduleDagTasksSimple131ShortQueue(t *testing.T) {
 	)
 }
 
+// Task queue is shorter then number of children to schedule during the single
+// iteration.
+func TestScheduleDagTasksSimple131ShortestQueue(t *testing.T) {
+	const taskQueueSize = 1
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag_shortest_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	testScheduleDagTasksSingleDagrun(
+		d, dagrun, 50*time.Millisecond, taskQueueSize, t,
+	)
+}
+
 func TestScheduleDagTasksLinkedListShort(t *testing.T) {
 	testScheduleDagTasksLinkedList(10, t)
 }
