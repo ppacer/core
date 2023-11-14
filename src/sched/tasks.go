@@ -310,7 +310,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 ) bool {
 	parents, exists := taskParents[taskId]
 	if !exists {
-		slog.Error("Task doesn not exist in parents map", "taskId", taskId)
+		slog.Error("Task does not exist in parents map", "taskId", taskId)
 		return false
 	}
 	if len(parents) == 0 {
@@ -324,40 +324,53 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			AtTime: dagrun.AtTime,
 			TaskId: parentTaskId,
 		}
-		statusFromCache, exists := ts.TaskCache.Get(key)
-		if exists && !statusFromCache.Status.CanProceed() {
+		isParentTaskDone := ts.checkIfParentTaskIsDone(dagrun, key)
+		if !isParentTaskDone {
 			return false
 		}
-		if exists && statusFromCache.Status.CanProceed() {
-			continue
-		}
-		// If there is no entry in the cache, we need to query database
-		slog.Warn("There is no entry in TaskCache, need to query database",
-			"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", taskId)
-		ctx := context.TODO()
-		dagruntask, err := ts.DbClient.ReadDagRunTask(
-			ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
-			parentTaskId,
-		)
-		if err == sql.ErrNoRows {
-			// There is no entry in the cache and in the database, we are
-			// probably a bit early - either task queue was full at the moment
-			// or the other goroutine is a bit slower. Will try again.
-			return false
-		}
-		if err != nil {
-			// No need to handle it, this function will be retried.
-			slog.Error("Cannot read DagRunTask status from DB", "err", err)
-			return false
-		}
-		drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
-		if sErr != nil {
-			slog.Error("Cannot convert string to DagRunTaskStatus", "err", sErr)
-			return false
-		}
-		if !drtStatus.CanProceed() {
-			return false
-		}
+	}
+	return true
+}
+
+// Check if given parent task in given dag run is completed, to determine if
+// DAG can proceed forward. It checks cache first and if there is no info there
+// it reaches the database, to check the status.
+func (ts *taskScheduler) checkIfParentTaskIsDone(
+	dagrun DagRun, parent DagRunTask,
+) bool {
+	statusFromCache, exists := ts.TaskCache.Get(parent)
+	if exists && !statusFromCache.Status.CanProceed() {
+		return false
+	}
+	if exists && statusFromCache.Status.CanProceed() {
+		return true
+	}
+	// If there is no entry in the cache, we need to query database
+	slog.Warn("There is no entry in TaskCache, need to query database",
+		"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", parent.TaskId)
+	ctx := context.TODO()
+	dagruntask, err := ts.DbClient.ReadDagRunTask(
+		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
+		parent.TaskId,
+	)
+	if err == sql.ErrNoRows {
+		// There is no entry in the cache and in the database, we are
+		// probably a bit early - either task queue was full at the moment
+		// or the other goroutine is a bit slower. Will try again.
+		return false
+	}
+	if err != nil {
+		// No need to handle it, this function will be retried.
+		slog.Error("Cannot read DagRunTask status from DB", "err", err)
+		return false
+	}
+	drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
+	if sErr != nil {
+		slog.Error("Cannot convert string to DagRunTaskStatus", "err", sErr)
+		return false
+	}
+	if !drtStatus.CanProceed() {
+		return false
 	}
 	return true
 }
