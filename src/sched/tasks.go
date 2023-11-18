@@ -189,7 +189,6 @@ func (ts *taskScheduler) scheduleDagTasks(
 	taskParents := dag.TaskParents()
 	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
 	var wg sync.WaitGroup
-	wg.Add(len(taskParents))
 	ts.walkAndSchedule(
 		ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg,
 	)
@@ -235,6 +234,8 @@ func (ts *taskScheduler) walkAndSchedule(
 	alreadyMarkedTasks *ds.AsyncMap[DagRunTask, any],
 	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer wg.Done()
 	checkDelay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
 	taskId := node.Task.Id()
 	slog.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
@@ -254,7 +255,6 @@ func (ts *taskScheduler) walkAndSchedule(
 		canSchedule := ts.checkIfCanBeScheduled(dagrun, taskId, taskParents)
 		if canSchedule {
 			ts.scheduleSingleTask(dagrun, taskId)
-			wg.Done()
 			break
 		}
 		time.Sleep(checkDelay)

@@ -112,7 +112,6 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
 	var wg sync.WaitGroup
-	wg.Add(2)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
@@ -155,7 +154,6 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
 	var wg sync.WaitGroup
-	wg.Add(5)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
