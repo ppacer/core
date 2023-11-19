@@ -65,7 +65,7 @@ func (c *Client) ReadDagRunTasks(
 
 // Inserts new DagRunTask with default status SCHEDULED.
 func (c *Client) InsertDagRunTask(
-	ctx context.Context, dagId, execTs, taskId string,
+	ctx context.Context, dagId, execTs, taskId, status string,
 ) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(start)
@@ -73,7 +73,7 @@ func (c *Client) InsertDagRunTask(
 		execTs, "taskId", taskId)
 	_, iErr := c.dbConn.ExecContext(
 		ctx, c.insertDagRunTaskQuery(),
-		dagId, execTs, taskId, insertTs, DagRunTaskStatusScheduled, insertTs,
+		dagId, execTs, taskId, insertTs, status, insertTs,
 		version.Version,
 	)
 	if iErr != nil {

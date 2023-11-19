@@ -19,7 +19,9 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 	dagId := "mock_dag"
 	execTs := timeutils.ToString(time.Now())
 	taskId := "my_task_1"
-	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId)
+	iErr := c.InsertDagRunTask(
+		ctx, dagId, execTs, taskId, DagRunTaskStatusScheduled,
+	)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}
@@ -30,7 +32,9 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 	}
 
 	taskId2 := "my_task_2"
-	iErr2 := c.InsertDagRunTask(ctx, dagId, execTs, taskId2)
+	iErr2 := c.InsertDagRunTask(
+		ctx, dagId, execTs, taskId2, DagRunTaskStatusScheduled,
+	)
 	if iErr2 != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr2.Error())
 	}
@@ -187,7 +191,9 @@ func insertDagRunTask(
 	dagId, execTs, taskId string,
 	t *testing.T,
 ) {
-	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId)
+	iErr := c.InsertDagRunTask(
+		ctx, dagId, execTs, taskId, DagRunTaskStatusScheduled,
+	)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}

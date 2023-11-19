@@ -89,7 +89,9 @@ func TestCachePullFromDbDagRunTask(t *testing.T) {
 	timestamp := timeutils.ToString(ts)
 	taskId := "my_task_1"
 
-	iErr := c.InsertDagRunTask(ctx, dagId, timestamp, taskId)
+	iErr := c.InsertDagRunTask(
+		ctx, dagId, timestamp, taskId, db.DagRunTaskStatusScheduled,
+	)
 	if iErr != nil {
 		t.Errorf("Error while inserting new dag run task into the DB: %s",
 			iErr.Error())
