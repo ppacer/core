@@ -31,16 +31,17 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
 
 	startShouldBeSched, _ := ts.checkIfCanBeScheduled(
-		dagrun, "start", d.TaskParents(),
+		dagrun, "start", tasksParents,
 	)
 	if !startShouldBeSched {
 		t.Error("Task <start> should be scheduled, but it's not")
 	}
 
 	endShouldBeSched, _ := ts.checkIfCanBeScheduled(
-		dagrun, "end", d.TaskParents(),
+		dagrun, "end", tasksParents,
 	)
 	if endShouldBeSched {
 		t.Error("Task <end> should not be scheduled in this case, but it is")
@@ -116,14 +117,12 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
-	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
+	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start"}
 	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end"}
 
 	// Execute
-	dagrunStatus := db.DagRunStatusSuccess
-	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks,
-		&wg, &dagrunStatus)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 	// Manually mark "start" task as success, to go to another task
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
@@ -161,7 +160,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
-	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
+	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
 	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21"}
 	drtN22 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n22"}
@@ -169,9 +168,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
 
 	t.Logf("Start ts.walkAndSchedule...")
-	dagrunStatus := db.DagRunStatusSuccess
-	ts.walkAndSchedule(ctx, dagrun, d.Root, d.TaskParents(), alreadyMarkedTasks,
-		&wg, &dagrunStatus)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 
 	t.Logf("Manually mark n1 as success")
