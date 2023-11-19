@@ -142,7 +142,7 @@ type NodeInfo struct {
 // Flattens tree (DAG) into a list of NodeInfo. Flattening is done in BFS
 // order. Result slice does not contain duplicates. List of nodes might be
 // incomplete if depth of the graph exceeds MAX_RECURSION value.
-func (dn *Node) flatten() []NodeInfo {
+func (dn *Node) Flatten() []NodeInfo {
 	flattenNodes, parentsMap := dn.flattenBFS()
 	ni := make([]NodeInfo, 0, len(flattenNodes))
 	for idx, nodeD := range flattenNodes {
@@ -209,7 +209,7 @@ func (dn *Node) flattenBFS() ([]NodeInfo, map[*Node][]*Node) {
 }
 
 func (dn *Node) taskIdsUnique() bool {
-	nodesInfo := dn.flatten()
+	nodesInfo := dn.Flatten()
 	taskIds := make(map[string]struct{})
 
 	for _, ni := range nodesInfo {
@@ -225,7 +225,7 @@ func (dn *Node) taskIdsUnique() bool {
 // into single []byte. Traversal is in BFS order.
 func (dn *Node) joinTasksExecSources() []byte {
 	data := make([]byte, 0, 1024)
-	nodesInfo := dn.flatten()
+	nodesInfo := dn.Flatten()
 	for _, ni := range nodesInfo {
 		taskId := []byte(ni.Node.Task.Id() + ":")
 		data = append(data, taskId...)

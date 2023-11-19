@@ -107,7 +107,7 @@ func TestIsAcyclicOnBranchoutAndJoin(t *testing.T) {
 
 func TestFlattenSimple(t *testing.T) {
 	g := deep3Width3Graph()
-	nodesInfo := g.flatten()
+	nodesInfo := g.Flatten()
 
 	if len(nodesInfo) != 5 {
 		t.Errorf("Expected 5 tasks, got: %d", len(nodesInfo))
@@ -135,7 +135,7 @@ func TestFlattenSimple(t *testing.T) {
 func TestFlattenLinkedList(t *testing.T) {
 	const N = 100
 	l := linkedList(N)
-	nodesInfo := l.flatten()
+	nodesInfo := l.Flatten()
 
 	if len(nodesInfo) != N {
 		t.Errorf("Expected flatten %d tasks, got: %d", N, len(nodesInfo))
@@ -169,7 +169,7 @@ func TestFlattenLinkedList(t *testing.T) {
 
 func TestFlattenBinaryTree(t *testing.T) {
 	g := binaryTree(2)
-	nodesInfo := g.flatten()
+	nodesInfo := g.Flatten()
 
 	expectedTaskIds := []string{
 		"Node", "Node_0", "Node_1", "Node_0_0", "Node_0_1", "Node_1_0",
@@ -195,7 +195,7 @@ func TestFlattenBinaryTree(t *testing.T) {
 
 func TestFlattenBranchoutAndMerge(t *testing.T) {
 	g := branchOutAndMergeGraph()
-	nodesInfo := g.flatten()
+	nodesInfo := g.Flatten()
 	expectedTaskIds := []string{"n1", "n21", "n22", "n23", "n3"}
 	expectedLevels := []int{1, 2, 2, 2, 3}
 	expectedNumOfParents := []int{0, 1, 1, 1, 3}
@@ -231,7 +231,7 @@ func TestFlattenBranchoutAndMerge(t *testing.T) {
 
 func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
 	g := fewBranchoutsAndMergesGraph()
-	nodesInfo := g.flatten()
+	nodesInfo := g.Flatten()
 
 	expectedTaskIds := []string{
 		"n1",

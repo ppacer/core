@@ -69,7 +69,7 @@ func (d *Dag) IsValid() bool {
 // the DAG of given taskId, then non-nil error will be returned
 // (ErrTaskNotFoundInDag).
 func (d *Dag) GetTask(taskId string) (Task, error) {
-	nodesInfo := d.Root.flatten()
+	nodesInfo := d.Root.Flatten()
 	for _, ni := range nodesInfo {
 		if ni.Node.Task.Id() == taskId {
 			return ni.Node.Task, nil
@@ -83,7 +83,7 @@ func (d *Dag) Flatten() []Task {
 	if d.Root == nil {
 		return []Task{}
 	}
-	nodesInfo := d.Root.flatten()
+	nodesInfo := d.Root.Flatten()
 	tasks := make([]Task, len(nodesInfo))
 	for idx, ni := range nodesInfo {
 		tasks[idx] = ni.Node.Task
@@ -97,7 +97,7 @@ func (d *Dag) FlattenNodes() []NodeInfo {
 	if d.Root == nil {
 		return []NodeInfo{}
 	}
-	return d.Root.flatten()
+	return d.Root.Flatten()
 }
 
 // TaskParents returns mapping of DAG task IDs onto its parents task IDs.
