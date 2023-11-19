@@ -3,14 +3,22 @@ package ds
 import "sync"
 
 // Analog of standard map but safe to use among many goroutines.
-type AsyncMap[K, V comparable] struct {
+type AsyncMap[K comparable, V any] struct {
 	sync.Mutex
 	data map[K]V
 }
 
-func NewAsyncMap[K, V comparable]() *AsyncMap[K, V] {
+// Instantiate new empty AsyncMap of given types.
+func NewAsyncMap[K comparable, V any]() *AsyncMap[K, V] {
 	return &AsyncMap[K, V]{
 		data: map[K]V{},
+	}
+}
+
+// Instantiate new AsyncMap based on standard map.
+func NewAsyncMapFromMap[K comparable, V any](m map[K]V) *AsyncMap[K, V] {
+	return &AsyncMap[K, V]{
+		data: m,
 	}
 }
 
@@ -29,6 +37,18 @@ func (am *AsyncMap[K, V]) Get(key K) (V, bool) {
 	defer am.Unlock()
 	value, exists := am.data[key]
 	return value, exists
+}
+
+// GetOrDefault gets value from the map for given key. If there is no entry in
+// the map for given key, then default value is returned.
+func (am *AsyncMap[K, V]) GetOrDefault(key K, defaultVal V) V {
+	am.Lock()
+	defer am.Unlock()
+	value, exists := am.data[key]
+	if !exists {
+		return defaultVal
+	}
+	return value
 }
 
 // Delete deletes key and corresponding value from the map.
