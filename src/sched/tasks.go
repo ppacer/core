@@ -99,11 +99,13 @@ func (ts *taskScheduler) UpsertTaskStatus(
 
 	// Insert/update info in the cache
 	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
-	_, entryExists := ts.TaskCache.Get(drt)
+	drtsCache, entryExists := ts.TaskCache.Get(drt)
 	if entryExists {
-		cacheUpdateErr := ts.TaskCache.Update(drt, drts)
-		if cacheUpdateErr != nil {
-			return cacheUpdateErr
+		if drtsCache.Status != status {
+			cacheUpdateErr := ts.TaskCache.Update(drt, drts)
+			if cacheUpdateErr != nil {
+				return cacheUpdateErr
+			}
 		}
 	} else {
 		cacheAddErr := ts.TaskCache.Add(drt, drts)
@@ -115,9 +117,11 @@ func (ts *taskScheduler) UpsertTaskStatus(
 	// Insert/update info in the database
 	dagIdStr := string(drt.DagId)
 	execTs := timeutils.ToString(drt.AtTime)
-	_, getErr := ts.DbClient.ReadDagRunTask(ctx, dagIdStr, execTs, drt.TaskId)
+	drtDb, getErr := ts.DbClient.ReadDagRunTask(ctx, dagIdStr, execTs, drt.TaskId)
 	switch getErr {
 	case sql.ErrNoRows:
+		slog.Info("Inserting new dag run task", "dagId", dagIdStr, "execTs",
+			execTs, "taskId", drt.TaskId)
 		iErr := ts.DbClient.InsertDagRunTask(
 			ctx, dagIdStr, execTs, drt.TaskId, status.String(),
 		)
@@ -125,11 +129,16 @@ func (ts *taskScheduler) UpsertTaskStatus(
 			return iErr
 		}
 	case nil:
-		dbUpdateErr := ts.DbClient.UpdateDagRunTaskStatus(
-			ctx, dagIdStr, execTs, drt.TaskId, status.String(),
-		)
-		if dbUpdateErr != nil {
-			return dbUpdateErr
+		slog.Info("Given dag run task exists in database", "dagruntask", drtDb)
+		if drtDb.Status != status.String() {
+			slog.Info("Updating dag run task status", "currentStatus",
+				drtDb.Status, "newStatus", status.String())
+			dbUpdateErr := ts.DbClient.UpdateDagRunTaskStatus(
+				ctx, dagIdStr, execTs, drt.TaskId, status.String(),
+			)
+			if dbUpdateErr != nil {
+				return dbUpdateErr
+			}
 		}
 	default:
 		slog.Error("Could not read from dagruntasks", "dagruntask", drt,
@@ -188,15 +197,10 @@ func (ts *taskScheduler) scheduleDagTasks(
 		return
 	}
 
-	taskParents := dag.TaskParents()
-	alreadyMarkedTasks := ds.NewAsyncMap[DagRunTask, any]()
+	sharedState := newDagRunSharedState(dag.TaskParents())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dagrunStatus := db.DagRunStatusSuccess // TODO: probably we need DagRun statuses in this pkg
-	ts.walkAndSchedule(
-		ctx, dagrun, dag.Root, taskParents, alreadyMarkedTasks, &wg,
-		&dagrunStatus,
-	)
+	ts.walkAndSchedule(ctx, dagrun, dag.Root, sharedState, &wg)
 	wg.Wait()
 
 	// At this point all tasks has been scheduled, but not necessarily done.
@@ -207,13 +211,52 @@ func (ts *taskScheduler) scheduleDagTasks(
 
 	// Update dagrun state to finished
 	stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
-		ctx, dagId, execTs, dagrunStatus,
+		ctx, dagId, execTs, *sharedState.DagRunStatus,
 	)
 	if stateUpdateErr != nil {
 		// TODO(dskrzypiec): should we add retries? Probably...
 		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
 	ts.cleanTaskCache(dagrun, dag.Flatten())
+}
+
+// Type dagRunSharedState represents shared state for goroutines spinned within
+// the same dag run for scheduling multiple tasks. Those goroutines need to
+// share metadata. One example is when a task has multiple parents, we want to
+// create only one new goroutine which would await for scheduling that task.
+// Similar case is when we propagate upstream failure down the tree.
+type dagRunSharedState struct {
+	// Map of dag run tasks that has been already started to be scheduled in a
+	// separate goroutine. Having this helps, to avoid firing up few goroutines
+	// for the same dag run task. For example:
+	// n21
+	//     \
+	// n22 - n3
+	//     /
+	// n23
+	// We don't need to start 3 separate goroutines for the same task, only
+	// because it has 3 parents.
+	AlreadyMarkedTasks *ds.AsyncMap[DagRunTask, any]
+
+	// TODO
+	AlreadyMarkedForUpstreamFailure *ds.AsyncMap[DagRunTask, any]
+
+	// Map of taskId -> []{ parent task ids } for the DAG.
+	TasksParents *ds.AsyncMap[string, []string]
+
+	// Overall dag run status
+	sync.Mutex
+	DagRunStatus *string
+}
+
+func newDagRunSharedState(taskParents map[string][]string) *dagRunSharedState {
+	dagrunStatus := db.DagRunStatusSuccess
+	return &dagRunSharedState{
+		AlreadyMarkedTasks:              ds.NewAsyncMap[DagRunTask, any](),
+		AlreadyMarkedForUpstreamFailure: ds.NewAsyncMap[DagRunTask, any](),
+		TasksParents:                    ds.NewAsyncMapFromMap(taskParents),
+		DagRunStatus:                    &dagrunStatus,
+	}
 }
 
 // WalkAndSchedule wait for node.Task to be ready for scheduling, then
@@ -223,17 +266,13 @@ func (ts *taskScheduler) walkAndSchedule(
 	ctx context.Context,
 	dagrun DagRun,
 	node *dag.Node,
-	taskParents map[string][]string,
-	alreadyMarkedTasks *ds.AsyncMap[DagRunTask, any],
+	sharedState *dagRunSharedState,
 	wg *sync.WaitGroup,
-	dagrunStatus *string,
 ) {
 	defer wg.Done()
 	checkDelay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
 	taskId := node.Task.Id()
 	slog.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
-	slog.Debug("Task parents:", "dagId", string(dagrun.DagId), "taskId",
-		taskId, "parents", taskParents[taskId])
 
 	for {
 		select {
@@ -246,13 +285,15 @@ func (ts *taskScheduler) walkAndSchedule(
 		}
 
 		canSchedule, parentsStatus := ts.checkIfCanBeScheduled(
-			dagrun, taskId, taskParents,
+			dagrun, taskId, sharedState.TasksParents,
 		)
 		if parentsStatus == Failed {
 			msg := "At least one parent of the task has failed. Will not proceed."
 			slog.Warn(msg, "dagrun", dagrun, "taskId", taskId)
 			ts.markDownstreamTasks(ctx, dagrun, node, UpstreamFailed)
-			*dagrunStatus = db.DagRunStatusFailed
+			sharedState.Lock()
+			*sharedState.DagRunStatus = db.DagRunStatusFailed
+			sharedState.Unlock()
 			return
 		}
 		if canSchedule {
@@ -264,22 +305,11 @@ func (ts *taskScheduler) walkAndSchedule(
 
 	for _, child := range node.Children {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, child.Task.Id()}
-		// before we start walking down the tree, we need to check if the
-		// child has not been already started. Mostly for such cases:
-		// n21
-		//     \
-		// n22 - n3
-		//     /
-		// n23
-		// We don't need to start 3 separate goroutines for the same task,
-		// only because it has 3 parents.
-		if _, alreadyStarted := alreadyMarkedTasks.Get(drt); !alreadyStarted {
-			alreadyMarkedTasks.Add(drt, struct{}{})
+		_, alreadyStarted := sharedState.AlreadyMarkedTasks.Get(drt)
+		if !alreadyStarted {
+			sharedState.AlreadyMarkedTasks.Add(drt, struct{}{})
 			wg.Add(1)
-			go ts.walkAndSchedule(
-				ctx, dagrun, child, taskParents, alreadyMarkedTasks, wg,
-				dagrunStatus,
-			)
+			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg)
 		}
 	}
 }
@@ -312,16 +342,13 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 func (ts *taskScheduler) markDownstreamTasks(
 	ctx context.Context, dagrun DagRun, node *dag.Node, status DagRunTaskStatus,
 ) {
-	// TODO: This is incorrect! We need to use node.Flatten(), to not call this
-	// function more then once for nodes
-	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, node.Task.Id()}
-	uErr := ts.UpsertTaskStatus(ctx, drt, status)
-	if uErr != nil {
-		slog.Error("UpsertTaskStatus failed during markDownstreamTasks",
-			"dagrun", dagrun, "taskId", node.Task.Id(), "status", status)
-	}
-	for _, child := range node.Children {
-		ts.markDownstreamTasks(ctx, dagrun, child, UpstreamFailed)
+	for _, task := range node.Flatten() {
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, task.Node.Task.Id()}
+		uErr := ts.UpsertTaskStatus(ctx, drt, status)
+		if uErr != nil {
+			slog.Error("UpsertTaskStatus failed during markDownstreamTasks",
+				"dagrun", dagrun, "taskId", node.Task.Id(), "status", status)
+		}
 	}
 }
 
@@ -329,9 +356,9 @@ func (ts *taskScheduler) markDownstreamTasks(
 func (ts *taskScheduler) checkIfCanBeScheduled(
 	dagrun DagRun,
 	taskId string,
-	taskParents map[string][]string,
+	tasksParents *ds.AsyncMap[string, []string],
 ) (bool, DagRunTaskStatus) {
-	parents, exists := taskParents[taskId]
+	parents, exists := tasksParents.Get(taskId)
 	if !exists {
 		slog.Error("Task does not exist in parents map", "taskId", taskId)
 		return false, Running
