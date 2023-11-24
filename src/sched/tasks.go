@@ -203,9 +203,13 @@ func (ts *taskScheduler) scheduleDagTasks(
 	ts.walkAndSchedule(ctx, dagrun, dag.Root, sharedState, &wg)
 	wg.Wait()
 
+	// Check whenever any task has failed and if so, then mark downstream tasks
+	// with status UPSTREAM_FAILED.
+	ts.checkFailsAndMarkDownstream(ctx, dagrun, dag.Root, sharedState)
+
 	// At this point all tasks has been scheduled, but not necessarily done.
 	tasks := dag.Flatten()
-	for !ts.allTasksAreDone(dagrun, tasks) {
+	for !ts.allTasksAreDone(dagrun, tasks, sharedState) {
 		time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
 	}
 
@@ -290,10 +294,6 @@ func (ts *taskScheduler) walkAndSchedule(
 		if parentsStatus == Failed {
 			msg := "At least one parent of the task has failed. Will not proceed."
 			slog.Warn(msg, "dagrun", dagrun, "taskId", taskId)
-			ts.markDownstreamTasks(ctx, dagrun, node, UpstreamFailed)
-			sharedState.Lock()
-			*sharedState.DagRunStatus = db.DagRunStatusFailed
-			sharedState.Unlock()
 			return
 		}
 		if canSchedule {
@@ -333,6 +333,43 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 		slog.Error("Cannot update dag run task status", "dagruntask", drt,
 			"status", Scheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
+	}
+}
+
+// CheckFailsAndMarkDownstream performs DFS and if it finds a task in the tree
+// which is in FAILED state it marks the dag run as FAILED and also marks all
+// tasks in this sub-tree with status UPSTREAM_FAILED.
+func (ts *taskScheduler) checkFailsAndMarkDownstream(
+	ctx context.Context,
+	dagrun DagRun,
+	node *dag.Node,
+	sharedState *dagRunSharedState,
+) {
+	status, err := ts.getDagRunTaskStatus(dagrun, node.Task.Id())
+	if err == sql.ErrNoRows {
+		slog.Error("Dag run is done but there is no cache entry and DB entry"+
+			"for this dag run task. This is highly unexpected", "dagrun", dagrun,
+			"taskId", node.Task.Id())
+	}
+	if err != nil && err != sql.ErrNoRows {
+		slog.Error("Could no get dag run task status. Dag run is done. This is"+
+			" unexpected. This dag run task is treated as not failed", "dagrun",
+			dagrun, "taskId", node.Task.Id())
+	}
+	if status != Failed {
+		// Parent is not FAILED, we should continue DFS.
+		for _, child := range node.Children {
+			ts.checkFailsAndMarkDownstream(ctx, dagrun, child, sharedState)
+		}
+	} else {
+		// Parent is in FAILED state - we should mark it's subtree with
+		// UPSTREAM_FAILED status.
+		sharedState.Lock()
+		*sharedState.DagRunStatus = Failed.String()
+		sharedState.Unlock()
+		for _, child := range node.Children {
+			ts.markDownstreamTasks(ctx, dagrun, child, UpstreamFailed)
+		}
 	}
 }
 
@@ -431,43 +468,63 @@ func (ts *taskScheduler) checkIfParentTaskIsDone(
 
 // Checks whenever all tasks within the dag run are in terminal states and thus
 // dag run is finished.
-func (ts *taskScheduler) allTasksAreDone(dagrun DagRun, tasks []dag.Task) bool {
+func (ts *taskScheduler) allTasksAreDone(
+	dagrun DagRun, tasks []dag.Task, sharedState *dagRunSharedState,
+) bool {
 	for _, task := range tasks {
-		drt := DagRunTask{
-			DagId:  dagrun.DagId,
-			AtTime: dagrun.AtTime,
-			TaskId: task.Id(),
-		}
-		drts, exists := ts.TaskCache.Get(drt)
-		if !exists {
-			ctx := context.TODO()
-			dbErr := ts.TaskCache.PullFromDatabase(ctx, drt, ts.DbClient)
-			if dbErr == sql.ErrNoRows {
-				return false
-			}
-			if dbErr != nil {
-				slog.Error(
-					"Dag run task does not exist in the cache and cannot get it "+
-						"from database", "dagruntask", drt, "err", dbErr.Error())
-				return false
-			}
-			drts, exists := ts.TaskCache.Get(drt)
-			if !exists {
-				slog.Error("Dag run task still does not exist in the cache "+
-					"even after trying pull it from database", "dagruntask",
-					drt)
-				return false
-			}
-			if !drts.Status.IsTerminal() {
-				return false
-			}
-			continue
-		}
-		if !drts.Status.IsTerminal() {
+		status, err := ts.getDagRunTaskStatus(dagrun, task.Id())
+		if err != nil {
 			return false
+		}
+		if !status.IsTerminal() {
+			return false
+		}
+		if status == Failed {
+			// Almost all cases should be covered by
+			// checkFailsAndMarkDownstream but in case when all tasks are
+			// scheduled, then checkFailsAndMarkDownstream might be run before
+			// all task (especially leafs) has been done. Those cases are
+			// cought only in here. There is no need for marking downstream
+			// tasks, because there is no downstream tasks. This can only
+			// happen for leafs of the tree.
+			sharedState.Lock()
+			*sharedState.DagRunStatus = Failed.String()
+			sharedState.Unlock()
 		}
 	}
 	return true
+}
+
+// This methods gets dag run task status. It tries to check TaskCache first.
+// When given dag run task is not there it tries to pull it from database. If
+// there is also no entry in the database, then sql.ErrNoRows is returned.
+func (ts *taskScheduler) getDagRunTaskStatus(
+	dagrun DagRun, taskId string,
+) (DagRunTaskStatus, error) {
+	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+	drts, exists := ts.TaskCache.Get(drt)
+	if exists {
+		return drts.Status, nil
+	}
+	ctx := context.TODO()
+	dbErr := ts.TaskCache.PullFromDatabase(ctx, drt, ts.DbClient)
+	if dbErr == sql.ErrNoRows {
+		return NoStatus, dbErr
+	}
+	if dbErr != nil {
+		slog.Error(
+			"Dag run task does not exist in the cache and cannot get it "+
+				"from database", "dagruntask", drt, "err", dbErr.Error())
+		return NoStatus, dbErr
+	}
+	drts, exists = ts.TaskCache.Get(drt)
+	if exists {
+		return drts.Status, nil
+	}
+	slog.Error("Dag run task still does not exist in the cache "+
+		"even after trying pull it from database", "dagruntask",
+		drt)
+	return NoStatus, sql.ErrNoRows
 }
 
 // Removes bulk of tasks for given dag run from the TaskCache.
@@ -492,6 +549,7 @@ const (
 	Failed
 	Success
 	UpstreamFailed
+	NoStatus
 )
 
 func (s DagRunTaskStatus) String() string {
@@ -501,6 +559,7 @@ func (s DagRunTaskStatus) String() string {
 		"FAILED",
 		"SUCCESS",
 		"UPSTREAM_FAILED",
+		"NO_STATUS",
 	}[s]
 }
 
@@ -520,6 +579,7 @@ func stringToDagRunTaskStatus(s string) (DagRunTaskStatus, error) {
 		"FAILED":          Failed,
 		"SUCCESS":         Success,
 		"UPSTREAM_FAILED": UpstreamFailed,
+		"NO_STATUS":       NoStatus,
 	}
 	if status, ok := states[s]; ok {
 		return status, nil

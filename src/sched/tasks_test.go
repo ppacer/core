@@ -314,6 +314,22 @@ func TestScheduleDagTasks131WithFailedFirstTask(t *testing.T) {
 	)
 }
 
+func TestScheduleDagTasks131WithFailedLastTask(t *testing.T) {
+	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	d := dag.New("mock_dag_fail_n3").
+		AddSchedule(schedule).
+		AddRoot(nodes131()).
+		Done()
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	taskIdsToFail := map[string]struct{}{
+		"n3": {},
+	}
+	testScheduleDagTasksSingleDagrunWithFailure(
+		d, dagrun, taskIdsToFail, 50*time.Millisecond, 100, t,
+	)
+}
+
 func TestScheduleDagTasksLinkedListShort(t *testing.T) {
 	testScheduleDagTasksLinkedList(10, t)
 }
@@ -551,10 +567,11 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
+	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
 	ctx := context.Background()
 
-	areDoneBefore := ts.allTasksAreDone(dagrun, tasks)
+	areDoneBefore := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneBefore {
 		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
 	}
@@ -566,7 +583,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 			Success.String())
 	}
 
-	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneAfterN1 {
 		t.Errorf("All dag run %v tasks should not yet be finished (after n1)",
 			dagrun)
@@ -581,7 +598,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 		}
 	}
 
-	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneAfterN2x {
 		t.Errorf("All dag run %v tasks should not yet be finished (after n2x)",
 			dagrun)
@@ -593,7 +610,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
 			Success.String())
 	}
-	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if !areDoneAfterN3 {
 		t.Errorf("All dag run %v tasks should be finished after n3, but are not",
 			dagrun)
@@ -607,10 +624,11 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
+	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
 	ctx := context.Background()
 
-	areDoneBefore := ts.allTasksAreDone(dagrun, tasks)
+	areDoneBefore := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneBefore {
 		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
 	}
@@ -622,7 +640,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 			Success.String())
 	}
 
-	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneAfterN1 {
 		t.Errorf("All dag run %v tasks should not yet be finished (after n1)",
 			dagrun)
@@ -637,7 +655,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 		}
 	}
 
-	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN2x := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if areDoneAfterN2x {
 		t.Errorf("All dag run %v tasks should not yet be finished (after n2x)",
 			dagrun)
@@ -661,7 +679,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 			drtn3, Success.String(), uErr.Error())
 	}
 
-	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks)
+	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if !areDoneAfterN3 {
 		t.Errorf("All dag run %v tasks should be finished after n3, but are not",
 			dagrun)
