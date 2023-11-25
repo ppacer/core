@@ -353,7 +353,6 @@ func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
 	)
 }
 
-// TODO: make it passes
 func TestScheduleDagTasksLinkedListShortFailure(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
@@ -683,6 +682,95 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	if !areDoneAfterN3 {
 		t.Errorf("All dag run %v tasks should be finished after n3, but are not",
 			dagrun)
+	}
+}
+
+func TestGetDagRunTaskStatusFromCache(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+
+	// Add entry to the cache
+	taskId := "task_1"
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+	status := DagRunTaskState{Success, dagrun.AtTime}
+	addErr := ts.TaskCache.Add(drt, status)
+	if addErr != nil {
+		t.Errorf("Cannot add new entry %v to task cache: %s",
+			drt, addErr.Error())
+	}
+
+	// Get dag run task status
+	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
+	if getErr != nil {
+		t.Errorf("Error while getting (%v, %s) dag run task status: %s",
+			dagrun, taskId, getErr.Error())
+	}
+	if statusNew != status.Status {
+		t.Errorf("Expected %v, got: %v", status.Status.String(),
+			statusNew.String())
+	}
+}
+
+func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+
+	// Add entry to the database and left task cache empty on purpose
+	taskId := "task_1"
+	execTs := time.Now()
+	execTsStr := timeutils.ToString(execTs)
+	dagrun := DagRun{dag.Id("mock_dag"), execTs}
+	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+	status := DagRunTaskState{Success, dagrun.AtTime}
+
+	ctx := context.Background()
+	iErr := ts.DbClient.InsertDagRunTask(
+		ctx, string(dagrun.DagId), execTsStr, taskId, Success.String(),
+	)
+	if iErr != nil {
+		t.Errorf("Cannot insert dag run task (%v) to database: %s",
+			drt, iErr.Error())
+	}
+
+	// Get dag run task status
+	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
+	if getErr != nil {
+		t.Errorf("Error while getting (%v, %s) dag run task status: %s",
+			dagrun, taskId, getErr.Error())
+	}
+	if statusNew != status.Status {
+		t.Errorf("Expected %v, got: %v", status.Status.String(),
+			statusNew.String())
+	}
+
+	// Check if this dag run task is also in the cache
+	drts, exists := ts.TaskCache.Get(drt)
+	if !exists {
+		t.Errorf("Expected %v to exist in the task cache, but it's not",
+			drt)
+	}
+	if drts.Status != status.Status {
+		t.Errorf("Expected status from cache %s, but got %s",
+			status.Status.String(), drts.Status.String())
+	}
+}
+
+func TestGetDagRunTaskStatusNoCacheNoDatabase(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+
+	// In this case we don't add entry either to the cache nor to database
+	taskId := "task_1"
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+
+	// Get dag run task status
+	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
+	if getErr != sql.ErrNoRows {
+		t.Errorf("Expected no rows error, got: %s", getErr.Error())
+	}
+	if statusNew != NoStatus {
+		t.Errorf("Expected %v, got: %v", NoStatus.String(), statusNew.String())
 	}
 }
 
