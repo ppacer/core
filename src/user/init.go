@@ -18,4 +18,8 @@ func init() {
 	if err != nil {
 		slog.Error("Could not add print DAG", "err", err)
 	}
+	err = dag.Add(createRandomFailDag(10))
+	if err != nil {
+		slog.Error("Could not add random failing DAG", "err", err)
+	}
 }
