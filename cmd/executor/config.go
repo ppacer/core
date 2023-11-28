@@ -12,11 +12,14 @@ type LoggerConfig struct {
 }
 
 type Config struct {
-	Logger LoggerConfig
+	SchedulerUrl string
+	Logger       LoggerConfig
 }
 
 // Parse Config or fail.
 func ParseConfig() Config {
+	schedulerUrl := flag.String("schedUrl", "http://localhost:8080",
+		"Scheduler URL")
 	logDebugLevel := flag.Bool("logDebug", true,
 		"Log events on at least debug level. Otherwise info level is assumed.")
 	logUseConsoleWriter := flag.Bool("logConsole", true,
@@ -27,7 +30,7 @@ func ParseConfig() Config {
 		UseDebugLevel:    *logDebugLevel,
 		UseConsoleWriter: *logUseConsoleWriter,
 	}
-	return Config{Logger: loggerCfg}
+	return Config{SchedulerUrl: *schedulerUrl, Logger: loggerCfg}
 }
 
 func (c *Config) setupLogger() {
