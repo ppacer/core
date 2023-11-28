@@ -21,12 +21,38 @@ const (
 
 type Executor struct {
 	schedClient *SchedulerClient
+	config      Config
 }
 
-func New(schedAddr string) *Executor {
-	httpClient := &http.Client{Timeout: 30 * time.Second} // TODO: config
+// Executor configuration.
+type Config struct {
+	PollInterval       time.Duration
+	HttpRequestTimeout time.Duration
+}
+
+// Setup default configuration values.
+func defaultConfig() Config {
+	return Config{
+		PollInterval:       10 * time.Millisecond,
+		HttpRequestTimeout: 30 * time.Second,
+	}
+}
+
+// New creates new Executor instance. When config is nil, then default
+// configuration values will be used.
+func New(schedAddr string, config *Config) *Executor {
+	var cfg Config
+	if config != nil {
+		cfg = *config
+	} else {
+		cfg = defaultConfig()
+	}
+	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
 	sc := NewSchedulerClient(schedAddr, httpClient)
-	return &Executor{schedClient: sc}
+	return &Executor{
+		schedClient: sc,
+		config:      cfg,
+	}
 }
 
 // Start starts executor. TODO...
@@ -34,7 +60,7 @@ func (e *Executor) Start() {
 	for {
 		tte, err := e.schedClient.GetTask()
 		if err == ds.ErrQueueIsEmpty {
-			time.Sleep(10 * time.Millisecond) // TODO: config
+			time.Sleep(e.config.PollInterval)
 			continue
 		}
 		if err != nil {
