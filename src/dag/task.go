@@ -66,7 +66,7 @@ func ParseTaskStatus(s string) (TaskStatus, error) {
 	if status, ok := states[s]; ok {
 		return status, nil
 	}
-	return 0, fmt.Errorf("invalid DagRunTaskStatus: %s", s)
+	return 0, fmt.Errorf("invalid TaskStatus: %s", s)
 }
 
 // TaskExecuteSource returns Task's source code of its Execute() method. In

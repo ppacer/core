@@ -21,12 +21,11 @@ type DagRun struct {
 	Version        string
 }
 
+// Those should be consistent with dag.RunStatus string values. We cannot use
+// those in here, because db package cannot depend on dag package.
 const (
-	DagRunStatusReadyToSchedule = "READY_TO_SCHEDULE"
-	DagRunStatusScheduled       = "SCHEDULED"
-	DagRunStatusRunning         = "RUNNING"
-	DagRunStatusSuccess         = "SUCCESS"
-	DagRunStatusFailed          = "FAILED"
+	statusReadyToSchedule = "READY_TO_SCHEDULE"
+	statusScheduled       = "SCHEDULED"
 )
 
 // ReadDagRuns reads topN latest dag runs for given DAG ID.
@@ -77,7 +76,7 @@ func (c *Client) InsertDagRun(ctx context.Context, dagId, execTs string) (int64,
 	slog.Debug("Start inserting dag run", "dagId", dagId, "execTs", insertTs)
 	res, err := c.dbConn.ExecContext(
 		ctx, c.insertDagRunQuery(),
-		dagId, execTs, insertTs, DagRunStatusScheduled, insertTs,
+		dagId, execTs, insertTs, statusScheduled, insertTs,
 		version.Version,
 	)
 	if err != nil {
@@ -187,9 +186,9 @@ func (c *Client) UpdateDagRunStatusByExecTs(
 	return nil
 }
 
-// DagRunExists checks whenever dagrun already exists for given DAG ID and
+// DagRunAlreadyScheduled checks whenever dagrun already exists for given DAG ID and
 // schedule timestamp.
-func (c *Client) DagRunExists(
+func (c *Client) DagRunAlreadyScheduled(
 	ctx context.Context, dagId, execTs string,
 ) (bool, error) {
 	start := time.Now()
@@ -197,8 +196,8 @@ func (c *Client) DagRunExists(
 
 	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=? AND (Status=? OR Status=?)"
 	row := c.dbConn.QueryRowContext(
-		ctx, q, dagId, execTs, DagRunStatusScheduled,
-		DagRunStatusReadyToSchedule,
+		ctx, q, dagId, execTs, statusScheduled,
+		statusReadyToSchedule,
 	)
 	var count int
 	err := row.Scan(&count)
@@ -220,7 +219,7 @@ func (c *Client) ReadDagRunsToBeScheduled(ctx context.Context) ([]DagRun, error)
 	dagruns := make([]DagRun, 0, 100)
 
 	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunToBeScheduledQuery(),
-		DagRunStatusReadyToSchedule, DagRunStatusScheduled)
+		statusReadyToSchedule, statusScheduled)
 	if qErr != nil {
 		slog.Error("Failed querying dag run to be scheduled", "err", qErr)
 		return nil, qErr

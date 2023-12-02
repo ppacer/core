@@ -24,7 +24,6 @@ type Dag struct {
 }
 
 type Attr struct {
-
 	// If set to true schedule dag run would be catch up since the last run or
 	// Start.
 	CatchUp bool     `json:"catchUp"`

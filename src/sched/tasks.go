@@ -162,7 +162,7 @@ func (ts *taskScheduler) scheduleDagTasks(
 
 	// Update dagrun state to running
 	stateUpdateErr := ts.DbClient.UpdateDagRunStatusByExecTs(
-		ctx, dagId, execTs, db.DagRunStatusRunning,
+		ctx, dagId, execTs, dag.RunRunning.String(),
 	)
 	if stateUpdateErr != nil {
 		// just send error, we don't want to stop scheduling because of dagrun
@@ -171,7 +171,7 @@ func (ts *taskScheduler) scheduleDagTasks(
 	}
 
 	// Schedule tasks, starting from root - put on the task queue
-	dag, dagGetErr := dag.Get(dagrun.DagId)
+	d, dagGetErr := dag.Get(dagrun.DagId)
 	if dagGetErr != nil {
 		err := fmt.Errorf("cannot get DAG %s from DAG registry: %s", dagId,
 			dagGetErr.Error())
@@ -182,12 +182,12 @@ func (ts *taskScheduler) scheduleDagTasks(
 		}
 		return
 	}
-	if dag.Root == nil {
+	if d.Root == nil {
 		slog.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
 			dagrun.DagId)
 		// Update dagrun state to finished
 		stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
-			ctx, dagId, execTs, db.DagRunStatusSuccess,
+			ctx, dagId, execTs, dag.RunSuccess.String(),
 		)
 		if stateUpdateErr != nil {
 			// TODO(dskrzypiec): should we add retries? Probably...
@@ -196,31 +196,31 @@ func (ts *taskScheduler) scheduleDagTasks(
 		return
 	}
 
-	sharedState := newDagRunSharedState(dag.TaskParents())
+	sharedState := newDagRunSharedState(d.TaskParents())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	ts.walkAndSchedule(ctx, dagrun, dag.Root, sharedState, &wg)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	wg.Wait()
 
 	// Check whenever any task has failed and if so, then mark downstream tasks
 	// with status UPSTREAM_FAILED.
-	ts.checkFailsAndMarkDownstream(ctx, dagrun, dag.Root, sharedState)
+	ts.checkFailsAndMarkDownstream(ctx, dagrun, d.Root, sharedState)
 
 	// At this point all tasks has been scheduled, but not necessarily done.
-	tasks := dag.Flatten()
+	tasks := d.Flatten()
 	for !ts.allTasksAreDone(dagrun, tasks, sharedState) {
 		time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
 	}
 
 	// Update dagrun state to finished
 	stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
-		ctx, dagId, execTs, *sharedState.DagRunStatus,
+		ctx, dagId, execTs, (*sharedState.DagRunStatus).String(),
 	)
 	if stateUpdateErr != nil {
 		// TODO(dskrzypiec): should we add retries? Probably...
 		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
-	ts.cleanTaskCache(dagrun, dag.Flatten())
+	ts.cleanTaskCache(dagrun, d.Flatten())
 }
 
 // Type dagRunSharedState represents shared state for goroutines spinned within
@@ -249,11 +249,11 @@ type dagRunSharedState struct {
 
 	// Overall dag run status
 	sync.Mutex
-	DagRunStatus *string
+	DagRunStatus *dag.RunStatus
 }
 
 func newDagRunSharedState(taskParents map[string][]string) *dagRunSharedState {
-	dagrunStatus := db.DagRunStatusSuccess
+	dagrunStatus := dag.RunSuccess
 	return &dagRunSharedState{
 		AlreadyMarkedTasks:              ds.NewAsyncMap[DagRunTask, any](),
 		AlreadyMarkedForUpstreamFailure: ds.NewAsyncMap[DagRunTask, any](),
@@ -364,7 +364,7 @@ func (ts *taskScheduler) checkFailsAndMarkDownstream(
 		// Parent is in FAILED state - we should mark it's subtree with
 		// UPSTREAM_FAILED status.
 		sharedState.Lock()
-		*sharedState.DagRunStatus = dag.TaskFailed.String()
+		*sharedState.DagRunStatus = dag.RunFailed
 		sharedState.Unlock()
 		for _, child := range node.Children {
 			ts.markDownstreamTasks(ctx, dagrun, child, dag.TaskUpstreamFailed)
@@ -487,7 +487,7 @@ func (ts *taskScheduler) allTasksAreDone(
 			// tasks, because there is no downstream tasks. This can only
 			// happen for leafs of the tree.
 			sharedState.Lock()
-			*sharedState.DagRunStatus = dag.TaskFailed.String()
+			*sharedState.DagRunStatus = dag.RunFailed
 			sharedState.Unlock()
 		}
 	}

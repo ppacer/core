@@ -78,66 +78,68 @@ func trySchedule(
 // schedule time from the cache (nextSchedules).
 func tryScheduleDag(
 	ctx context.Context,
-	dag dag.Dag,
+	d dag.Dag,
 	currentTime time.Time,
 	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
 	dbClient *db.Client,
 ) error {
-	shouldBe, schedule := shouldBeSheduled(dag, nextSchedules, currentTime)
+	shouldBe, schedule := shouldBeSheduled(d, nextSchedules, currentTime)
 	if !shouldBe {
 		return nil
 	}
-	slog.Info("About to try scheduling new dag run", "dagId", string(dag.Id),
+	slog.Info("About to try scheduling new dag run", "dagId", string(d.Id),
 		"execTs", schedule)
 
 	execTs := timeutils.ToString(schedule)
-	alreadyScheduled, dreErr := dbClient.DagRunExists(ctx, string(dag.Id), execTs)
+	alreadyScheduled, dreErr := dbClient.DagRunAlreadyScheduled(ctx, string(d.Id), execTs)
 	if dreErr != nil {
 		return dreErr
 	}
 	if alreadyScheduled {
-		alreadyInQueue := queue.Contains(DagRun{DagId: dag.Id, AtTime: schedule})
+		alreadyInQueue := queue.Contains(DagRun{DagId: d.Id, AtTime: schedule})
 		if !alreadyInQueue {
 			// When dag run is already in the database but it's not on the
 			// queue (perhaps due to scheduler restart).
-			qErr := queue.Put(DagRun{DagId: dag.Id, AtTime: schedule})
+			qErr := queue.Put(DagRun{DagId: d.Id, AtTime: schedule})
 			if qErr != nil {
 				slog.Error("Cannot put dag run on the queue", "dagId",
-					string(dag.Id), "execTs", schedule, "err", qErr)
+					string(d.Id), "execTs", schedule, "err", qErr)
 				return qErr
 			}
 		}
 		return nil
 	}
-	runId, iErr := dbClient.InsertDagRun(ctx, string(dag.Id), execTs)
+	runId, iErr := dbClient.InsertDagRun(ctx, string(d.Id), execTs)
 	if iErr != nil {
 		// Revert next schedule
-		nextSchedules[dag.Id] = &schedule
+		nextSchedules[d.Id] = &schedule
 		return iErr
 	}
-	uErr := dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusReadyToSchedule)
+	uErr := dbClient.UpdateDagRunStatus(
+		ctx, runId, dag.RunReadyToSchedule.String(),
+	)
 	if uErr != nil {
 		slog.Warn("Cannot update dag run status to READY_TO_SCHEDULE", "dagId",
-			string(dag.Id), "execTs", schedule, "err", uErr)
+			string(d.Id), "execTs", schedule, "err", uErr)
 		// We don't need to block the process because of this error. In worst
 		// case we can omit having this status.
 	}
-	qErr := queue.Put(DagRun{DagId: dag.Id, AtTime: schedule})
+	qErr := queue.Put(DagRun{DagId: d.Id, AtTime: schedule})
 	if qErr != nil {
 		// Revert next schedule
-		nextSchedules[dag.Id] = &schedule
+		nextSchedules[d.Id] = &schedule
 
 		// We don't remove entry from dagruns table, based on this it would be
 		// put on the queue in the next iteration.
-		slog.Error("Cannot put dag run on the queue", "dagId", string(dag.Id),
+		slog.Error("Cannot put dag run on the queue", "dagId", string(d.Id),
 			"execTs", schedule, "err", qErr)
 		return qErr
 	}
-	uErr = dbClient.UpdateDagRunStatus(ctx, runId, db.DagRunStatusScheduled)
+	uErr = dbClient.UpdateDagRunStatus(ctx, runId, dag.RunScheduled.String())
 	if uErr != nil {
 		// Revert next schedule
-		nextSchedules[dag.Id] = &schedule
+		nextSchedules[d.Id] = &schedule
 		// Pop item from the queue
 		_, pErr := queue.Pop()
 		if pErr != nil && pErr != ds.ErrQueueIsEmpty {

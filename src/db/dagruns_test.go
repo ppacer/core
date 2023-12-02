@@ -83,8 +83,8 @@ func TestInsertAndReadDagRunsAll(t *testing.T) {
 		if dr.ExecTs != timestamps[rows-idx-1] {
 			t.Errorf("Expected ExecTs=%s, got: %s", timestamps[rows-idx-1], dr.ExecTs)
 		}
-		if dr.Status != DagRunStatusScheduled {
-			t.Errorf("Expected Status=%s, but got: %s", DagRunStatusScheduled, dr.Status)
+		if dr.Status != statusScheduled {
+			t.Errorf("Expected Status=%s, but got: %s", statusScheduled, dr.Status)
 		}
 	}
 }
@@ -130,8 +130,8 @@ func TestInsertAndReadDagRunsTop3(t *testing.T) {
 		if dr.ExecTs != timestamps[rows-idx-1] {
 			t.Errorf("Expected ExecTs=%s, got: %s", timestamps[rows-idx-1], dr.ExecTs)
 		}
-		if dr.Status != DagRunStatusScheduled {
-			t.Errorf("Expected Status=%s, but got: %s", DagRunStatusScheduled, dr.Status)
+		if dr.Status != statusScheduled {
+			t.Errorf("Expected Status=%s, but got: %s", statusScheduled, dr.Status)
 		}
 	}
 }
@@ -177,8 +177,8 @@ func TestInsertAndReadDagRunsTop1000(t *testing.T) {
 		if dr.ExecTs != timestamps[rows-idx-1] {
 			t.Errorf("Expected ExecTs=%s, got: %s", timestamps[rows-idx-1], dr.ExecTs)
 		}
-		if dr.Status != DagRunStatusScheduled {
-			t.Errorf("Expected Status=%s, but got: %s", DagRunStatusScheduled, dr.Status)
+		if dr.Status != statusScheduled {
+			t.Errorf("Expected Status=%s, but got: %s", statusScheduled, dr.Status)
 		}
 	}
 }
@@ -296,8 +296,8 @@ func TestDagRunUpdateStatus(t *testing.T) {
 	if tErr != nil {
 		t.Errorf("Cannot convert to time.Time from %s", dr.StatusUpdateTs)
 	}
-	if dr.Status != DagRunStatusScheduled {
-		t.Errorf("Expected status %s for the dag run before update, got: %s", DagRunStatusScheduled, dr.Status)
+	if dr.Status != statusScheduled {
+		t.Errorf("Expected status %s for the dag run before update, got: %s", statusScheduled, dr.Status)
 	}
 
 	time.Sleep(1 * time.Millisecond)
@@ -347,8 +347,8 @@ func TestDagRunUpdateStatusByExecTs(t *testing.T) {
 	if tErr != nil {
 		t.Errorf("Cannot convert to time.Time from %s", dr.StatusUpdateTs)
 	}
-	if dr.Status != DagRunStatusScheduled {
-		t.Errorf("Expected status %s for the dag run before update, got: %s", DagRunStatusScheduled, dr.Status)
+	if dr.Status != statusScheduled {
+		t.Errorf("Expected status %s for the dag run before update, got: %s", statusScheduled, dr.Status)
 	}
 
 	time.Sleep(1 * time.Millisecond)
@@ -411,7 +411,7 @@ func TestDagRunExistsOnEmpty(t *testing.T) {
 	dagId := "mock_dag_1"
 	timestamp := "2023-09-23T10:10:00"
 
-	exists, err := c.DagRunExists(ctx, dagId, timestamp)
+	exists, err := c.DagRunAlreadyScheduled(ctx, dagId, timestamp)
 	if err != nil {
 		t.Errorf("Expected non-nil error, got: %s", err.Error())
 	}
@@ -440,7 +440,7 @@ func TestDagRunExistsSimple(t *testing.T) {
 	}
 
 	for _, ts := range timestamps {
-		exists, err := c.DagRunExists(ctx, dagId, ts)
+		exists, err := c.DagRunAlreadyScheduled(ctx, dagId, ts)
 		if err != nil {
 			t.Errorf("Expected non-nil error, got: %s", err.Error())
 		}
