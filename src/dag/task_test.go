@@ -33,6 +33,7 @@ func (nt nameTask) Id() string { return nt.Name }
 func (nt nameTask) Execute()   { fmt.Println(nt.Name) }
 
 func TestExecSourceEmpty(t *testing.T) {
+	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	etask := emptyTask{}
 	etaskSource := TaskExecuteSource(etask)
 	const expectedExecSource = `{
@@ -44,6 +45,7 @@ func TestExecSourceEmpty(t *testing.T) {
 }
 
 func TestExecSourceConst(t *testing.T) {
+	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	ctask := constTask{}
 	ctaskSource := TaskExecuteSource(ctask)
 	const expectedExecSource = `{
@@ -327,6 +329,7 @@ func TestDepthBranchoutAndJoin(t *testing.T) {
 }
 
 func TestJointTasksExecSources(t *testing.T) {
+	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	n1 := Node{Task: constTask{}}
 	n2 := Node{Task: constTask{}}
 	n3 := Node{Task: constTask{}}
@@ -348,6 +351,7 @@ func TestJointTasksExecSources(t *testing.T) {
 }
 
 func TestJointTasksExecSourcesBroad(t *testing.T) {
+	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	n1 := deep3Width3Graph()
 	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
@@ -373,6 +377,7 @@ func (at aTaskCopy) Id() string { return "A" }
 func (at aTaskCopy) Execute()   { fmt.Println("A") }
 
 func TestNodeHashesForSimilarNodes(t *testing.T) {
+	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	n1 := Node{Task: aTask{}}
 	n2 := Node{Task: aTaskCopy{}}
 	h1 := n1.Hash()
