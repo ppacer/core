@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dskrzypiec/scheduler/src/dag"
 	"github.com/dskrzypiec/scheduler/src/db"
 	"github.com/dskrzypiec/scheduler/src/timeutils"
 )
@@ -111,7 +112,7 @@ func (sc *simpleCache[K, V]) PullFromDatabase(
 		if err != nil {
 			return err
 		}
-		status, sErr := stringToDagRunTaskStatus(dagruntask.Status)
+		status, sErr := dag.ParseTaskStatus(dagruntask.Status)
 		if sErr != nil {
 			return sErr
 		}

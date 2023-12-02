@@ -82,9 +82,9 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	if !existInCache {
 		t.Errorf("Scheduled task %v does not exist in TaskCache", drt)
 	}
-	if cacheStatus.Status != Scheduled {
+	if cacheStatus.Status != dag.TaskScheduled {
 		t.Errorf("Expected cached status of %v, to be %s, got %s",
-			drt, Scheduled.String(), cacheStatus.Status.String())
+			drt, dag.TaskScheduled.String(), cacheStatus.Status.String())
 	}
 
 	// Task should be inserted into the database
@@ -95,9 +95,9 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	if dbErr == sql.ErrNoRows {
 		t.Errorf("There is no row in dagruntasks for %v", drt)
 	}
-	if drtDb.Status != Scheduled.String() {
+	if drtDb.Status != dag.TaskScheduled.String() {
 		t.Errorf("DagRunTask %v in the database has status: %s, but expected %s",
-			drt, drtDb.Status, Scheduled.String())
+			drt, drtDb.Status, dag.TaskScheduled.String())
 	}
 }
 
@@ -125,7 +125,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 	// Manually mark "start" task as success, to go to another task
-	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while marking <start> as Success: %s", uErr.Error())
 	}
@@ -133,7 +133,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 
 	// Assert
 	testTaskCacheQueueTableSize(ts, 2, t)
-	testTaskStatusInCache(ts, drtEnd, Scheduled, t)
+	testTaskStatusInCache(ts, drtEnd, dag.TaskScheduled, t)
 }
 
 // Testing walkAndSchedule on the following DAG:
@@ -172,7 +172,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	time.Sleep(delay)
 
 	t.Logf("Manually mark n1 as success")
-	uErr := ts.UpsertTaskStatus(ctx, drtStart, Success)
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
@@ -181,14 +181,14 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	// At this point n1 should have status Success, and n21, n22 and n23 should
 	// be Scheduled.
 	testTaskCacheQueueTableSize(ts, 4, t)
-	testTaskStatusInCache(ts, drtN21, Scheduled, t)
+	testTaskStatusInCache(ts, drtN21, dag.TaskScheduled, t)
 	if _, n3Exists := ts.TaskCache.Get(drtN3); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
 
 	t.Logf("Manually mark n22 (just one of three scheduled tasks at the same time) as success")
-	uErr = ts.UpsertTaskStatus(ctx, drtN22, Success)
+	uErr = ts.UpsertTaskStatus(ctx, drtN22, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN22,
 			uErr.Error())
@@ -197,22 +197,22 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 
 	// n3 still should not be scheduled yet
 	testTaskCacheQueueTableSize(ts, 4, t)
-	testTaskStatusInCache(ts, drtN21, Scheduled, t)
-	testTaskStatusInDB(ts, drtN21, Scheduled, t)
-	testTaskStatusInCache(ts, drtN22, Success, t)
-	testTaskStatusInDB(ts, drtN22, Success, t)
+	testTaskStatusInCache(ts, drtN21, dag.TaskScheduled, t)
+	testTaskStatusInDB(ts, drtN21, dag.TaskScheduled, t)
+	testTaskStatusInCache(ts, drtN22, dag.TaskSuccess, t)
+	testTaskStatusInDB(ts, drtN22, dag.TaskSuccess, t)
 	if _, n3Exists := ts.TaskCache.Get(drtN3); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
 
 	t.Logf("Mark n21 and n23 (the rest of async tasks) as Success")
-	uErr = ts.UpsertTaskStatus(ctx, drtN21, Success)
+	uErr = ts.UpsertTaskStatus(ctx, drtN21, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN21,
 			uErr.Error())
 	}
-	uErr = ts.UpsertTaskStatus(ctx, drtN23, Success)
+	uErr = ts.UpsertTaskStatus(ctx, drtN23, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN23,
 			uErr.Error())
@@ -221,14 +221,14 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 
 	// n3 should be scheduled now, n21, n22 and n23 are done
 	testTaskCacheQueueTableSize(ts, 5, t)
-	testTaskStatusInCache(ts, drtN21, Success, t)
-	testTaskStatusInDB(ts, drtN21, Success, t)
-	testTaskStatusInCache(ts, drtN22, Success, t)
-	testTaskStatusInDB(ts, drtN22, Success, t)
-	testTaskStatusInCache(ts, drtN23, Success, t)
-	testTaskStatusInDB(ts, drtN23, Success, t)
-	testTaskStatusInCache(ts, drtN3, Scheduled, t)
-	testTaskStatusInDB(ts, drtN3, Scheduled, t)
+	testTaskStatusInCache(ts, drtN21, dag.TaskSuccess, t)
+	testTaskStatusInDB(ts, drtN21, dag.TaskSuccess, t)
+	testTaskStatusInCache(ts, drtN22, dag.TaskSuccess, t)
+	testTaskStatusInDB(ts, drtN22, dag.TaskSuccess, t)
+	testTaskStatusInCache(ts, drtN23, dag.TaskSuccess, t)
+	testTaskStatusInDB(ts, drtN23, dag.TaskSuccess, t)
+	testTaskStatusInCache(ts, drtN3, dag.TaskScheduled, t)
+	testTaskStatusInDB(ts, drtN3, dag.TaskScheduled, t)
 	wg.Wait()
 }
 
@@ -440,11 +440,11 @@ func testScheduleDagTasksSingleDagrun(
 	t.Log("Dag run is done!")
 
 	// Asssertions after the dag run is done
-	statusValue := fmt.Sprintf("Status='%s'", Success)
+	statusValue := fmt.Sprintf("Status='%s'", dag.TaskSuccess)
 	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != taskNum {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
-			taskNum, Success, cnt)
+			taskNum, dag.TaskSuccess, cnt)
 	}
 	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
 	if cnt != 1 {
@@ -483,11 +483,11 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 	t.Log("Dag run is done!")
 
 	// Asssertions after the dag run is done
-	statusValue := fmt.Sprintf("Status='%s'", Failed)
+	statusValue := fmt.Sprintf("Status='%s'", dag.TaskFailed)
 	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != len(taskIdsToFail) {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
-			len(taskIdsToFail), Failed, cnt)
+			len(taskIdsToFail), dag.TaskFailed, cnt)
 	}
 	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
 	if cnt != 1 {
@@ -547,11 +547,11 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 	t.Log("Dag run is done!")
 
 	// Asssertions after the dag run is done
-	statusValue := fmt.Sprintf("Status='%s'", Success)
+	statusValue := fmt.Sprintf("Status='%s'", dag.TaskSuccess)
 	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != 2*taskNum {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
-			2*taskNum, Success, cnt)
+			2*taskNum, dag.TaskSuccess, cnt)
 	}
 	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
 	if cnt != 2 {
@@ -576,10 +576,10 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	}
 
 	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
-	uErr := ts.UpsertTaskStatus(ctx, drtn1, Success)
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
-			Success.String())
+			dag.TaskSuccess.String())
 	}
 
 	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks, sharedState)
@@ -590,10 +590,10 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
-				Success.String())
+				dag.TaskSuccess.String())
 		}
 	}
 
@@ -604,10 +604,10 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	}
 
 	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
-	uErr = ts.UpsertTaskStatus(ctx, drtn3, Failed)
+	uErr = ts.UpsertTaskStatus(ctx, drtn3, dag.TaskFailed)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
-			Success.String())
+			dag.TaskSuccess.String())
 	}
 	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks, sharedState)
 	if !areDoneAfterN3 {
@@ -633,10 +633,10 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 
 	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
-	uErr := ts.UpsertTaskStatus(ctx, drtn1, Success)
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
-			Success.String())
+			dag.TaskSuccess.String())
 	}
 
 	areDoneAfterN1 := ts.allTasksAreDone(dagrun, tasks, sharedState)
@@ -647,10 +647,10 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
-				Success.String())
+				dag.TaskSuccess.String())
 		}
 	}
 
@@ -671,11 +671,11 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 	uErr = ts.DbClient.UpdateDagRunTaskStatus(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
-		Success.String(),
+		dag.TaskSuccess.String(),
 	)
 	if uErr != nil {
 		t.Errorf("Cannot update dag run task %v status %s: %s",
-			drtn3, Success.String(), uErr.Error())
+			drtn3, dag.TaskSuccess.String(), uErr.Error())
 	}
 
 	areDoneAfterN3 := ts.allTasksAreDone(dagrun, tasks, sharedState)
@@ -693,7 +693,7 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	taskId := "task_1"
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-	status := DagRunTaskState{Success, dagrun.AtTime}
+	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 	addErr := ts.TaskCache.Add(drt, status)
 	if addErr != nil {
 		t.Errorf("Cannot add new entry %v to task cache: %s",
@@ -722,11 +722,11 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	execTsStr := timeutils.ToString(execTs)
 	dagrun := DagRun{dag.Id("mock_dag"), execTs}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-	status := DagRunTaskState{Success, dagrun.AtTime}
+	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 
 	ctx := context.Background()
 	iErr := ts.DbClient.InsertDagRunTask(
-		ctx, string(dagrun.DagId), execTsStr, taskId, Success.String(),
+		ctx, string(dagrun.DagId), execTsStr, taskId, dag.TaskSuccess.String(),
 	)
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run task (%v) to database: %s",
@@ -769,8 +769,9 @@ func TestGetDagRunTaskStatusNoCacheNoDatabase(t *testing.T) {
 	if getErr != sql.ErrNoRows {
 		t.Errorf("Expected no rows error, got: %s", getErr.Error())
 	}
-	if statusNew != NoStatus {
-		t.Errorf("Expected %v, got: %v", NoStatus.String(), statusNew.String())
+	if statusNew != dag.TaskNoStatus {
+		t.Errorf("Expected %v, got: %v", dag.TaskNoStatus.String(),
+			statusNew.String())
 	}
 }
 
@@ -801,7 +802,7 @@ func markSuccessAllTasks(
 		t.Logf("Got %v from the TaskQueue. Simulating execution for %v",
 			drt, taskExecutionDuration)
 		time.Sleep(taskExecutionDuration) // executor work simulation
-		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
 		if uErr != nil {
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())
@@ -840,7 +841,7 @@ func markSuccessAllTasksExceptFew(
 			drt, taskExecutionDuration)
 		time.Sleep(taskExecutionDuration) // executor work simulation
 		if _, shouldFail := taskIdsToFail[drt.TaskId]; shouldFail {
-			uErr := ts.UpsertTaskStatus(ctx, drt, Failed)
+			uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskFailed)
 			if uErr != nil {
 				t.Errorf("Error while marking %v as Failed: %s",
 					drt, uErr.Error())
@@ -848,7 +849,7 @@ func markSuccessAllTasksExceptFew(
 			t.Logf("Status updated to Failed for %v", drt)
 			continue
 		}
-		uErr := ts.UpsertTaskStatus(ctx, drt, Success)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
 		if uErr != nil {
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())
@@ -860,7 +861,7 @@ func markSuccessAllTasksExceptFew(
 func testTaskStatusInCache(
 	ts *taskScheduler,
 	drt DagRunTask,
-	expectedStatus DagRunTaskStatus,
+	expectedStatus dag.TaskStatus,
 	t *testing.T,
 ) {
 	drts, exists := ts.TaskCache.Get(drt)
@@ -876,7 +877,7 @@ func testTaskStatusInCache(
 func testTaskStatusInDB(
 	ts *taskScheduler,
 	drt DagRunTask,
-	expectedStatus DagRunTaskStatus,
+	expectedStatus dag.TaskStatus,
 	t *testing.T,
 ) {
 	ctx := context.Background()

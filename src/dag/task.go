@@ -20,6 +20,55 @@ type Task interface {
 	Execute()
 }
 
+// TaskStatus enumerates possible Task states within the DAG run.
+type TaskStatus int
+
+const (
+	TaskScheduled TaskStatus = iota
+	TaskRunning
+	TaskFailed
+	TaskSuccess
+	TaskUpstreamFailed
+	TaskNoStatus
+)
+
+func (s TaskStatus) String() string {
+	return [...]string{
+		"SCHEDULED",
+		"RUNNING",
+		"FAILED",
+		"SUCCESS",
+		"UPSTREAM_FAILED",
+		"NO_STATUS",
+	}[s]
+}
+
+func (s TaskStatus) CanProceed() bool {
+	return s == TaskSuccess
+}
+
+func (s TaskStatus) IsTerminal() bool {
+	return s == TaskSuccess || s == TaskFailed || s == TaskUpstreamFailed
+}
+
+// ParseTaskStatus parses task status based on given string. If given string
+// does not match any task status, then non-nil error is returned. Statuses are
+// case-sensitive.
+func ParseTaskStatus(s string) (TaskStatus, error) {
+	states := map[string]TaskStatus{
+		"SCHEDULED":       TaskScheduled,
+		"RUNNING":         TaskRunning,
+		"FAILED":          TaskFailed,
+		"SUCCESS":         TaskSuccess,
+		"UPSTREAM_FAILED": TaskUpstreamFailed,
+		"NO_STATUS":       TaskNoStatus,
+	}
+	if status, ok := states[s]; ok {
+		return status, nil
+	}
+	return 0, fmt.Errorf("invalid DagRunTaskStatus: %s", s)
+}
+
 // TaskExecuteSource returns Task's source code of its Execute() method. In
 // case when method source code cannot be found in the AST
 // (meta.PackagesASTsMap) string with message "NO IMPLEMENTATION FOUND..."

@@ -11,14 +11,6 @@ import (
 	"github.com/dskrzypiec/scheduler/src/models"
 )
 
-// TODO(dskrzypiec): Unify those statuses, sched tasks statuses, DB, etc...
-// Where? Not sure yet, perhaps src/models?
-const (
-	TaskStatusRunning = "RUNNING"
-	TaskStatusFailed  = "FAILED"
-	TaskStatusSuccess = "SUCCESS"
-)
-
 type Executor struct {
 	schedClient *SchedulerClient
 	config      Config
@@ -88,21 +80,21 @@ func executeTask(
 ) {
 	defer func() {
 		if r := recover(); r != nil {
-			schedClient.UpdateTaskStatus(tte, TaskStatusFailed)
+			schedClient.UpdateTaskStatus(tte, dag.TaskFailed.String())
 			slog.Error("Recovered from panic:", "err", r, "stack",
 				string(debug.Stack()))
 		}
 	}()
-	uErr := schedClient.UpdateTaskStatus(tte, TaskStatusRunning)
+	uErr := schedClient.UpdateTaskStatus(tte, dag.TaskRunning.String())
 	if uErr != nil {
 		slog.Error("Error while updating status", "tte", tte, "status",
-			TaskStatusRunning, "err", uErr.Error())
+			dag.TaskRunning.String(), "err", uErr.Error())
 	}
 	task.Execute()
 	slog.Info("Finished executing task", "taskToExec", tte)
-	uErr = schedClient.UpdateTaskStatus(tte, TaskStatusSuccess)
+	uErr = schedClient.UpdateTaskStatus(tte, dag.TaskSuccess.String())
 	if uErr != nil {
 		slog.Error("Error while updating status", "tte", tte, "status",
-			TaskStatusSuccess, "err", uErr.Error())
+			dag.TaskSuccess.String(), "err", uErr.Error())
 	}
 }

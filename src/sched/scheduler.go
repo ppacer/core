@@ -118,7 +118,7 @@ func (ts *taskScheduler) updateTaskStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	status, statusErr := stringToDagRunTaskStatus(drts.Status)
+	status, statusErr := dag.ParseTaskStatus(drts.Status)
 	if statusErr != nil {
 		msg := fmt.Sprintf("Incorrect dag run task status: %s",
 			statusErr.Error())

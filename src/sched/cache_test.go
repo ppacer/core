@@ -19,7 +19,7 @@ func TestCacheSimple(t *testing.T) {
 		TaskId: "my_task_1",
 	}
 	drts := DagRunTaskState{
-		Status:         Scheduled,
+		Status:         dag.TaskScheduled,
 		StatusUpdateTs: drt.AtTime,
 	}
 
@@ -41,7 +41,7 @@ func TestCacheSimple(t *testing.T) {
 	}
 
 	drtsNew := DagRunTaskState{
-		Status:         Scheduled,
+		Status:         dag.TaskScheduled,
 		StatusUpdateTs: drt.AtTime.Add(1 * time.Hour),
 	}
 	updateErr := cache.Update(drt, drtsNew)
@@ -113,7 +113,7 @@ func TestCachePullFromDbDagRunTask(t *testing.T) {
 	if !exists {
 		t.Errorf("Expected %v to exists in the cache, but it doesn not", drt)
 	}
-	if drtC.Status != Scheduled {
+	if drtC.Status != dag.TaskScheduled {
 		t.Errorf("Expected %v, got: %v", drt, drtC)
 	}
 	if drtC.StatusUpdateTs.Compare(timestampBeforeInsert) <= 0 {

@@ -21,9 +21,8 @@ type DagRunTask struct {
 }
 
 type DagRunTaskState struct {
-	Status         DagRunTaskStatus
+	Status         dag.TaskStatus
 	StatusUpdateTs time.Time
-	// TODO: probably more metadata
 }
 
 type taskScheduler struct {
@@ -92,7 +91,7 @@ func (ts *taskScheduler) Start() {
 // queues, database and every place that needs to be included regarding task
 // status update.
 func (ts *taskScheduler) UpsertTaskStatus(
-	ctx context.Context, drt DagRunTask, status DagRunTaskStatus,
+	ctx context.Context, drt DagRunTask, status dag.TaskStatus,
 ) error {
 	slog.Info("Start upserting dag run task status", "dagruntask", drt,
 		"status", status.String())
@@ -291,7 +290,7 @@ func (ts *taskScheduler) walkAndSchedule(
 		canSchedule, parentsStatus := ts.checkIfCanBeScheduled(
 			dagrun, taskId, sharedState.TasksParents,
 		)
-		if parentsStatus == Failed {
+		if parentsStatus == dag.TaskFailed {
 			msg := "At least one parent of the task has failed. Will not proceed."
 			slog.Warn(msg, "dagrun", dagrun, "taskId", taskId)
 			return
@@ -328,10 +327,10 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: config
 	defer cancel()
 	ds.PutContext(ctx, ts.TaskQueue, drt)
-	usErr := ts.UpsertTaskStatus(ctx, drt, Scheduled)
+	usErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskScheduled)
 	if usErr != nil {
 		slog.Error("Cannot update dag run task status", "dagruntask", drt,
-			"status", Scheduled.String(), "err", usErr)
+			"status", dag.TaskScheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
 	}
 }
@@ -356,7 +355,7 @@ func (ts *taskScheduler) checkFailsAndMarkDownstream(
 			" unexpected. This dag run task is treated as not failed", "dagrun",
 			dagrun, "taskId", node.Task.Id())
 	}
-	if status != Failed {
+	if status != dag.TaskFailed {
 		// Parent is not FAILED, we should continue DFS.
 		for _, child := range node.Children {
 			ts.checkFailsAndMarkDownstream(ctx, dagrun, child, sharedState)
@@ -365,10 +364,10 @@ func (ts *taskScheduler) checkFailsAndMarkDownstream(
 		// Parent is in FAILED state - we should mark it's subtree with
 		// UPSTREAM_FAILED status.
 		sharedState.Lock()
-		*sharedState.DagRunStatus = Failed.String()
+		*sharedState.DagRunStatus = dag.TaskFailed.String()
 		sharedState.Unlock()
 		for _, child := range node.Children {
-			ts.markDownstreamTasks(ctx, dagrun, child, UpstreamFailed)
+			ts.markDownstreamTasks(ctx, dagrun, child, dag.TaskUpstreamFailed)
 		}
 	}
 }
@@ -377,7 +376,7 @@ func (ts *taskScheduler) checkFailsAndMarkDownstream(
 // Usually used to mark downstream tasks with status UPSTREAM_FAILED when one
 // of parents fails.
 func (ts *taskScheduler) markDownstreamTasks(
-	ctx context.Context, dagrun DagRun, node *dag.Node, status DagRunTaskStatus,
+	ctx context.Context, dagrun DagRun, node *dag.Node, status dag.TaskStatus,
 ) {
 	for _, task := range node.Flatten() {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, task.Node.Task.Id()}
@@ -394,15 +393,15 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 	dagrun DagRun,
 	taskId string,
 	tasksParents *ds.AsyncMap[string, []string],
-) (bool, DagRunTaskStatus) {
+) (bool, dag.TaskStatus) {
 	parents, exists := tasksParents.Get(taskId)
 	if !exists {
 		slog.Error("Task does not exist in parents map", "taskId", taskId)
-		return false, Running
+		return false, dag.TaskRunning
 	}
 	if len(parents) == 0 {
 		// no parents, no dependecies
-		return true, Success
+		return true, dag.TaskSuccess
 	}
 
 	for _, parentTaskId := range parents {
@@ -412,14 +411,14 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 			TaskId: parentTaskId,
 		}
 		isParentTaskDone, status := ts.checkIfParentTaskIsDone(dagrun, key)
-		if status == Failed {
-			return false, Failed
+		if status == dag.TaskFailed {
+			return false, dag.TaskFailed
 		}
 		if !isParentTaskDone {
-			return false, Running
+			return false, dag.TaskRunning
 		}
 	}
-	return true, Success
+	return true, dag.TaskSuccess
 }
 
 // Check if given parent task in given dag run is completed, to determine if
@@ -427,7 +426,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 // it reaches the database, to check the status.
 func (ts *taskScheduler) checkIfParentTaskIsDone(
 	dagrun DagRun, parent DagRunTask,
-) (bool, DagRunTaskStatus) {
+) (bool, dag.TaskStatus) {
 	statusFromCache, exists := ts.TaskCache.Get(parent)
 	if exists && !statusFromCache.Status.CanProceed() {
 		return false, statusFromCache.Status
@@ -447,18 +446,18 @@ func (ts *taskScheduler) checkIfParentTaskIsDone(
 		// There is no entry in the cache and in the database, we are
 		// probably a bit early - either task queue was full at the moment
 		// or the other goroutine is a bit slower. Will try again.
-		return false, Running
+		return false, dag.TaskRunning
 	}
 	if err != nil {
 		// No need to handle it, this function will be retried.
 		slog.Error("Cannot read DagRunTask status from DB", "err", err)
-		return false, Running
+		return false, dag.TaskRunning
 	}
-	drtStatus, sErr := stringToDagRunTaskStatus(dagruntask.Status)
+	drtStatus, sErr := dag.ParseTaskStatus(dagruntask.Status)
 	if sErr != nil {
 		slog.Error("Cannot convert string to DagRunTaskStatus", "status",
 			dagruntask.Status, "err", sErr)
-		return false, Running
+		return false, dag.TaskRunning
 	}
 	if !drtStatus.CanProceed() {
 		return false, drtStatus
@@ -479,7 +478,7 @@ func (ts *taskScheduler) allTasksAreDone(
 		if !status.IsTerminal() {
 			return false
 		}
-		if status == Failed {
+		if status == dag.TaskFailed {
 			// Almost all cases should be covered by
 			// checkFailsAndMarkDownstream but in case when all tasks are
 			// scheduled, then checkFailsAndMarkDownstream might be run before
@@ -488,7 +487,7 @@ func (ts *taskScheduler) allTasksAreDone(
 			// tasks, because there is no downstream tasks. This can only
 			// happen for leafs of the tree.
 			sharedState.Lock()
-			*sharedState.DagRunStatus = Failed.String()
+			*sharedState.DagRunStatus = dag.TaskFailed.String()
 			sharedState.Unlock()
 		}
 	}
@@ -500,7 +499,7 @@ func (ts *taskScheduler) allTasksAreDone(
 // there is also no entry in the database, then sql.ErrNoRows is returned.
 func (ts *taskScheduler) getDagRunTaskStatus(
 	dagrun DagRun, taskId string,
-) (DagRunTaskStatus, error) {
+) (dag.TaskStatus, error) {
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
 	drts, exists := ts.TaskCache.Get(drt)
 	if exists {
@@ -509,13 +508,13 @@ func (ts *taskScheduler) getDagRunTaskStatus(
 	ctx := context.TODO()
 	dbErr := ts.TaskCache.PullFromDatabase(ctx, drt, ts.DbClient)
 	if dbErr == sql.ErrNoRows {
-		return NoStatus, dbErr
+		return dag.TaskNoStatus, dbErr
 	}
 	if dbErr != nil {
 		slog.Error(
 			"Dag run task does not exist in the cache and cannot get it "+
 				"from database", "dagruntask", drt, "err", dbErr.Error())
-		return NoStatus, dbErr
+		return dag.TaskNoStatus, dbErr
 	}
 	drts, exists = ts.TaskCache.Get(drt)
 	if exists {
@@ -524,7 +523,7 @@ func (ts *taskScheduler) getDagRunTaskStatus(
 	slog.Error("Dag run task still does not exist in the cache "+
 		"even after trying pull it from database", "dagruntask",
 		drt)
-	return NoStatus, sql.ErrNoRows
+	return dag.TaskNoStatus, sql.ErrNoRows
 }
 
 // Removes bulk of tasks for given dag run from the TaskCache.
@@ -538,53 +537,6 @@ func (ts *taskScheduler) cleanTaskCache(dagrun DagRun, tasks []dag.Task) {
 			},
 		)
 	}
-}
-
-type DagRunTaskStatus int
-
-const (
-	// TODO: more states
-	Scheduled DagRunTaskStatus = iota
-	Running
-	Failed
-	Success
-	UpstreamFailed
-	NoStatus
-)
-
-func (s DagRunTaskStatus) String() string {
-	return [...]string{
-		"SCHEDULED",
-		"RUNNING",
-		"FAILED",
-		"SUCCESS",
-		"UPSTREAM_FAILED",
-		"NO_STATUS",
-	}[s]
-}
-
-func (s DagRunTaskStatus) CanProceed() bool {
-	// TODO: more states
-	return s == Success
-}
-
-func (s DagRunTaskStatus) IsTerminal() bool {
-	return s == Success || s == Failed || s == UpstreamFailed
-}
-
-func stringToDagRunTaskStatus(s string) (DagRunTaskStatus, error) {
-	states := map[string]DagRunTaskStatus{
-		"SCHEDULED":       Scheduled,
-		"RUNNING":         Running,
-		"FAILED":          Failed,
-		"SUCCESS":         Success,
-		"UPSTREAM_FAILED": UpstreamFailed,
-		"NO_STATUS":       NoStatus,
-	}
-	if status, ok := states[s]; ok {
-		return status, nil
-	}
-	return 0, fmt.Errorf("invalid DagRunTaskStatus: %s", s)
 }
 
 func sendTaskSchedulerErr(
