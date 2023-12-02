@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"log"
 	"log/slog"
 	"strings"
 
@@ -16,14 +15,20 @@ import (
 var PackagesASTsMap map[string]PackageASTs
 
 func init() {
-	astMap, err := ParsePackagesASTs()
-	if err != nil {
-		msg := "Could not parse packages ASTs map on embedded files"
-		slog.Error(msg, "err", err)
-		log.Panic(msg)
-	}
-	PackagesASTsMap = astMap
-	slog.Info("meta.PackagesASTsMap is set", "packages", len(astMap))
+	PackagesASTsMap = map[string]PackageASTs{}
+	/*
+		// TODO(dskrzypiec): This feature is not in use for now. It needs to be
+		// rearranged a bit, in order to be more suitable for using scheduler
+		// as Go package and not like a project or module.
+
+		astMap, err := ParsePackagesASTs(src.GoSourceFiles)
+		if err != nil {
+			msg := "Could not parse packages ASTs map on embedded files"
+			slog.Warn(msg, "err", err)
+		}
+		PackagesASTsMap = astMap
+		slog.Info("meta.PackagesASTsMap is set", "packages", len(astMap))
+	*/
 }
 
 // PackageASTs represents single Go package metadata with FileToAST field which
@@ -36,11 +41,9 @@ type PackageASTs struct {
 
 // ParsePackagesASTs parses all packages under ./src/ in this project in form
 // of map from package ID to PackageASTs (metadata plus mapping file -> AST).
-// Parsing is done on embedded Go project source files defined in
-// src.GoSourceFiles.
-func ParsePackagesASTs() (map[string]PackageASTs, error) {
+func ParsePackagesASTs(fs embed.FS) (map[string]PackageASTs, error) {
 	packMap := make(map[string]PackageASTs)
-	wErr := walkParsePackages(src.GoSourceFiles, ".", packMap)
+	wErr := walkParsePackages(fs, ".", packMap)
 	if wErr != nil {
 		return nil, wErr
 	}
