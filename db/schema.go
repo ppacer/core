@@ -1,0 +1,99 @@
+package db
+
+import (
+	"fmt"
+)
+
+// SchemaStatements returns a list of SQL statements that setups new instance
+// of scheduler internal database. It can differ a little bit between SQL
+// databases, so exact list of statements are prepared based on given database
+// driver name. If given database driver is not supported, then non-nil error
+// is returned.
+func SchemaStatements(dbDriver string) ([]string, error) {
+	if dbDriver == "sqlite" || dbDriver == "sqlite3" {
+		return []string{
+			sqliteCreateDagsTable(),
+			sqliteCreateDagtasksTable(),
+			sqliteCreateDagrunsTable(),
+			sqliteCreateDagruntasksTable(),
+		}, nil
+	}
+
+	return []string{}, fmt.Errorf("there is no schema for %s driver defined",
+		dbDriver)
+}
+
+func sqliteCreateDagsTable() string {
+	return `
+-- Table dags stores DAGs and its metadata. Information about DAG tasks are
+-- stored in dagtasks table.
+CREATE TABLE IF NOT EXISTS dags (
+    DagId TEXT NOT NULL,            -- DAG ID
+    StartTs TEXT NULL,              -- DAG start timestamp
+    Schedule TEXT NULL,             -- DAG schedule
+    CreateTs TEXT NOT NULL,         -- Timestamp when DAG was initially inserted
+    LatestUpdateTs TEXT NULL,       -- Timestamp of the DAG latest update
+    CreateVersion TEXT NOT NULL,    -- Verion when DAG was innitially inserted
+    LatestUpdateVersion TEXT NULL,  -- Version of DAG latest update
+    HashDagMeta TEXT NOT NULL,      -- SHA256 hash of DAG attributes + StartTs + Schedule
+    HashTasks TEXT NOT NULL,        -- SHA256 hash of DAG tasks
+    Attributes TEXT NOT NULL,       -- DAG attributes like tags
+    -- TODO: probably many more, but sometime later
+
+    PRIMARY KEY (DagId)
+);
+`
+}
+
+func sqliteCreateDagtasksTable() string {
+	return `
+-- Table dagtasks represents tasks in dags. It contains history of changes.
+-- Current state of all DAGs and its tasks can -- be determined by using
+-- IsCurrent=1 condition.
+CREATE TABLE IF NOT EXISTS dagtasks (
+    DagId TEXT NOT NULL,            -- DAG ID
+    TaskId TEXT NOT NULL,           -- Task ID
+    IsCurrent INT NOT NULL,         -- Flag if pair (DagId, TaskId) represents the current version
+    InsertTs TEXT NOT NULL,         -- Insert timestamp in %Y-%m-%D %H:%M:%S format
+    Version TEXT NOT NULL,          -- Scheduler Version
+    TaskTypeName TEXT NOT NULL,     -- Go type name which implements this task
+    TaskBodyHash TEXT NOT NULL,     -- Task Execute() method body source code hash
+    TaskBodySource TEXT NOT NULL,   -- Task Execute() method body source code as text
+
+    PRIMARY KEY (DagId, TaskId, IsCurrent, InsertTs)
+);
+`
+}
+
+func sqliteCreateDagrunsTable() string {
+	return `
+-- Table dagruns stores DAG runs information. Runs might be both scheduled for
+-- manually triggered.
+CREATE TABLE IF NOT EXISTS dagruns (
+    RunId INTEGER PRIMARY KEY,      -- Run ID - auto increments
+    DagId TEXT NOT NULL,            -- DAG ID
+    ExecTs TEXT NOT NULL,           -- Execution timestamp
+    InsertTs TEXT NOT NULL,         -- Row insertion timestamp
+    Status TEXT NOT NULL,           -- DAG run status
+    StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
+    Version TEXT NOT NULL           -- Scheduler Version
+);
+`
+}
+
+func sqliteCreateDagruntasksTable() string {
+	return `
+-- Table dagruntasks stores information about tasks state of DAG runs.
+CREATE TABLE IF NOT EXISTS dagruntasks (
+    DagId TEXT NOT NULL,            -- DAG ID
+    ExecTs TEXT NOT NULL,           -- Execution timestamp
+    TaskId TEXT NOT NULL,           -- Task ID
+    InsertTs TEXT NOT NULL,         -- Insert timestamp
+    Status TEXT NOT NULL,           -- DAG task execution status
+    StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
+    Version TEXT NOT NULL,          -- Scheduler version
+
+    PRIMARY KEY (DagId, ExecTs, TaskId)
+);
+`
+}
