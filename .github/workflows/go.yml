@@ -29,5 +29,4 @@ jobs:
 
     - name: Benchmarks
       run: |
-        go test -bench=. -benchmem ./src/meta
-        go test -bench=. -benchmem ./src/ds
+        go test -bench=. -benchmem ./ds
