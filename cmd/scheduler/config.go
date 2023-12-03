@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dskrzypiec/scheduler/src/version"
+	"github.com/dskrzypiec/scheduler/version"
 )
 
 type LoggerConfig struct {

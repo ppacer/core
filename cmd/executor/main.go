@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/dskrzypiec/scheduler/src/exec"
-	_ "github.com/dskrzypiec/scheduler/src/user"
+	"github.com/dskrzypiec/scheduler/exec"
+	_ "github.com/dskrzypiec/scheduler/user"
 )
 
 func main() {

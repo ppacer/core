@@ -7,10 +7,10 @@ import (
 	"log"
 	"log/slog"
 
-	_ "github.com/dskrzypiec/scheduler/src/user"
+	_ "github.com/dskrzypiec/scheduler/user"
 
-	"github.com/dskrzypiec/scheduler/src/db"
-	"github.com/dskrzypiec/scheduler/src/sched"
+	"github.com/dskrzypiec/scheduler/db"
+	"github.com/dskrzypiec/scheduler/sched"
 )
 
 func main() {
