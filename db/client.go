@@ -39,7 +39,8 @@ func NewClient(connString string) (*Client, error) {
 	return &Client{&sqliteDB}, nil
 }
 
-// Produces new Client using in-memory SQLite database with schema created based on given script.
+// Produces new Client using in-memory SQLite database with schema created
+// based on given script.
 func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 	schema, err := os.ReadFile(schemaScriptPath)
 	if err != nil {
@@ -64,8 +65,8 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 
 // Produces new Client using SQLite database created as temp file. It's mainly
 // for testing and ad-hocs.
-func NewSqliteTmpClient(schemaScriptPath string) (*Client, error) {
-	schema, err := os.ReadFile(schemaScriptPath)
+func NewSqliteTmpClient() (*Client, error) {
+	schemaStmts, err := SchemaStatements("sqlite")
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +85,8 @@ func NewSqliteTmpClient(schemaScriptPath string) (*Client, error) {
 		os.Remove(tmpFilePath)
 		return nil, err
 	}
-	execQueries := strings.Split(string(schema), ";")
-	for _, query := range execQueries {
+
+	for _, query := range schemaStmts {
 		query = strings.TrimSpace(query)
 		if query == "" {
 			continue
