@@ -3,10 +3,116 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
 )
+
+// Produces new Client based on given connection string to SQLite database. If
+// database file does not exist in given location, then empty SQLite database
+// with setup schema will be created.
+func NewSqliteClient(dbFilePath string) (*Client, error) {
+	newDbCreated, dbFileErr := createSqliteDbIfNotExist(dbFilePath)
+	if dbFileErr != nil {
+		return nil, fmt.Errorf("cannot create new empty SQLite database: %w",
+			dbFileErr)
+	}
+	connString := sqliteConnString(dbFilePath)
+	db, dbErr := sql.Open("sqlite", connString)
+	if dbErr != nil {
+		slog.Error("Could not connect to SQLite", "connString", connString,
+			"err", dbErr)
+		return nil, fmt.Errorf("cannot connect to SQLite DB (%s): %w",
+			connString, dbErr)
+	}
+	if newDbCreated {
+		schemaErr := setupSqliteSchema(db)
+		if schemaErr != nil {
+			db.Close()
+			return nil, fmt.Errorf("cannot setup SQLite schema for %s: %w",
+				connString, schemaErr)
+		}
+	}
+	sqliteDB := SqliteDB{dbConn: db}
+	return &Client{&sqliteDB}, nil
+}
+
+// Produces new Client using SQLite database created as temp file. It's mainly
+// for testing and ad-hocs.
+func NewSqliteTmpClient() (*Client, error) {
+	tmpFile, err := os.CreateTemp("", "sqlite-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFilePath := tmpFile.Name()
+	tmpFile.Close()
+
+	// Connect to the SQLite database using the temporary file path
+	db, err := sql.Open("sqlite", sqliteConnString(tmpFilePath))
+	if err != nil {
+		os.Remove(tmpFilePath)
+		return nil, err
+	}
+
+	schemaErr := setupSqliteSchema(db)
+	if schemaErr != nil {
+		db.Close()
+		os.Remove(tmpFilePath)
+		return nil, fmt.Errorf("cannot setup SQLite schema: %w", schemaErr)
+	}
+
+	sqliteDB := SqliteDB{dbConn: db, dbFilePath: tmpFilePath}
+	return &Client{&sqliteDB}, nil
+}
+
+func sqliteConnString(dbFilePath string) string {
+	// TODO: probably read from the config not only database file path but also
+	// additional arguments also.
+	return fmt.Sprintf("file://%s?journal_mode=WAL&cache=shared", dbFilePath)
+}
+
+func setupSqliteSchema(db *sql.DB) error {
+	schemaStmts, err := SchemaStatements("sqlite")
+	if err != nil {
+		return err
+	}
+
+	for _, query := range schemaStmts {
+		query = strings.TrimSpace(query)
+		if query == "" {
+			continue
+		}
+		_, err = db.Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createSqliteDbIfNotExist(dbFilePath string) (bool, error) {
+	if _, err := os.Stat(dbFilePath); os.IsNotExist(err) {
+		dirErr := os.MkdirAll(filepath.Dir(dbFilePath), os.ModePerm)
+		if dirErr != nil {
+			return false, dirErr
+		}
+
+		file, fErr := os.Create(dbFilePath)
+		if fErr != nil {
+			return false, fErr
+		}
+		file.Close()
+		return true, nil
+	}
+
+	return false, nil
+}
 
 type SqliteDB struct {
 	sync.RWMutex

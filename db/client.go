@@ -3,8 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -25,18 +23,6 @@ type DB interface {
 // Clinet represents the main database client.
 type Client struct {
 	dbConn DB
-}
-
-// Produces new Client based on given connection string to SQLite database.
-func NewClient(connString string) (*Client, error) {
-	db, dbErr := sql.Open("sqlite", connString)
-	if dbErr != nil {
-		slog.Error("Could not connect to SQLite", "connString", connString,
-			"err", dbErr)
-		return nil, fmt.Errorf("cannot connect to SQLite DB: %w", dbErr)
-	}
-	sqliteDB := SqliteDB{dbConn: db}
-	return &Client{&sqliteDB}, nil
 }
 
 // Produces new Client using in-memory SQLite database with schema created
@@ -60,45 +46,6 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 		}
 	}
 	sqliteDB := SqliteDB{dbConn: db}
-	return &Client{&sqliteDB}, nil
-}
-
-// Produces new Client using SQLite database created as temp file. It's mainly
-// for testing and ad-hocs.
-func NewSqliteTmpClient() (*Client, error) {
-	schemaStmts, err := SchemaStatements("sqlite")
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a temporary file to hold the SQLite database
-	tmpFile, err := os.CreateTemp("", "sqlite-")
-	if err != nil {
-		return nil, err
-	}
-	tmpFilePath := tmpFile.Name()
-	tmpFile.Close()
-
-	// Connect to the SQLite database using the temporary file path
-	db, err := sql.Open("sqlite", tmpFilePath)
-	if err != nil {
-		os.Remove(tmpFilePath)
-		return nil, err
-	}
-
-	for _, query := range schemaStmts {
-		query = strings.TrimSpace(query)
-		if query == "" {
-			continue
-		}
-		_, err = db.Exec(query)
-		if err != nil {
-			db.Close()
-			os.Remove(tmpFilePath)
-			return nil, err
-		}
-	}
-	sqliteDB := SqliteDB{dbConn: db, dbFilePath: tmpFilePath}
 	return &Client{&sqliteDB}, nil
 }
 

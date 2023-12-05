@@ -16,7 +16,7 @@ import (
 func main() {
 	cfg := ParseConfig()
 	cfg.setupLogger()
-	dbClient, err := db.NewClient("/Users/ds/GoProjects/go_sched/test.db")
+	dbClient, err := db.NewSqliteClient("/tmp/test_ds.db")
 	if err != nil {
 		slog.Error("Cannot connect to the database", "err", err)
 		log.Panic("Cannot connect to the database")
