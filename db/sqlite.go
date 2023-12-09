@@ -17,12 +17,19 @@ import (
 // database file does not exist in given location, then empty SQLite database
 // with setup schema will be created.
 func NewSqliteClient(dbFilePath string) (*Client, error) {
-	newDbCreated, dbFileErr := createSqliteDbIfNotExist(dbFilePath)
+	dbFilePathAbs, absErr := filepath.Abs(dbFilePath)
+	if absErr != nil {
+		slog.Error("Cannot get absolute path of database file", "dbFilePath",
+			dbFilePath)
+		return nil, fmt.Errorf("cannot get absolute path of database file %s: %w",
+			dbFilePath, absErr)
+	}
+	newDbCreated, dbFileErr := createSqliteDbIfNotExist(dbFilePathAbs)
 	if dbFileErr != nil {
 		return nil, fmt.Errorf("cannot create new empty SQLite database: %w",
 			dbFileErr)
 	}
-	connString := sqliteConnString(dbFilePath)
+	connString := sqliteConnString(dbFilePathAbs)
 	db, dbErr := sql.Open("sqlite", connString)
 	if dbErr != nil {
 		slog.Error("Could not connect to SQLite", "connString", connString,
@@ -38,7 +45,7 @@ func NewSqliteClient(dbFilePath string) (*Client, error) {
 				connString, schemaErr)
 		}
 	}
-	sqliteDB := SqliteDB{dbConn: db}
+	sqliteDB := SqliteDB{dbConn: db, dbFilePath: dbFilePathAbs}
 	return &Client{&sqliteDB}, nil
 }
 
