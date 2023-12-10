@@ -29,6 +29,18 @@ func init() {
 	*/
 }
 
+func ParseASTs(fs embed.FS) error {
+	astMap, err := ParsePackagesASTs(fs)
+	if err != nil {
+		msg := "Could not parse packages ASTs map on embedded files"
+		slog.Warn(msg, "err", err)
+		return err
+	}
+	PackagesASTsMap = astMap
+	slog.Info("meta.PackagesASTsMap is set", "packages", len(astMap))
+	return nil
+}
+
 // PackageASTs represents single Go package metadata with FileToAST field which
 // is a mapping from package file name to its parsed AST.
 type PackageASTs struct {
