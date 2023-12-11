@@ -3,17 +3,28 @@ package db
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
+	"log/slog"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/dag"
+	"github.com/dskrzypiec/scheduler/meta"
 	"github.com/dskrzypiec/scheduler/timeutils"
-	"github.com/dskrzypiec/scheduler/user/tasks"
 )
 
+//go:embed *.go
+var goSourceFiles embed.FS
+
 var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
+
+func TestMain(m *testing.M) {
+	meta.ParseASTs(goSourceFiles)
+	os.Exit(m.Run())
+}
 
 func TestDagTestReadFromEmptyTable(t *testing.T) {
 	c, err := NewInMemoryClient(sqlSchemaPath)
@@ -35,10 +46,9 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 	ctx := context.Background()
 	tx, _ := c.dbConn.Begin()
-	task := tasks.PrintTask{Name: "db_test"}
+	task := PrintTask{Name: "db_test"}
 	insertTs := timeutils.ToString(time.Now())
 	err = c.insertSingleDagTask(ctx, tx, "db_dag", task, insertTs)
 	cErr := tx.Commit()
@@ -164,11 +174,11 @@ func BenchmarkDagTasksInsert(b *testing.B) {
 }
 
 func simpleDag(dagId string, innerTasks int) dag.Dag {
-	start := dag.Node{Task: tasks.WaitTask{TaskId: "start", Interval: 3 * time.Second}}
+	start := dag.Node{Task: WaitTask{TaskId: "start", Interval: 3 * time.Second}}
 	prev := &start
 
 	for i := 0; i < innerTasks; i++ {
-		t := dag.Node{Task: tasks.PrintTask{Name: fmt.Sprintf("t%d", i)}}
+		t := dag.Node{Task: PrintTask{Name: fmt.Sprintf("t%d", i)}}
 		prev.Next(&t)
 		prev = &t
 	}
@@ -194,4 +204,28 @@ func logDagTasks(c *Client, dagId string, t *testing.T) {
 		fmt.Printf("%s|%s|%d|%s|%s\n",
 			dt.DagId, dt.TaskId, isCurrInt, dt.InsertTs, dt.TaskTypeName)
 	}
+}
+
+type PrintTask struct {
+	Name string
+}
+
+func (pt PrintTask) Id() string { return pt.Name }
+
+func (pt PrintTask) Execute() {
+	fmt.Println("Hello executor!")
+}
+
+// WaitTask is a Task which just waits and logs.
+type WaitTask struct {
+	TaskId   string
+	Interval time.Duration
+}
+
+func (wt WaitTask) Id() string { return wt.TaskId }
+
+func (wt WaitTask) Execute() {
+	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
+	time.Sleep(wt.Interval)
+	slog.Info("Task is done", "task", wt.Id())
 }
