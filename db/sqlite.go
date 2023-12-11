@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -80,7 +81,11 @@ func NewSqliteTmpClient() (*Client, error) {
 func sqliteConnString(dbFilePath string) string {
 	// TODO: probably read from the config not only database file path but also
 	// additional arguments also.
-	return fmt.Sprintf("file://%s?journal_mode=WAL&cache=shared", dbFilePath)
+	options := "journal_mode=WAL&cache=shared"
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("%s?%s", dbFilePath, options)
+	}
+	return fmt.Sprintf("file://%s?%s", dbFilePath, options)
 }
 
 func setupSqliteSchema(db *sql.DB) error {
