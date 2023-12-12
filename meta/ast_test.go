@@ -5,35 +5,27 @@ import (
 	"testing"
 )
 
-func TestParsingMetaASTs(t *testing.T) {
-	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
-	astMap, err := ParsePackagesASTs(embed.FS{})
+//go:embed *.go
+var goSourceFiles embed.FS
+
+func TestParsePackagesASTs(t *testing.T) {
+	asts, err := ParsePackagesASTs(goSourceFiles)
 	if err != nil {
-		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
+		t.Errorf("Error while parsing ASTs from meta package: %s", err.Error())
 	}
-
-	if _, metaExists := astMap["meta"]; !metaExists {
-		t.Error("Expected <meta> package to exist in Packages ASTs map, but it does not")
+	expectedFiles := []string{
+		"ast.go", "ast_test.go", "finders.go", "finders_test.go",
 	}
-
-	if len(astMap) < 2 {
-		t.Errorf("Expected more then 1 package - meta, got: %d modules", len(astMap))
-	}
-
-	astMeta := astMap["meta"]
-	if len(astMeta.FileToASTs) < 2 {
-		t.Errorf("Expected at least two file ASTs in meta module, got: %d", len(astMeta.FileToASTs))
-	}
-	for file, astFile := range astMeta.FileToASTs {
-		if len(astFile.Decls) == 0 {
-			t.Errorf("Expected at least one top-level declaration at each file in meta module. This is not true for %s", file)
+	for _, expFileName := range expectedFiles {
+		if _, exists := asts["."].FileToASTs[expFileName]; !exists {
+			t.Errorf("Expected to have AST for file %s, but it's not there",
+				expFileName)
 		}
 	}
 }
 
 func BenchmarkParsingProjectASTs(b *testing.B) {
-	b.Skip("Approach to embedding Go files and parsing the tree will be revisited")
 	for i := 0; i < b.N; i++ {
-		ParsePackagesASTs(embed.FS{})
+		ParsePackagesASTs(goSourceFiles)
 	}
 }

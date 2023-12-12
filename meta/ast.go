@@ -114,7 +114,7 @@ func parseSinglePackage(dirPath string, fs embed.FS) (PackageASTs, error) {
 		fileToASTs[entry.Name()] = astFile
 	}
 	return PackageASTs{
-		Name:       "TODO (it used to be module_name/src/)" + dirPath,
+		Name:       dirPath,
 		Fset:       fset,
 		FileToASTs: fileToASTs,
 	}, nil

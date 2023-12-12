@@ -1,14 +1,12 @@
 package meta
 
 import (
-	"embed"
 	"go/ast"
 	"testing"
 )
 
 func TestFindMethodBodySource(t *testing.T) {
-	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
-	astMap, err := ParsePackagesASTs(embed.FS{})
+	astMap, err := ParsePackagesASTs(goSourceFiles)
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -37,8 +35,7 @@ func TestFindMethodBodySource(t *testing.T) {
 }
 
 func TestFindMethodBodySourcePrivate(t *testing.T) {
-	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
-	astMap, err := ParsePackagesASTs(embed.FS{})
+	astMap, err := ParsePackagesASTs(goSourceFiles)
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -64,8 +61,7 @@ func TestFindMethodBodySourcePrivate(t *testing.T) {
 }
 
 func TestFindMethodBodySourceOnPointer(t *testing.T) {
-	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
-	astMap, err := ParsePackagesASTs(embed.FS{})
+	astMap, err := ParsePackagesASTs(goSourceFiles)
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
@@ -89,8 +85,7 @@ func TestFindMethodBodySourceOnPointer(t *testing.T) {
 }
 
 func TestFindMethodBodySourceNotExist(t *testing.T) {
-	t.Skip("Approach to embedding Go files and parsing the tree will be revisited")
-	astMap, err := ParsePackagesASTs(embed.FS{})
+	astMap, err := ParsePackagesASTs(goSourceFiles)
 	if err != nil {
 		t.Errorf("Couldn't get AST map for meta module: %s", err.Error())
 	}
