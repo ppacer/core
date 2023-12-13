@@ -204,22 +204,3 @@ func TestDagGetTaskInvalidId(t *testing.T) {
 		t.Errorf("Expected non-nill ErrTaskNotFoundInDag, but got: %v", err)
 	}
 }
-
-func TestDagPrint(t *testing.T) {
-	start := Node{Task: EmptyTask{"start"}}
-	t1 := Node{Task: EmptyTask{"t1"}}
-	t2 := Node{Task: EmptyTask{"t2"}}
-	t3 := Node{Task: EmptyTask{"t3"}}
-	t4 := Node{Task: EmptyTask{"t4"}}
-	end := Node{Task: EmptyTask{"end"}}
-
-	start.Next(&t1)
-	start.Next(&t2)
-	t1.Next(&t3)
-	t2.Next(&t4)
-	t3.Next(&t4)
-	t4.Next(&end)
-
-	dag := New(Id("mock_dag_2")).AddSchedule(FixedSchedule{startTs, 1 * time.Hour}).AddRoot(&start).Done()
-	fmt.Println(dag)
-}
