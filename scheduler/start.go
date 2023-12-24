@@ -1,4 +1,4 @@
-package sched
+package scheduler
 
 import (
 	"context"
