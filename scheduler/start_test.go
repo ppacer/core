@@ -2,13 +2,14 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"path"
 	"testing"
 	"time"
 
 	"github.com/dskrzypiec/scheduler/dag"
 	"github.com/dskrzypiec/scheduler/db"
-	"github.com/dskrzypiec/scheduler/user/tasks"
 )
 
 var sqlSchemaPath = path.Join("..", "schema.sql")
@@ -209,7 +210,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	}
 
 	// Update DAG tasks
-	additionalTask := dag.Node{Task: tasks.PrintTask{Name: "bonus_task"}}
+	additionalTask := dag.Node{Task: printTask{Name: "bonus_task"}}
 	d.Root.Next(&additionalTask)
 
 	// Second sync - should not change anything
@@ -268,14 +269,14 @@ func dagtasksCountCheck(
 
 func verySimpleDag(dagId string) dag.Dag {
 	start := dag.Node{
-		Task: tasks.WaitTask{
+		Task: waitTask{
 			TaskId:   "start",
 			Interval: 3 * time.Second,
 		},
 	}
-	t := dag.Node{Task: tasks.PrintTask{Name: "t_1"}}
+	t := dag.Node{Task: printTask{Name: "t_1"}}
 	end := dag.Node{
-		Task: tasks.WaitTask{
+		Task: waitTask{
 			TaskId:   "end",
 			Interval: 1 * time.Second,
 		},
@@ -292,4 +293,28 @@ func verySimpleDag(dagId string) dag.Dag {
 		AddAttributes(attr).
 		Done()
 	return dag
+}
+
+type printTask struct {
+	Name string
+}
+
+func (pt printTask) Id() string { return pt.Name }
+
+func (pt printTask) Execute() {
+	fmt.Println("Hello executor!")
+}
+
+// WaitTask is a Task which just waits and logs.
+type waitTask struct {
+	TaskId   string
+	Interval time.Duration
+}
+
+func (wt waitTask) Id() string { return wt.TaskId }
+
+func (wt waitTask) Execute() {
+	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
+	time.Sleep(wt.Interval)
+	slog.Info("Task is done", "task", wt.Id())
 }
