@@ -914,7 +914,7 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *taskScheduler {
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,
 		TaskCache:   &taskCache,
-		Config:      defaultTaskSchedulerConfig(),
+		Config:      DefaultTaskSchedulerConfig,
 	}
 	return &ts
 }

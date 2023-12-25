@@ -1,3 +1,7 @@
+// Package scheduler provides functions for creating and starting new
+// Scheduler.
+//
+// TODO more docs and examples.
 package scheduler
 
 import (
@@ -16,7 +20,9 @@ import (
 const StartContextTimeout = 30 * time.Second
 
 // This function is called on scheduler start up. TODO: more docs.
-func syncWithDatabase(queue ds.Queue[DagRun], dbClient *db.Client) {
+func syncWithDatabase(
+	queue ds.Queue[DagRun], dbClient *db.Client, config Config,
+) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
 		StartContextTimeout,
@@ -29,7 +35,9 @@ func syncWithDatabase(queue ds.Queue[DagRun], dbClient *db.Client) {
 		slog.Error("Cannot sync up dag.registry and dagtasks", "err",
 			dagTasksSyncErr)
 	}
-	queueSyncErr := syncDagRunsQueue(ctx, queue, dbClient)
+	queueSyncErr := syncDagRunsQueue(
+		ctx, queue, dbClient, config.DagRunWatcherConfig,
+	)
 	if queueSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
 		slog.Error("Cannot sync up dag runs queue", "err", queueSyncErr)
@@ -125,6 +133,7 @@ func syncDagRunsQueue(
 	ctx context.Context,
 	q ds.Queue[DagRun],
 	dbClient *db.Client,
+	config DagRunWatcherConfig,
 ) error {
 	dagrunsToSchedule, dbErr := dbClient.ReadDagRunsToBeScheduled(ctx)
 	if dbErr != nil {
@@ -132,9 +141,9 @@ func syncDagRunsQueue(
 	}
 	for _, dr := range dagrunsToSchedule {
 		for q.Capacity() <= 0 {
-			slog.Warn("The dag run queue is full. Will try in moment", "moment",
-				QueueIsFullInterval)
-			time.Sleep(QueueIsFullInterval)
+			slog.Warn("The dag run queue is full. Will try in moment",
+				"QueueIsFullIntervalMs", config.QueueIsFullIntervalMs)
+			time.Sleep(time.Duration(config.QueueIsFullIntervalMs) * time.Millisecond)
 		}
 		q.Put(DagRun{
 			DagId:  dag.Id(dr.DagId),

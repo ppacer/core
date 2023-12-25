@@ -30,21 +30,7 @@ type taskScheduler struct {
 	DagRunQueue ds.Queue[DagRun]
 	TaskQueue   ds.Queue[DagRunTask]
 	TaskCache   cache[DagRunTask, DagRunTaskState]
-	Config      taskSchedulerConfig
-}
-
-type taskSchedulerConfig struct {
-	MaxConcurrentDagRuns      int
-	HeartbeatMs               int
-	CheckDependenciesStatusMs int
-}
-
-func defaultTaskSchedulerConfig() taskSchedulerConfig {
-	return taskSchedulerConfig{
-		MaxConcurrentDagRuns:      1000,
-		HeartbeatMs:               1,
-		CheckDependenciesStatusMs: 1,
-	}
+	Config      TaskSchedulerConfig
 }
 
 type taskSchedulerError struct {
@@ -53,8 +39,8 @@ type taskSchedulerError struct {
 	Err    error
 }
 
-// Start starts taskScheduler loop which gets DAG runs from the queue and start
-// scheduling it in a separate goroutines.
+// Start starts taskScheduler loopTaskSchedulerConfigs from the queue and start
+// schedTaskSchedulerConfigate goroutines.
 func (ts *taskScheduler) Start() {
 	taskSchedulerErrors := make(chan taskSchedulerError, 1000)
 	for {

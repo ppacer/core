@@ -11,10 +11,6 @@ import (
 	"github.com/dskrzypiec/scheduler/timeutils"
 )
 
-const LOG_PREFIX = "scheduler"
-const WatchInterval = 1 * time.Second
-const QueueIsFullInterval = 100 * time.Millisecond
-
 type DagRun struct {
 	DagId  dag.Id
 	AtTime time.Time
@@ -23,12 +19,15 @@ type DagRun struct {
 // Watch watches DAG registry and check whenever DAGs should be scheduled. In
 // that case they are sent onto the given channel. Watch checks DAG registry
 // every WatchInterval period. This function runs indefinitely.
-func WatchDagRuns(dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client) {
+func WatchDagRuns(
+	dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client,
+	config DagRunWatcherConfig,
+) {
 	ctx := context.TODO() // Think about it
 	nextSchedules := nextScheduleForDagRuns(ctx, dag.List(), time.Now(), dbClient)
 	for {
-		trySchedule(dags, queue, nextSchedules, dbClient)
-		time.Sleep(WatchInterval)
+		trySchedule(dags, queue, nextSchedules, dbClient, config)
+		time.Sleep(time.Duration(config.WatchIntervalMs) * time.Millisecond)
 	}
 }
 
@@ -37,6 +36,7 @@ func trySchedule(
 	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
 	dbClient *db.Client,
+	config DagRunWatcherConfig,
 ) {
 	now := time.Now()
 
@@ -55,8 +55,8 @@ func trySchedule(
 		// Check if there is space on the queue to schedule a new dag run
 		for queue.Capacity() <= 0 {
 			slog.Warn("The dag run queue is full. Will try in moment", "moment",
-				QueueIsFullInterval)
-			time.Sleep(QueueIsFullInterval)
+				config.QueueIsFullIntervalMs)
+			time.Sleep(time.Duration(config.QueueIsFullIntervalMs) * time.Millisecond)
 		}
 
 		tsdErr := tryScheduleDag(ctx, d, now, queue, nextSchedules, dbClient)

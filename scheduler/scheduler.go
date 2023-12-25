@@ -17,23 +17,28 @@ import (
 
 type Scheduler struct {
 	dbClient *db.Client
+	config   Config
 }
 
-func New(dbClient *db.Client) *Scheduler {
-	return &Scheduler{dbClient: dbClient}
+// New returns new instance of Scheduler.
+func New(dbClient *db.Client, config Config) *Scheduler {
+	return &Scheduler{
+		dbClient: dbClient,
+		config:   config,
+	}
 }
 
-// Start starts scheduler. It syncs queues with the database, fires up DAG
-// watcher and task scheduler and finally returns HTTP ServeMux with attached
-// HTTP endpoints for communication between scheduler and executors.
-// TODO(dskrzypiec): more docs
+// Start starts Scheduler. It synchronize internal queues with the database,
+// fires up DAG watcher, task scheduler and finally returns HTTP ServeMux
+// with attached HTTP endpoints for communication between scheduler and
+// executors. TODO(dskrzypiec): more docs
 func (s *Scheduler) Start() http.Handler {
-	drQueue := ds.NewSimpleQueue[DagRun](1000)
-	taskQueue := ds.NewSimpleQueue[DagRunTask](1000)
+	drQueue := ds.NewSimpleQueue[DagRun](s.config.DagRunQueueLen)
+	taskQueue := ds.NewSimpleQueue[DagRunTask](s.config.DagRunTaskQueueLen)
 	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
 
 	// Syncing queues with the database in case of program restarts.
-	syncWithDatabase(&drQueue, s.dbClient)
+	syncWithDatabase(&drQueue, s.dbClient, s.config)
 	//syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient) // TODO
 
 	taskScheduler := taskScheduler{
@@ -41,12 +46,14 @@ func (s *Scheduler) Start() http.Handler {
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,
 		TaskCache:   &taskCache,
-		Config:      defaultTaskSchedulerConfig(),
+		Config:      s.config.TaskSchedulerConfig,
 	}
 
 	go func() {
 		// Running in the background dag run watcher
-		WatchDagRuns(dag.List(), &drQueue, s.dbClient)
+		WatchDagRuns(
+			dag.List(), &drQueue, s.dbClient, s.config.DagRunWatcherConfig,
+		)
 	}()
 
 	go func() {
@@ -55,12 +62,12 @@ func (s *Scheduler) Start() http.Handler {
 	}()
 
 	mux := http.NewServeMux()
-	s.RegisterEndpoints(mux, &taskScheduler)
+	s.registerEndpoints(mux, &taskScheduler)
 
 	return mux
 }
 
-func (s *Scheduler) RegisterEndpoints(mux *http.ServeMux, ts *taskScheduler) {
+func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *taskScheduler) {
 	mux.HandleFunc("/dag/task/pop", ts.popTask)
 	mux.HandleFunc("/dag/task/update", ts.updateTaskStatus)
 }
