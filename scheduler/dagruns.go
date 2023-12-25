@@ -16,18 +16,37 @@ type DagRun struct {
 	AtTime time.Time
 }
 
-// Watch watches DAG registry and check whenever DAGs should be scheduled. In
-// that case they are sent onto the given channel. Watch checks DAG registry
-// every WatchInterval period. This function runs indefinitely.
-func WatchDagRuns(
-	dags []dag.Dag, queue ds.Queue[DagRun], dbClient *db.Client,
-	config DagRunWatcherConfig,
-) {
+// DagRunWatcher watches on given list of DAGs and sends information about new
+// DAG runs onto the internal queue when it's time for a new DAG run to be
+// scheduled. Next DAG run schedule for given DAG is determined based on its
+// schedule. It also synchronize information about DAG run with the database.
+type DagRunWatcher struct {
+	queue    ds.Queue[DagRun]
+	dbClient *db.Client
+	config   DagRunWatcherConfig
+}
+
+// NewDagRunWatcher creates new instance of DagRunWatcher.
+func NewDagRunWatcher(
+	queue ds.Queue[DagRun], dbClient *db.Client, config DagRunWatcherConfig,
+) *DagRunWatcher {
+	return &DagRunWatcher{
+		queue:    queue,
+		dbClient: dbClient,
+		config:   config,
+	}
+}
+
+// Watch watches on given list of DAGs and try to schedules new DAG runs onto
+// internal queue. Watch tries to do it each WatchIntervalMs.
+func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
 	ctx := context.TODO() // Think about it
-	nextSchedules := nextScheduleForDagRuns(ctx, dag.List(), time.Now(), dbClient)
+	nextSchedules := nextScheduleForDagRuns(
+		ctx, dags, time.Now(), drw.dbClient,
+	)
 	for {
-		trySchedule(dags, queue, nextSchedules, dbClient, config)
-		time.Sleep(time.Duration(config.WatchIntervalMs) * time.Millisecond)
+		trySchedule(dags, drw.queue, nextSchedules, drw.dbClient, drw.config)
+		time.Sleep(time.Duration(drw.config.WatchIntervalMs) * time.Millisecond)
 	}
 }
 

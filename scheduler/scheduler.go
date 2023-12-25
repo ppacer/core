@@ -41,6 +41,10 @@ func (s *Scheduler) Start() http.Handler {
 	syncWithDatabase(&drQueue, s.dbClient, s.config)
 	//syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient) // TODO
 
+	dagRunWatcher := NewDagRunWatcher(
+		&drQueue, s.dbClient, s.config.DagRunWatcherConfig,
+	)
+
 	taskScheduler := taskScheduler{
 		DbClient:    s.dbClient,
 		DagRunQueue: &drQueue,
@@ -51,9 +55,7 @@ func (s *Scheduler) Start() http.Handler {
 
 	go func() {
 		// Running in the background dag run watcher
-		WatchDagRuns(
-			dag.List(), &drQueue, s.dbClient, s.config.DagRunWatcherConfig,
-		)
+		dagRunWatcher.Watch(dag.List())
 	}()
 
 	go func() {
