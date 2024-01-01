@@ -15,16 +15,26 @@ import (
 	"github.com/dskrzypiec/scheduler/timeutils"
 )
 
+// Scheduler is the title object of this package, it connects all other
+// components together. There should be single instance of a scheduler in
+// single project - currently model of 1 scheduler and N executors are
+// supported.
 type Scheduler struct {
 	dbClient *db.Client
 	config   Config
+	queues   Queues
 }
 
-// New returns new instance of Scheduler.
-func New(dbClient *db.Client, config Config) *Scheduler {
+// New returns new instance of Scheduler. Scheduler needs database client,
+// queues for asynchronous communication and configuration. Database clients
+// are by default available in db package (e.g. db.NewSqliteClient). Default
+// configuration is set in DefaultConfig and default fixed-size buffer queues
+// in DefaultQueues.
+func New(dbClient *db.Client, queues Queues, config Config) *Scheduler {
 	return &Scheduler{
 		dbClient: dbClient,
 		config:   config,
+		queues:   queues,
 	}
 }
 
@@ -33,22 +43,20 @@ func New(dbClient *db.Client, config Config) *Scheduler {
 // with attached HTTP endpoints for communication between scheduler and
 // executors. TODO(dskrzypiec): more docs
 func (s *Scheduler) Start() http.Handler {
-	drQueue := ds.NewSimpleQueue[DagRun](s.config.DagRunQueueLen)
-	taskQueue := ds.NewSimpleQueue[DagRunTask](s.config.DagRunTaskQueueLen)
 	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
 
 	// Syncing queues with the database in case of program restarts.
-	syncWithDatabase(&drQueue, s.dbClient, s.config)
+	syncWithDatabase(s.queues.DagRuns, s.dbClient, s.config)
 	//syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient) // TODO
 
 	dagRunWatcher := NewDagRunWatcher(
-		&drQueue, s.dbClient, s.config.DagRunWatcherConfig,
+		s.queues.DagRuns, s.dbClient, s.config.DagRunWatcherConfig,
 	)
 
 	taskScheduler := taskScheduler{
 		DbClient:    s.dbClient,
-		DagRunQueue: &drQueue,
-		TaskQueue:   &taskQueue,
+		DagRunQueue: s.queues.DagRuns,
+		TaskQueue:   s.queues.DagRunTasks,
 		TaskCache:   &taskCache,
 		Config:      s.config.TaskSchedulerConfig,
 	}

@@ -45,7 +45,7 @@ func PutContext[T comparable](ctx context.Context, q Queue[T], item T) {
 	}
 }
 
-// Simple buffer-based FIFO queue. It's safe for concurrent use.
+// Simple buffer-based, fixed size FIFO queue. It's safe for concurrent use.
 type SimpleQueue[T comparable] struct {
 	maxSize int
 	sync.Mutex

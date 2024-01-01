@@ -17,15 +17,13 @@ import (
 	"github.com/dskrzypiec/scheduler/timeutils"
 )
 
-const StartContextTimeout = 30 * time.Second
-
 // This function is called on scheduler start up. TODO: more docs.
 func syncWithDatabase(
 	queue ds.Queue[DagRun], dbClient *db.Client, config Config,
 ) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
-		StartContextTimeout,
+		config.StartupContextTimeout,
 		errors.New("scheduler initial sync timeouted"),
 	)
 	defer cancel()
