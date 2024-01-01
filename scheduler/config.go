@@ -30,9 +30,11 @@ type Config struct {
 
 // Default Scheduler configuration.
 var DefaultConfig Config = Config{
-	DagRunQueueLen:      100,
-	DagRunTaskQueueLen:  1000,
-	TaskSchedulerConfig: DefaultTaskSchedulerConfig,
+	DagRunQueueLen:        100,
+	DagRunTaskQueueLen:    1000,
+	StartupContextTimeout: 30 * time.Second,
+	TaskSchedulerConfig:   DefaultTaskSchedulerConfig,
+	DagRunWatcherConfig:   DefaultDagRunWatcherConfig,
 }
 
 // Configuration for taskScheduler which is responsible for scheduling tasks
