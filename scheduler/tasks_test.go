@@ -232,7 +232,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	wg.Wait()
 }
 
-func testTaskCacheQueueTableSize(ts *taskScheduler, expectedCount int, t *testing.T) {
+func testTaskCacheQueueTableSize(ts *TaskScheduler, expectedCount int, t *testing.T) {
 	if ts.TaskCache.Len() != expectedCount {
 		t.Errorf("Expected %d tasks in the cache, got: %d", expectedCount,
 			ts.TaskCache.Len())
@@ -778,7 +778,7 @@ func TestGetDagRunTaskStatusNoCacheNoDatabase(t *testing.T) {
 // Marks all tasks popped from the queue as success.
 func markSuccessAllTasks(
 	ctx context.Context,
-	ts *taskScheduler,
+	ts *TaskScheduler,
 	taskExecutionDuration time.Duration,
 	t *testing.T,
 ) {
@@ -815,7 +815,7 @@ func markSuccessAllTasks(
 // taskIdsToFail which are marked as Failed.
 func markSuccessAllTasksExceptFew(
 	ctx context.Context,
-	ts *taskScheduler,
+	ts *TaskScheduler,
 	taskIdsToFail map[string]struct{},
 	taskExecutionDuration time.Duration,
 	t *testing.T,
@@ -859,7 +859,7 @@ func markSuccessAllTasksExceptFew(
 }
 
 func testTaskStatusInCache(
-	ts *taskScheduler,
+	ts *TaskScheduler,
 	drt DagRunTask,
 	expectedStatus dag.TaskStatus,
 	t *testing.T,
@@ -875,7 +875,7 @@ func testTaskStatusInCache(
 }
 
 func testTaskStatusInDB(
-	ts *taskScheduler,
+	ts *TaskScheduler,
 	drt DagRunTask,
 	expectedStatus dag.TaskStatus,
 	t *testing.T,
@@ -901,7 +901,7 @@ func listenOnSchedulerErrors(errChan chan taskSchedulerError, t *testing.T) {
 }
 
 // Initialize default TaskScheduler with in-memory DB client for testing.
-func defaultTaskScheduler(t *testing.T, taskQueueCap int) *taskScheduler {
+func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 	c, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
@@ -909,7 +909,7 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *taskScheduler {
 	drQueue := ds.NewSimpleQueue[DagRun](100)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](taskQueueCap)
 	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
-	ts := taskScheduler{
+	ts := TaskScheduler{
 		DbClient:    c,
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,

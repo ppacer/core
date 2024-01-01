@@ -53,7 +53,7 @@ func (s *Scheduler) Start() http.Handler {
 		s.queues.DagRuns, s.dbClient, s.config.DagRunWatcherConfig,
 	)
 
-	taskScheduler := taskScheduler{
+	taskScheduler := TaskScheduler{
 		DbClient:    s.dbClient,
 		DagRunQueue: s.queues.DagRuns,
 		TaskQueue:   s.queues.DagRunTasks,
@@ -77,13 +77,13 @@ func (s *Scheduler) Start() http.Handler {
 	return mux
 }
 
-func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *taskScheduler) {
+func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	mux.HandleFunc("/dag/task/pop", ts.popTask)
 	mux.HandleFunc("/dag/task/update", ts.updateTaskStatus)
 }
 
 // HTTP handler for popping dag run task from the queue.
-func (ts *taskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
+func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 	if ts.TaskQueue.Size() == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -114,7 +114,7 @@ func (ts *taskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Updates task status in the task cache and the database.
-func (ts *taskScheduler) updateTaskStatus(w http.ResponseWriter, r *http.Request) {
+func (ts *TaskScheduler) updateTaskStatus(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	if r.Method != "POST" {
 		http.Error(w, "Only POST requests are allowed",

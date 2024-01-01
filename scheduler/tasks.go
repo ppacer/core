@@ -25,7 +25,13 @@ type DagRunTaskState struct {
 	StatusUpdateTs time.Time
 }
 
-type taskScheduler struct {
+// TaskScheduler is responsible for scheduling tasks for a single DagRun. When
+// new DagRun is scheduled (by DagRunWatcher) it should appear on DagRunQueue,
+// then TaskScheduler pick it up and start scheduling DAG tasks for that DagRun
+// in a separate goroutine.
+//
+// If you use Scheduler, you probably don't need to use this object directly.
+type TaskScheduler struct {
 	DbClient    *db.Client
 	DagRunQueue ds.Queue[DagRun]
 	TaskQueue   ds.Queue[DagRunTask]
@@ -39,10 +45,12 @@ type taskSchedulerError struct {
 	Err    error
 }
 
-// Start starts taskScheduler loopTaskSchedulerConfigs from the queue and start
-// schedTaskSchedulerConfigate goroutines.
-func (ts *taskScheduler) Start() {
-	taskSchedulerErrors := make(chan taskSchedulerError, 1000)
+// Start starts TaskScheduler main loop. It check if there are new DagRuns on
+// the DagRunQueue and if so, it spins up DAG tasks scheduling for that DagRun
+// in a separate goroutine. If DagRunQueue is empty at the moment, then main
+// loop waits Config.HeartbeatMs milliseconds before the next try.
+func (ts *TaskScheduler) Start() {
+	taskSchedulerErrors := make(chan taskSchedulerError, 100)
 	for {
 		select {
 		case err := <-taskSchedulerErrors:
@@ -73,10 +81,10 @@ func (ts *taskScheduler) Start() {
 	}
 }
 
-// UpdateTaskStatus updates given DAG run task status. That includes caches,
-// queues, database and every place that needs to be included regarding task
-// status update.
-func (ts *taskScheduler) UpsertTaskStatus(
+// UpsertTaskStatus inserts or updates given DAG run task status. That includes
+// caches, queues, database and every place that needs to be included regarding
+// task status update.
+func (ts *TaskScheduler) UpsertTaskStatus(
 	ctx context.Context, drt DagRunTask, status dag.TaskStatus,
 ) error {
 	slog.Info("Start upserting dag run task status", "dagruntask", drt,
@@ -136,7 +144,7 @@ func (ts *taskScheduler) UpsertTaskStatus(
 // Function scheduleDagTasks is responsible for scheduling tasks of single DAG
 // run. Each call to this function by taskScheduler is fire up in separate
 // goroutine.
-func (ts *taskScheduler) scheduleDagTasks(
+func (ts *TaskScheduler) scheduleDagTasks(
 	ctx context.Context,
 	dagrun DagRun,
 	errorsChan chan taskSchedulerError,
@@ -251,7 +259,7 @@ func newDagRunSharedState(taskParents map[string][]string) *dagRunSharedState {
 // WalkAndSchedule wait for node.Task to be ready for scheduling, then
 // schedules it and then goes recursively for that node children.
 // TODO: More details when it become stable.
-func (ts *taskScheduler) walkAndSchedule(
+func (ts *TaskScheduler) walkAndSchedule(
 	ctx context.Context,
 	dagrun DagRun,
 	node *dag.Node,
@@ -301,7 +309,7 @@ func (ts *taskScheduler) walkAndSchedule(
 
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
-func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
+func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	slog.Info("Start scheduling new dag run task", "dagrun", dagrun, "taskId",
 		taskId)
 	drt := DagRunTask{
@@ -324,7 +332,7 @@ func (ts *taskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 // CheckFailsAndMarkDownstream performs DFS and if it finds a task in the tree
 // which is in FAILED state it marks the dag run as FAILED and also marks all
 // tasks in this sub-tree with status UPSTREAM_FAILED.
-func (ts *taskScheduler) checkFailsAndMarkDownstream(
+func (ts *TaskScheduler) checkFailsAndMarkDownstream(
 	ctx context.Context,
 	dagrun DagRun,
 	node *dag.Node,
@@ -361,7 +369,7 @@ func (ts *taskScheduler) checkFailsAndMarkDownstream(
 // Mark downstream node tasks of given node (inclusive) with given status.
 // Usually used to mark downstream tasks with status UPSTREAM_FAILED when one
 // of parents fails.
-func (ts *taskScheduler) markDownstreamTasks(
+func (ts *TaskScheduler) markDownstreamTasks(
 	ctx context.Context, dagrun DagRun, node *dag.Node, status dag.TaskStatus,
 ) {
 	for _, task := range node.Flatten() {
@@ -375,7 +383,7 @@ func (ts *taskScheduler) markDownstreamTasks(
 }
 
 // Checks if dependecies (parent tasks) are done and we can proceed.
-func (ts *taskScheduler) checkIfCanBeScheduled(
+func (ts *TaskScheduler) checkIfCanBeScheduled(
 	dagrun DagRun,
 	taskId string,
 	tasksParents *ds.AsyncMap[string, []string],
@@ -410,7 +418,7 @@ func (ts *taskScheduler) checkIfCanBeScheduled(
 // Check if given parent task in given dag run is completed, to determine if
 // DAG can proceed forward. It checks cache first and if there is no info there
 // it reaches the database, to check the status.
-func (ts *taskScheduler) checkIfParentTaskIsDone(
+func (ts *TaskScheduler) checkIfParentTaskIsDone(
 	dagrun DagRun, parent DagRunTask,
 ) (bool, dag.TaskStatus) {
 	statusFromCache, exists := ts.TaskCache.Get(parent)
@@ -453,7 +461,7 @@ func (ts *taskScheduler) checkIfParentTaskIsDone(
 
 // Checks whenever all tasks within the dag run are in terminal states and thus
 // dag run is finished.
-func (ts *taskScheduler) allTasksAreDone(
+func (ts *TaskScheduler) allTasksAreDone(
 	dagrun DagRun, tasks []dag.Task, sharedState *dagRunSharedState,
 ) bool {
 	for _, task := range tasks {
@@ -483,7 +491,7 @@ func (ts *taskScheduler) allTasksAreDone(
 // This methods gets dag run task status. It tries to check TaskCache first.
 // When given dag run task is not there it tries to pull it from database. If
 // there is also no entry in the database, then sql.ErrNoRows is returned.
-func (ts *taskScheduler) getDagRunTaskStatus(
+func (ts *TaskScheduler) getDagRunTaskStatus(
 	dagrun DagRun, taskId string,
 ) (dag.TaskStatus, error) {
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
@@ -513,7 +521,7 @@ func (ts *taskScheduler) getDagRunTaskStatus(
 }
 
 // Removes bulk of tasks for given dag run from the TaskCache.
-func (ts *taskScheduler) cleanTaskCache(dagrun DagRun, tasks []dag.Task) {
+func (ts *TaskScheduler) cleanTaskCache(dagrun DagRun, tasks []dag.Task) {
 	for _, task := range tasks {
 		ts.TaskCache.Remove(
 			DagRunTask{

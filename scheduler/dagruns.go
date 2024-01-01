@@ -20,6 +20,8 @@ type DagRun struct {
 // DAG runs onto the internal queue when it's time for a new DAG run to be
 // scheduled. Next DAG run schedule for given DAG is determined based on its
 // schedule. It also synchronize information about DAG run with the database.
+//
+// If you use Scheduler, you probably don't need to use this object directly.
 type DagRunWatcher struct {
 	queue    ds.Queue[DagRun]
 	dbClient *db.Client
@@ -27,9 +29,7 @@ type DagRunWatcher struct {
 }
 
 // NewDagRunWatcher creates new instance of DagRunWatcher.
-func NewDagRunWatcher(
-	queue ds.Queue[DagRun], dbClient *db.Client, config DagRunWatcherConfig,
-) *DagRunWatcher {
+func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, config DagRunWatcherConfig) *DagRunWatcher {
 	return &DagRunWatcher{
 		queue:    queue,
 		dbClient: dbClient,
