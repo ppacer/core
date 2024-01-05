@@ -9,10 +9,12 @@ import (
 type Cache[K comparable, V any] interface {
 	Get(key K) (V, bool)
 	Put(key K, value V)
+	Remove(key K)
+	Len() int
 }
 
 // Least Recently Used cache implementation of Cache interface. It's safe for
-// concurrent access.
+// concurrent use.
 type LruCache[K comparable, V any] struct {
 	lock     sync.RWMutex
 	items    map[K]*list.Element
@@ -66,4 +68,22 @@ func (lc *LruCache[K, V]) Put(key K, value V) {
 	}
 	item := &lruCacheItem[K, V]{key: key, value: value}
 	lc.items[key] = lc.queue.PushFront(item)
+}
+
+// Len returns number of items stored in the cache.
+func (lc *LruCache[K, V]) Len() int {
+	lc.lock.RLock()
+	defer lc.lock.RUnlock()
+	return len(lc.items)
+}
+
+// Remove deletes given key from the cache. If given key is not present in the
+// cache, then nothing happens.
+func (lc *LruCache[K, V]) Remove(key K) {
+	lc.lock.Lock()
+	defer lc.lock.Unlock()
+	if element, exists := lc.items[key]; exists {
+		lc.queue.Remove(element)
+		delete(lc.items, key)
+	}
 }

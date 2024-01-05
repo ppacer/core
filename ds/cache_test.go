@@ -1,9 +1,13 @@
 package ds
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func TestLruCacheSimple(t *testing.T) {
 	c := NewLruCache[int, string](2)
+	testCacheLen(c, 0, t)
 
 	if _, exists := c.Get(42); exists {
 		t.Errorf("Cache should be empty, but got key 42")
@@ -17,6 +21,7 @@ func TestLruCacheSimple(t *testing.T) {
 	if vc1 != v1 {
 		t.Errorf("Expected %s from cache for key %d, but got: %s", v1, 42, vc1)
 	}
+	testCacheLen(c, 1, t)
 
 	// Update
 	v12 := "test2"
@@ -29,6 +34,7 @@ func TestLruCacheSimple(t *testing.T) {
 		t.Errorf("Expected %s from cache for key %d, but got: %s", v12, 42,
 			vc12)
 	}
+	testCacheLen(c, 1, t)
 
 	// Another key
 	v2 := ""
@@ -41,6 +47,7 @@ func TestLruCacheSimple(t *testing.T) {
 		t.Errorf("Expected %s from cache for key %d, but got: %s", v2, 111,
 			vc2)
 	}
+	testCacheLen(c, 2, t)
 
 	// 3rd key - one over initial capacity
 	v3 := "x"
@@ -53,12 +60,14 @@ func TestLruCacheSimple(t *testing.T) {
 		t.Errorf("Expected %s from cache for key %d, but got: %s", v3, -123,
 			vc3)
 	}
+	testCacheLen(c, 2, t)
 
 	// after adding key -123 the first key 42 should be removed already
 	_, existsAfter3 := c.Get(42)
 	if existsAfter3 {
 		t.Errorf("Expected 42 to be removed from the cache, but it's still there")
 	}
+	testCacheLen(c, 2, t)
 }
 
 func TestLruCacheRemovalOrder(t *testing.T) {
@@ -91,7 +100,77 @@ func TestLruCacheRemovalOrder(t *testing.T) {
 	}
 }
 
-// TODO: add test for concurrent access
+func TestLruCacheRemoveItems(t *testing.T) {
+	c := NewLruCache[string, string](3)
+	c.Put("a", "x")
+	c.Put("b", "y")
+	c.Put("c", "z")
+	testCacheLen(c, 3, t)
+	c.Remove("this-key-does-not-exist")
+	testCacheLen(c, 3, t)
+
+	c.Remove("b")
+	testCacheLen(c, 2, t)
+	_, bExist := c.Get("b")
+	if bExist {
+		t.Error("Element with key 'b' should be deleted, but it's still in the cache")
+	}
+
+	c.Remove("a")
+	testCacheLen(c, 1, t)
+	_, aExist := c.Get("a")
+	if aExist {
+		t.Error("Element with key 'a' should be deleted, but it's still in the cache")
+	}
+
+	c.Remove("c")
+	testCacheLen(c, 0, t)
+	_, cExist := c.Get("c")
+	if cExist {
+		t.Error("Element with key 'c' should be deleted, but it's still in the cache")
+	}
+
+	c.Remove("this-key-does-not-exist")
+	testCacheLen(c, 0, t)
+}
+
+func TestLruCacheConcurrency(t *testing.T) {
+	const size = 1000
+	c := NewLruCache[int, int](size)
+	var wg sync.WaitGroup
+	wg.Add(5)
+
+	go putManyIntoCache(c, 0, 100, 0, &wg)
+	go putManyIntoCache(c, 100, 200, 1, &wg)
+	go putManyIntoCache(c, 200, 300, 2, &wg)
+	go putManyIntoCache(c, 300, 400, 3, &wg)
+	go putManyIntoCache(c, 400, 500, 4, &wg)
+
+	wg.Wait()
+	for i := 0; i < 500; i++ {
+		v, exist := c.Get(i)
+		if !exist {
+			t.Errorf("Expected key %d to be in the cache, but it's not", i)
+		}
+		if v != i/100 {
+			t.Errorf("Expected cache(%d)=%d, but got: %d", i, i/100, v)
+		}
+	}
+}
+
+func putManyIntoCache(c Cache[int, int], start, end, value int, wg *sync.WaitGroup) {
+	for i := start; i < end; i++ {
+		c.Put(i, value)
+	}
+	wg.Done()
+}
+
+func testCacheLen[K comparable, V any](c Cache[K, V], expCount int, t *testing.T) {
+	cnt := c.Len()
+	if cnt != expCount {
+		t.Errorf("Expected %d items in the cache, but got: %d", expCount, cnt)
+	}
+}
 
 func BenchmarkLruCachePut(b *testing.B) {
 	const size = 100
