@@ -16,6 +16,9 @@ type Config struct {
 	// Scheduler startup.
 	DagRunTaskQueueLen int
 
+	// DAG run tasks cache capacity.
+	DagRunTaskCacheLen int
+
 	// Startup timeout duration. When scheduler call Start, it synchronize with
 	// the database and possibly other resources. This duration interval is
 	// setup in Start context.
@@ -32,6 +35,7 @@ type Config struct {
 var DefaultConfig Config = Config{
 	DagRunQueueLen:        100,
 	DagRunTaskQueueLen:    1000,
+	DagRunTaskCacheLen:    1000,
 	StartupContextTimeout: 30 * time.Second,
 	TaskSchedulerConfig:   DefaultTaskSchedulerConfig,
 	DagRunWatcherConfig:   DefaultDagRunWatcherConfig,

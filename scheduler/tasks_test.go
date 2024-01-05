@@ -694,11 +694,7 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
-	addErr := ts.TaskCache.Add(drt, status)
-	if addErr != nil {
-		t.Errorf("Cannot add new entry %v to task cache: %s",
-			drt, addErr.Error())
-	}
+	ts.TaskCache.Put(drt, status)
 
 	// Get dag run task status
 	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
@@ -908,12 +904,12 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 	}
 	drQueue := ds.NewSimpleQueue[DagRun](100)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](taskQueueCap)
-	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
+	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](10)
 	ts := TaskScheduler{
 		DbClient:    c,
 		DagRunQueue: &drQueue,
 		TaskQueue:   &taskQueue,
-		TaskCache:   &taskCache,
+		TaskCache:   taskCache,
 		Config:      DefaultTaskSchedulerConfig,
 	}
 	return &ts

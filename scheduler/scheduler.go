@@ -43,11 +43,12 @@ func New(dbClient *db.Client, queues Queues, config Config) *Scheduler {
 // with attached HTTP endpoints for communication between scheduler and
 // executors. TODO(dskrzypiec): more docs
 func (s *Scheduler) Start() http.Handler {
-	taskCache := newSimpleCache[DagRunTask, DagRunTaskState]()
+	cacheSize := s.config.DagRunTaskCacheLen
+	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
 	syncWithDatabase(s.queues.DagRuns, s.dbClient, s.config)
-	//syncDagRunTaskCache(context.TODO(), &taskCache, s.dbClient) // TODO
+	//syncDagRunTaskCache(context.TODO(), taskCache, s.dbClient) // TODO
 
 	dagRunWatcher := NewDagRunWatcher(
 		s.queues.DagRuns, s.dbClient, s.config.DagRunWatcherConfig,
@@ -57,7 +58,7 @@ func (s *Scheduler) Start() http.Handler {
 		DbClient:    s.dbClient,
 		DagRunQueue: s.queues.DagRuns,
 		TaskQueue:   s.queues.DagRunTasks,
-		TaskCache:   &taskCache,
+		TaskCache:   taskCache,
 		Config:      s.config.TaskSchedulerConfig,
 	}
 

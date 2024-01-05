@@ -154,7 +154,7 @@ func syncDagRunsQueue(
 // TODO
 func syncDagRunTaskCache(
 	ctx context.Context,
-	cache cache[DagRunTask, DagRunTaskState],
+	cache ds.Cache[DagRunTask, DagRunTaskState],
 	dbClient *db.Client,
 ) error {
 	// TODO: We want to sync DagRunTasks which are not in terminal states

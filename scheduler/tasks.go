@@ -35,7 +35,7 @@ type TaskScheduler struct {
 	DbClient    *db.Client
 	DagRunQueue ds.Queue[DagRun]
 	TaskQueue   ds.Queue[DagRunTask]
-	TaskCache   cache[DagRunTask, DagRunTaskState]
+	TaskCache   ds.Cache[DagRunTask, DagRunTaskState]
 	Config      TaskSchedulerConfig
 }
 
@@ -93,18 +93,8 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 	// Insert/update info in the cache
 	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
 	drtsCache, entryExists := ts.TaskCache.Get(drt)
-	if entryExists {
-		if drtsCache.Status != status {
-			cacheUpdateErr := ts.TaskCache.Update(drt, drts)
-			if cacheUpdateErr != nil {
-				return cacheUpdateErr
-			}
-		}
-	} else {
-		cacheAddErr := ts.TaskCache.Add(drt, drts)
-		if cacheAddErr != nil {
-			return cacheAddErr
-		}
+	if !entryExists || (entryExists && drtsCache.Status != status) {
+		ts.TaskCache.Put(drt, drts)
 	}
 
 	// Insert/update info in the database
@@ -500,7 +490,7 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 		return drts.Status, nil
 	}
 	ctx := context.TODO()
-	dbErr := ts.TaskCache.PullFromDatabase(ctx, drt, ts.DbClient)
+	drts, dbErr := ts.getDagRunTaskStatusFromDb(ctx, drt)
 	if dbErr == sql.ErrNoRows {
 		return dag.TaskNoStatus, dbErr
 	}
@@ -510,14 +500,29 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 				"from database", "dagruntask", drt, "err", dbErr.Error())
 		return dag.TaskNoStatus, dbErr
 	}
-	drts, exists = ts.TaskCache.Get(drt)
-	if exists {
-		return drts.Status, nil
+	ts.TaskCache.Put(drt, drts)
+	return drts.Status, nil
+}
+
+// Gets dag run task status from the database.
+func (ts *TaskScheduler) getDagRunTaskStatusFromDb(
+	ctx context.Context, drt DagRunTask,
+) (DagRunTaskState, error) {
+	dagruntask, err := ts.DbClient.ReadDagRunTask(
+		ctx, string(drt.DagId), timeutils.ToString(drt.AtTime), drt.TaskId,
+	)
+	if err != nil {
+		return DagRunTaskState{}, err
 	}
-	slog.Error("Dag run task still does not exist in the cache "+
-		"even after trying pull it from database", "dagruntask",
-		drt)
-	return dag.TaskNoStatus, sql.ErrNoRows
+	status, sErr := dag.ParseTaskStatus(dagruntask.Status)
+	if sErr != nil {
+		return DagRunTaskState{}, sErr
+	}
+	drts := DagRunTaskState{
+		Status:         status,
+		StatusUpdateTs: timeutils.FromStringMust(dagruntask.StatusUpdateTs),
+	}
+	return drts, nil
 }
 
 // Removes bulk of tasks for given dag run from the TaskCache.
