@@ -311,6 +311,32 @@ func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
 	}
 }
 
+func TestShouldBeScheduledUnexpectedDelay(t *testing.T) {
+	const dagId = "mock_dag"
+	startTs := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: startTs}
+	attr := dag.Attr{}
+	d := emptyDag(dagId, &sched, attr)
+
+	nextSched := time.Date(2023, time.November, 13, 10, 0, 0, 0, time.UTC)
+	nextSchedules := map[dag.Id]*time.Time{d.Id: &nextSched}
+
+	// We are simulating that for over 3 hours dag run queue was full and now
+	// current time is 13:05 instead of 10:00.
+	currentTime := time.Date(2023, time.November, 13, 13, 5, 0, 0, time.UTC)
+	shouldBe, nextSched := shouldBeSheduled(d, nextSchedules, currentTime)
+	if !shouldBe {
+		t.Errorf("Expected DAG to be scheduled at %+v, but it's not",
+			currentTime)
+	}
+
+	expectedNextSched := time.Date(2023, time.November, 13, 10, 0, 0, 0, time.UTC)
+	if !nextSched.Equal(expectedNextSched) {
+		t.Errorf("Expected DAG to be scheduled with ExecTs %+v, but got: %+v",
+			expectedNextSched, nextSched)
+	}
+}
+
 func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
 	const N = 25
 	attr := dag.Attr{}
@@ -403,6 +429,79 @@ func TestTryScheduleDagSimple(t *testing.T) {
 			t.Errorf("Expected for dag run %d exec time %s, got %s in database",
 				expectedDagRuns-i-1, expTimeStr, dbDagRuns[i].ExecTs)
 		}
+	}
+}
+
+func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	ctx := context.Background()
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	d := emptyDag("sample_dag", &sched, attr)
+
+	t1 := time.Date(2024, time.January, 7, 8, 0, 0, 0, time.UTC)
+	nextSchedules := map[dag.Id]*time.Time{d.Id: &t1}
+	queue := ds.NewSimpleQueue[DagRun](100)
+
+	// Regular scheduling of a DAG run for d
+	t2 := time.Date(2024, time.January, 7, 8, 0, 10, 0, time.UTC)
+	s1Err := tryScheduleDag(ctx, d, t2, &queue, nextSchedules, c)
+	if s1Err != nil {
+		t.Errorf("Error while scheduling new DAG run at %+v", t2)
+	}
+	dr, popErr := queue.Pop()
+	if popErr != nil {
+		t.Errorf("Cannot pop item from the queue: %s", popErr.Error())
+	}
+	if !dr.AtTime.Equal(t1) {
+		t.Errorf("Expected that scheduled DAG run is for %+v, but it's %+v",
+			t1, dr.AtTime)
+	}
+	t2NextExp := time.Date(2024, time.January, 7, 9, 0, 0, 0, time.UTC)
+	checkNextSchedule(nextSchedules, d, t2NextExp, t)
+
+	// Let's simulate that DAG runs queue was full for 2 hours and try schedule
+	// just after the pause at 10:01:20.
+	tAfterDelay := time.Date(2024, time.January, 7, 10, 1, 20, 0, time.UTC)
+	s2Err := tryScheduleDag(ctx, d, tAfterDelay, &queue, nextSchedules, c)
+	if s2Err != nil {
+		t.Errorf("Error while scheduling new DAG run at %+v (after 2h delay)",
+			tAfterDelay)
+	}
+	dr2, pop2Err := queue.Pop()
+	if pop2Err != nil {
+		t.Errorf("Cannot pop item from the queue  after the delay: %s",
+			pop2Err.Error())
+	}
+	if !dr2.AtTime.Equal(t2NextExp) {
+		t.Errorf("Expected that DAG run after the delay will be scheduled for %+v, but it's %+v",
+			t2NextExp, dr2.AtTime)
+	}
+	t3NextExp := time.Date(2024, time.January, 7, 10, 0, 0, 0, time.UTC)
+	checkNextSchedule(nextSchedules, d, t3NextExp, t)
+}
+
+func checkNextSchedule(
+	ns map[dag.Id]*time.Time, d dag.Dag, nextSchedExp time.Time, t *testing.T,
+) {
+	t.Helper()
+	tNext, exists := ns[d.Id]
+	if !exists {
+		t.Errorf("Expected %s DAG to be in nextSchedules map, but it's not",
+			string(d.Id))
+	}
+	if tNext == nil {
+		t.Fatalf("Next schedule for %s is unexpectedly nil", string(d.Id))
+	}
+	if !nextSchedExp.Equal(*tNext) {
+		t.Errorf("Expected nextSchedule to be %+v, but got %+v", nextSchedExp,
+			*tNext)
 	}
 }
 

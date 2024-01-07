@@ -38,7 +38,12 @@ func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, config DagRun
 }
 
 // Watch watches on given list of DAGs and try to schedules new DAG runs onto
-// internal queue. Watch tries to do it each WatchIntervalMs.
+// internal queue. Watch tries to do it each WatchIntervalMs. In case when DAG
+// run queue is full and new DAG runs cannot be pushed there Watch waits for
+// DagRunWatcherConfig.QueueIsFullIntervalMs milliseconds before the next try.
+// Even when the queue would be full for longer then interval between two next
+// DAG runs, those DAG runs won't be skipped. They will be scheduled in
+// expected order but possibly a bit later.
 func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
 	ctx := context.TODO() // Think about it
 	nextSchedules := nextScheduleForDagRuns(
@@ -111,16 +116,17 @@ func tryScheduleDag(
 		"execTs", schedule)
 
 	execTs := timeutils.ToString(schedule)
+	newDagRun := DagRun{DagId: d.Id, AtTime: schedule}
 	alreadyScheduled, dreErr := dbClient.DagRunAlreadyScheduled(ctx, string(d.Id), execTs)
 	if dreErr != nil {
 		return dreErr
 	}
 	if alreadyScheduled {
-		alreadyInQueue := queue.Contains(DagRun{DagId: d.Id, AtTime: schedule})
+		alreadyInQueue := queue.Contains(newDagRun)
 		if !alreadyInQueue {
 			// When dag run is already in the database but it's not on the
 			// queue (perhaps due to scheduler restart).
-			qErr := queue.Put(DagRun{DagId: d.Id, AtTime: schedule})
+			qErr := queue.Put(newDagRun)
 			if qErr != nil {
 				slog.Error("Cannot put dag run on the queue", "dagId",
 					string(d.Id), "execTs", schedule, "err", qErr)
@@ -144,7 +150,7 @@ func tryScheduleDag(
 		// We don't need to block the process because of this error. In worst
 		// case we can omit having this status.
 	}
-	qErr := queue.Put(DagRun{DagId: d.Id, AtTime: schedule})
+	qErr := queue.Put(newDagRun)
 	if qErr != nil {
 		// Revert next schedule
 		nextSchedules[d.Id] = &schedule
