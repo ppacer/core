@@ -251,7 +251,6 @@ func TestShouldBeScheduledSimple(t *testing.T) {
 		t.Errorf("Expected DAG %s to be scheduled at %v, but got %v",
 			string(d1.Id), d1ns, execTime2)
 	}
-	expectedUpdatedNextSched := time.Date(2023, time.October, 5, 15, 0, 0, 0, time.UTC)
 	ds1NextNextSched, exists := nextSchedules[d1.Id]
 	if !exists {
 		t.Errorf("Expected DAG %s next schedule to exist in the map, but it does not",
@@ -261,9 +260,9 @@ func TestShouldBeScheduledSimple(t *testing.T) {
 		t.Fatalf("Expected non-nil next schedule after already checking shouldBeSheduled for DAG %s",
 			string(d1.Id))
 	}
-	if expectedUpdatedNextSched.Compare(*ds1NextNextSched) != 0 {
+	if d1ns.Compare(*ds1NextNextSched) != 0 {
 		t.Errorf("Expected next schedule after once checking shouldBeScheduled for DAG %s, to be %v, got %v",
-			string(d1.Id), expectedUpdatedNextSched, *ds1NextNextSched)
+			string(d1.Id), d1ns, *ds1NextNextSched)
 	}
 
 	for _, ct := range []time.Time{currTime1, currTime2} {

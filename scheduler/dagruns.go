@@ -137,8 +137,6 @@ func tryScheduleDag(
 	}
 	runId, iErr := dbClient.InsertDagRun(ctx, string(d.Id), execTs)
 	if iErr != nil {
-		// Revert next schedule
-		nextSchedules[d.Id] = &schedule
 		return iErr
 	}
 	uErr := dbClient.UpdateDagRunStatus(
@@ -152,9 +150,6 @@ func tryScheduleDag(
 	}
 	qErr := queue.Put(newDagRun)
 	if qErr != nil {
-		// Revert next schedule
-		nextSchedules[d.Id] = &schedule
-
 		// We don't remove entry from dagruns table, based on this it would be
 		// put on the queue in the next iteration.
 		slog.Error("Cannot put dag run on the queue", "dagId", string(d.Id),
@@ -163,8 +158,6 @@ func tryScheduleDag(
 	}
 	uErr = dbClient.UpdateDagRunStatus(ctx, runId, dag.RunScheduled.String())
 	if uErr != nil {
-		// Revert next schedule
-		nextSchedules[d.Id] = &schedule
 		// Pop item from the queue
 		_, pErr := queue.Pop()
 		if pErr != nil && pErr != ds.ErrQueueIsEmpty {
@@ -172,6 +165,9 @@ func tryScheduleDag(
 		}
 		return uErr
 	}
+	// Upadate the next schedule for that DAG
+	newNextSched := (*d.Schedule).Next(schedule)
+	nextSchedules[d.Id] = &newNextSched
 	return nil
 }
 
@@ -193,9 +189,6 @@ func shouldBeSheduled(
 		return false, time.Time{}
 	}
 	if (*nextSched).Compare(currentTime) <= 0 {
-		// Update next schedule and return the current schedule
-		newNextSched := (*dag.Schedule).Next(*nextSched)
-		nextSchedules[dag.Id] = &newNextSched
 		return true, *nextSched
 	}
 	return false, time.Time{}
