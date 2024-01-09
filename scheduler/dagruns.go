@@ -11,6 +11,8 @@ import (
 	"github.com/dskrzypiec/scheduler/timeutils"
 )
 
+// DagRun represents single DAG run. AtTime is more of scheduling time rather
+// then time of actually pushing it onto DAG run queue.
 type DagRun struct {
 	DagId  dag.Id
 	AtTime time.Time
@@ -38,20 +40,20 @@ func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, config DagRun
 }
 
 // Watch watches on given list of DAGs and try to schedules new DAG runs onto
-// internal queue. Watch tries to do it each WatchIntervalMs. In case when DAG
+// internal queue. Watch tries to do it each WatchInterval. In case when DAG
 // run queue is full and new DAG runs cannot be pushed there Watch waits for
-// DagRunWatcherConfig.QueueIsFullIntervalMs milliseconds before the next try.
-// Even when the queue would be full for longer then interval between two next
-// DAG runs, those DAG runs won't be skipped. They will be scheduled in
-// expected order but possibly a bit later.
+// DagRunWatcherConfig.QueueIsFullInterval before the next try. Even when the
+// queue would be full for longer then an interval between two next DAG runs,
+// those DAG runs won't be skipped. They will be scheduled in expected order
+// but possibly a bit later.
 func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
-	ctx := context.TODO() // Think about it
-	nextSchedules := nextScheduleForDagRuns(
-		ctx, dags, time.Now(), drw.dbClient,
-	)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
+	defer cancel()
+	nextSchedules := nextScheduleForDagRuns(ctx, dags, time.Now(), drw.dbClient)
 	for {
 		trySchedule(dags, drw.queue, nextSchedules, drw.dbClient, drw.config)
-		time.Sleep(time.Duration(drw.config.WatchIntervalMs) * time.Millisecond)
+		time.Sleep(drw.config.WatchInterval)
 	}
 }
 
@@ -62,34 +64,34 @@ func trySchedule(
 	dbClient *db.Client,
 	config DagRunWatcherConfig,
 ) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, config.DatabaseContextTimeout)
+	defer cancel()
 	now := time.Now()
 
 	// Make sure we have next schedules for every dag in dags
 	if len(dags) != len(nextSchedules) {
-		slog.Warn("Seems like number of next shedules does not match number "+
+		slog.Warn("Seems like number of next schedules does not match number "+
 			"of dags. Will try refresh next schedules.", "dags", len(dags),
 			"nextSchedules", len(nextSchedules))
-		ctx := context.TODO() // Think about it
 		nextSchedules = nextScheduleForDagRuns(ctx, dags, now, dbClient)
 	}
 
 	for _, d := range dags {
-		ctx := context.TODO() // Think about it
-
 		// Check if there is space on the queue to schedule a new dag run
 		for queue.Capacity() <= 0 {
 			slog.Warn("The dag run queue is full. Will try in moment", "moment",
-				config.QueueIsFullIntervalMs)
-			time.Sleep(time.Duration(config.QueueIsFullIntervalMs) * time.Millisecond)
+				config.QueueIsFullInterval)
+			time.Sleep(config.QueueIsFullInterval)
 		}
 
 		tsdErr := tryScheduleDag(ctx, d, now, queue, nextSchedules, dbClient)
 		if tsdErr != nil {
-			// TODO(dskrzypiec): implement some kind of second queue for
-			// retries when there was an error when trying to schedule new dag
-			// run.
 			slog.Error("Error while trying to schedule new dag run", "dagId",
 				string(d.Id), "err", tsdErr)
+			// We don't need to handle those errors in here. Function
+			// tryScheduleDag will be retried in another iteration and that
+			// should be good enough to resolve all cases eventually.
 		}
 	}
 }
@@ -97,9 +99,8 @@ func trySchedule(
 // Function tryScheduleDag tries to schedule new dag run for given DAG. When
 // new dag run is scheduled new entry is pushed onto the queue and into
 // database dagruns table. When scheduling new dag run fails in any of steps,
-// then non-nil error is returned and function try to clean up as much as
-// possible. When necessary pop new entry from the queue and revert next
-// schedule time from the cache (nextSchedules).
+// then non-nil error is returned. If DAG run is successfully scheduled, this
+// function updates nextSchedules for given dag ID.
 func tryScheduleDag(
 	ctx context.Context,
 	d dag.Dag,
@@ -126,12 +127,7 @@ func tryScheduleDag(
 		if !alreadyInQueue {
 			// When dag run is already in the database but it's not on the
 			// queue (perhaps due to scheduler restart).
-			qErr := queue.Put(newDagRun)
-			if qErr != nil {
-				slog.Error("Cannot put dag run on the queue", "dagId",
-					string(d.Id), "execTs", schedule, "err", qErr)
-				return qErr
-			}
+			ds.PutContext(ctx, queue, newDagRun)
 		}
 		return nil
 	}
@@ -158,14 +154,11 @@ func tryScheduleDag(
 	}
 	uErr = dbClient.UpdateDagRunStatus(ctx, runId, dag.RunScheduled.String())
 	if uErr != nil {
-		// Pop item from the queue
-		_, pErr := queue.Pop()
-		if pErr != nil && pErr != ds.ErrQueueIsEmpty {
-			slog.Error("Cannot pop latest item from the queue", "err", pErr)
-		}
+		slog.Warn("Cannot update dag run status to SCHEDULED", "dagId",
+			string(d.Id), "execTs", schedule, "err", uErr)
 		return uErr
 	}
-	// Upadate the next schedule for that DAG
+	// Update the next schedule for that DAG
 	newNextSched := (*d.Schedule).Next(schedule)
 	nextSchedules[d.Id] = &newNextSched
 	return nil

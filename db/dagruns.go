@@ -196,8 +196,7 @@ func (c *Client) DagRunAlreadyScheduled(
 
 	q := "SELECT COUNT(*) FROM dagruns WHERE DagId=? AND ExecTs=? AND (Status=? OR Status=?)"
 	row := c.dbConn.QueryRowContext(
-		ctx, q, dagId, execTs, statusScheduled,
-		statusReadyToSchedule,
+		ctx, q, dagId, execTs, statusScheduled, statusReadyToSchedule,
 	)
 	var count int
 	err := row.Scan(&count)

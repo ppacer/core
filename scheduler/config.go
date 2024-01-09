@@ -59,17 +59,26 @@ var DefaultTaskSchedulerConfig TaskSchedulerConfig = TaskSchedulerConfig{
 	CheckDependenciesStatusMs: 1,
 }
 
-// Configuration for dagRunWatcher which is responsible for scheduling new DAG
+// Configuration for DagRunWatcher which is responsible for scheduling new DAG
 // runs based on their schedule.
 type DagRunWatcherConfig struct {
-	WatchIntervalMs       int
-	QueueIsFullIntervalMs int
+	// DagRunWatcher waits WatchInterval before another try of scheduling DAG
+	// runs.
+	WatchInterval time.Duration
+
+	// DagRunWatcher would wait for QueueIsFullInterval in case when DAG run
+	// queue is full, before it would try again.
+	QueueIsFullInterval time.Duration
+
+	// Duration for database context timeout for queries done by DagRunWatcher.
+	DatabaseContextTimeout time.Duration
 }
 
-// Default dagRunWatcher configuration.
+// Default DagRunWatcher configuration.
 var DefaultDagRunWatcherConfig DagRunWatcherConfig = DagRunWatcherConfig{
-	WatchIntervalMs:       100,
-	QueueIsFullIntervalMs: 100,
+	WatchInterval:          100 * time.Millisecond,
+	QueueIsFullInterval:    100 * time.Millisecond,
+	DatabaseContextTimeout: 10 * time.Second,
 }
 
 // Queues contains queues internally needed by the Scheduler. It's
@@ -79,9 +88,6 @@ var DefaultDagRunWatcherConfig DagRunWatcherConfig = DagRunWatcherConfig{
 type Queues struct {
 	DagRuns     ds.Queue[DagRun]
 	DagRunTasks ds.Queue[DagRunTask]
-
-	// TODO: queues for retries and recoveries from errors which weren't
-	// related to task execution.
 }
 
 // Returns default instance of Queues which uses ds.SimpleQueue - fixed size

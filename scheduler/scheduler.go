@@ -64,6 +64,8 @@ func (s *Scheduler) Start() http.Handler {
 
 	go func() {
 		// Running in the background dag run watcher
+		// TODO(dskrzypiec): Probably move it as Start parameter (dags
+		// []dag.Dag).
 		dagRunWatcher.Watch(dag.List())
 	}()
 

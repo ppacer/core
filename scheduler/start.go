@@ -140,8 +140,8 @@ func syncDagRunsQueue(
 	for _, dr := range dagrunsToSchedule {
 		for q.Capacity() <= 0 {
 			slog.Warn("The dag run queue is full. Will try in moment",
-				"QueueIsFullIntervalMs", config.QueueIsFullIntervalMs)
-			time.Sleep(time.Duration(config.QueueIsFullIntervalMs) * time.Millisecond)
+				"QueueIsFullInterval", config.QueueIsFullInterval)
+			time.Sleep(config.QueueIsFullInterval)
 		}
 		q.Put(DagRun{
 			DagId:  dag.Id(dr.DagId),
