@@ -36,7 +36,8 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	}
 
 	currentTime := startTs.Add(time.Duration(dagRuns)*time.Hour + 45*time.Minute)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d}, currentTime, c)
+	nextSchedulesMap := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, []dag.Dag{d}, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 1 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -48,7 +49,7 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 		t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
 			dagId)
 	}
-	expectedNextSchedule := startTs.Add(time.Duration(dagRuns+1) * time.Hour)
+	expectedNextSchedule := startTs.Add(time.Duration(dagRuns) * time.Hour)
 	if nextSchedule.Compare(expectedNextSchedule) != 0 {
 		t.Errorf("Expected next schedule for DAG %s for the current time %v to be %v, but got %v",
 			dagId, currentTime, expectedNextSchedule, nextSchedule)
@@ -78,7 +79,8 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 	}
 
 	currentTime := time.Date(2023, time.October, 10, 10, 0, 0, 0, time.UTC)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d}, currentTime, c)
+	nextSchedulesMap := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, []dag.Dag{d}, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 1 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -122,8 +124,8 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 	}
 
 	currentTime := start.Add(5 * time.Minute)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2, d3},
-		currentTime, c)
+	nextSchedulesMap := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, []dag.Dag{d1, d2, d3}, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 3 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -171,7 +173,8 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	}
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, dags, currentTime, c)
+	nextSchedulesMap := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, dags, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != dagNumber {
 		t.Errorf("Expected to got next schedule for %d DAGs, got for %d",
@@ -203,8 +206,8 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 	d2 := dag.New(dag.Id("s2")).Done()
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)
-	nextSchedulesMap := nextScheduleForDagRuns(ctx, []dag.Dag{d1, d2},
-		currentTime, c)
+	nextSchedulesMap := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, []dag.Dag{d1, d2}, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 2 {
 		t.Errorf("Expected to got next schedule for %d DAGs, got for %d", 2,
@@ -484,6 +487,72 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 	}
 	t3NextExp := time.Date(2024, time.January, 7, 10, 0, 0, 0, time.UTC)
 	checkNextSchedule(nextSchedules, d, t3NextExp, t)
+}
+
+func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	ctx := context.Background()
+	attr := dag.Attr{}
+	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
+	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	d := emptyDag("sample_dag", &sched, attr)
+
+	// we simulate empty nextSchedules after the scheduler restart (actually we
+	// sync intentionally on scheduler.Start, but we also should have saftey
+	// mechanism on trySchedule level to ensure that we always have
+	// nextSchedules up to date).
+	nextSchedules := map[dag.Id]*time.Time{}
+	queue := ds.NewSimpleQueue[DagRun](10)
+
+	// Insert one DAG run into the database as a state before the restart
+	t0 := time.Date(2023, time.November, 11, 8, 0, 0, 0, time.UTC)
+	runId, iErr := c.InsertDagRun(ctx, string(d.Id), timeutils.ToString(t0))
+	if iErr != nil {
+		t.Errorf("Cannot insert DAG run into the DB: %s", iErr.Error())
+	}
+	uErr := c.UpdateDagRunStatus(ctx, runId, dag.TaskSuccess.String())
+	if uErr != nil {
+		t.Errorf("Cannot update DAG run status: %s", uErr.Error())
+	}
+
+	// Starting scheduling DAG run after restart at 12:10 and latest run was at
+	// 8:00.
+	cfg := DefaultDagRunWatcherConfig
+	timeAfterRestart := time.Date(2023, time.November, 11, 12, 10, 0, 0, time.UTC)
+	trySchedule([]dag.Dag{d}, &queue, nextSchedules, timeAfterRestart, c, cfg)
+
+	if len(nextSchedules) < 1 {
+		t.Error("Expected at least one entry in nextSchedules, got 0")
+	}
+
+	// Expected DAG run for 9:00 after the restart, even though it's after
+	// 12:00
+	dr, popErr := queue.Pop()
+	if popErr != nil {
+		t.Errorf("Cannot pop DAG run from the queue: %s", popErr.Error())
+	}
+	currentSchedExp := time.Date(2023, time.November, 11, 9, 0, 0, 0, time.UTC)
+	if !dr.AtTime.Equal(currentSchedExp) {
+		t.Errorf("Expected to schedule DR at %+v after the restart, but got %+v",
+			currentSchedExp, dr.AtTime)
+	}
+
+	// Next schedule should be 10:00 and not 13:00
+	nextSchedExp := time.Date(2023, time.November, 11, 10, 0, 0, 0, time.UTC)
+	nextSched, exist := nextSchedules[d.Id]
+	if !exist {
+		t.Errorf("Expected to have nextSchedule for DAG %s, but there is no entry",
+			string(d.Id))
+	}
+	if !nextSchedExp.Equal(*nextSched) {
+		t.Errorf("Expected nextSchedule after the restart to be %+v, but got: %+v",
+			nextSchedExp, *nextSched)
+	}
 }
 
 func checkNextSchedule(

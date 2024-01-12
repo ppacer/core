@@ -50,9 +50,11 @@ func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
 	defer cancel()
-	nextSchedules := nextScheduleForDagRuns(ctx, dags, time.Now(), drw.dbClient)
+	nextSchedules := make(map[dag.Id]*time.Time)
+	updateNextSchedules(ctx, dags, time.Now(), drw.dbClient, nextSchedules)
 	for {
-		trySchedule(dags, drw.queue, nextSchedules, drw.dbClient, drw.config)
+		now := time.Now()
+		trySchedule(dags, drw.queue, nextSchedules, now, drw.dbClient, drw.config)
 		time.Sleep(drw.config.WatchInterval)
 	}
 }
@@ -61,20 +63,20 @@ func trySchedule(
 	dags []dag.Dag,
 	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
+	currentTime time.Time,
 	dbClient *db.Client,
 	config DagRunWatcherConfig,
 ) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, config.DatabaseContextTimeout)
 	defer cancel()
-	now := time.Now()
 
 	// Make sure we have next schedules for every dag in dags
 	if len(dags) != len(nextSchedules) {
 		slog.Warn("Seems like number of next schedules does not match number "+
 			"of dags. Will try refresh next schedules.", "dags", len(dags),
 			"nextSchedules", len(nextSchedules))
-		nextSchedules = nextScheduleForDagRuns(ctx, dags, now, dbClient)
+		updateNextSchedules(ctx, dags, currentTime, dbClient, nextSchedules)
 	}
 
 	for _, d := range dags {
@@ -85,7 +87,7 @@ func trySchedule(
 			time.Sleep(config.QueueIsFullInterval)
 		}
 
-		tsdErr := tryScheduleDag(ctx, d, now, queue, nextSchedules, dbClient)
+		tsdErr := tryScheduleDag(ctx, d, currentTime, queue, nextSchedules, dbClient)
 		if tsdErr != nil {
 			slog.Error("Error while trying to schedule new dag run", "dagId",
 				string(d.Id), "err", tsdErr)
@@ -190,23 +192,22 @@ func shouldBeSheduled(
 // NextScheduleForDagRuns determines next schedules for all DAGs given in dags
 // and current time. It reads latest dag runs from the database. If DAG has no
 // schedule this DAG is still in output map but with nil next schedule time.
-func nextScheduleForDagRuns(
+func updateNextSchedules(
 	ctx context.Context,
 	dags []dag.Dag,
 	currentTime time.Time,
 	dbClient *db.Client,
-) map[dag.Id]*time.Time {
-	latestDagRunTime := make(map[dag.Id]*time.Time, len(dags))
+	nextSchedules map[dag.Id]*time.Time,
+) {
 	latestDagRuns, err := dbClient.ReadLatestDagRuns(ctx)
 	if err != nil {
 		slog.Error("Failed to load latest dag runs to create a cache. Cache is empty")
-		return latestDagRunTime
 	}
 
 	for _, dag := range dags {
 		if dag.Schedule == nil {
 			// No schedule for this DAG
-			latestDagRunTime[dag.Id] = nil
+			nextSchedules[dag.Id] = nil
 			continue
 		}
 		sched := *dag.Schedule
@@ -215,22 +216,15 @@ func nextScheduleForDagRuns(
 		if !exists {
 			// The first run
 			if dag.Attr.CatchUp {
-				latestDagRunTime[dag.Id] = &startTime
+				nextSchedules[dag.Id] = &startTime
 				continue
 			} else {
 				nextSched := sched.Next(currentTime)
-				latestDagRunTime[dag.Id] = &nextSched
+				nextSchedules[dag.Id] = &nextSched
 				continue
 			}
 		}
 		nextSched := sched.Next(timeutils.FromStringMust(latestDagRun.ExecTs))
-		if currentTime.After(nextSched) && !dag.Attr.CatchUp {
-			// current time is after the supposed schedule and we don't want to catch up
-			nextSchedFromCurrent := sched.Next(currentTime)
-			latestDagRunTime[dag.Id] = &nextSchedFromCurrent
-			continue
-		}
-		latestDagRunTime[dag.Id] = &nextSched
+		nextSchedules[dag.Id] = &nextSched
 	}
-	return latestDagRunTime
 }
