@@ -39,6 +39,9 @@ func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 }
 
 // Upsert inserts or updates DAG details in dags table.
+// TODO(dskrzypiec): Perhaps we should always insert new DAG into dags and keep
+// IsCurrent flag? Similarly like we do in dagtasks. Not really needed for now,
+// but something to consider in the future.
 func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
