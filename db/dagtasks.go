@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/timeutils"
-	"github.com/dskrzypiec/scheduler/version"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/timeutils"
+	"github.com/ppacer/core/version"
 )
 
 // DagTask represents single row in dagtasks table in the database.

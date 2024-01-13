@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/db"
-	"github.com/dskrzypiec/scheduler/ds"
-	"github.com/dskrzypiec/scheduler/models"
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/db"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/models"
+	"github.com/ppacer/core/timeutils"
 )
 
 // Scheduler is the title object of this package, it connects all other

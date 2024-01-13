@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/dskrzypiec/scheduler/meta"
+	"github.com/ppacer/core/meta"
 )
 
 const MAX_RECURSION = 10000

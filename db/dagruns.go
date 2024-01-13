@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/timeutils"
-	"github.com/dskrzypiec/scheduler/version"
+	"github.com/ppacer/core/timeutils"
+	"github.com/ppacer/core/version"
 )
 
 type DagRun struct {

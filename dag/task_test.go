@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dskrzypiec/scheduler/meta"
+	"github.com/ppacer/core/meta"
 )
 
 type constTask struct{}

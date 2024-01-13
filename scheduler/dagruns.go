@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/db"
-	"github.com/dskrzypiec/scheduler/ds"
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/db"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/timeutils"
 )
 
 // DagRun represents single DAG run. AtTime is more of scheduling time rather

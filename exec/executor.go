@@ -6,9 +6,9 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/ds"
-	"github.com/dskrzypiec/scheduler/models"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/models"
 )
 
 type Executor struct {

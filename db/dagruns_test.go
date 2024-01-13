@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/timeutils"
 )
 
 func TestInsertDagRunSimple(t *testing.T) {

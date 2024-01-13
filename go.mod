@@ -1,4 +1,4 @@
-module github.com/dskrzypiec/scheduler
+module github.com/ppacer/core
 
 go 1.21
 

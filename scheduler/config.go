@@ -3,7 +3,7 @@ package scheduler
 import (
 	"time"
 
-	"github.com/dskrzypiec/scheduler/ds"
+	"github.com/ppacer/core/ds"
 )
 
 // Config represents main configuration for the Scheduler.

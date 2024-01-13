@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/timeutils"
-	"github.com/dskrzypiec/scheduler/version"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/timeutils"
+	"github.com/ppacer/core/version"
 )
 
 type Dag struct {

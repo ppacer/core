@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/meta"
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/meta"
+	"github.com/ppacer/core/timeutils"
 )
 
 //go:embed *.go

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/timeutils"
 )
 
 const LOG_PREFIX = "dag"

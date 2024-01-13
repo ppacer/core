@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/ds"
-	"github.com/dskrzypiec/scheduler/models"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/models"
 )
 
 const (

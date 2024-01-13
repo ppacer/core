@@ -11,10 +11,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/db"
-	"github.com/dskrzypiec/scheduler/ds"
-	"github.com/dskrzypiec/scheduler/timeutils"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/db"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/timeutils"
 )
 
 // This function is called on scheduler start up. TODO: more docs.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/version"
+	"github.com/ppacer/core/version"
 )
 
 var sqlSchemaPath = path.Join("..", "schema.sql")

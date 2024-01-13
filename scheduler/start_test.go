@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dskrzypiec/scheduler/dag"
-	"github.com/dskrzypiec/scheduler/db"
+	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/db"
 )
 
 var sqlSchemaPath = path.Join("..", "schema.sql")
