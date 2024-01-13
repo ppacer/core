@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path"
 	"testing"
 	"time"
 
@@ -12,10 +11,8 @@ import (
 	"github.com/ppacer/core/db"
 )
 
-var sqlSchemaPath = path.Join("..", "schema.sql")
-
 func TestSyncOneDagNoChanges(t *testing.T) {
-	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	c, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +93,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 }
 
 func TestSyncOneDagTimeout(t *testing.T) {
-	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	c, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +113,7 @@ func TestSyncOneDagTimeout(t *testing.T) {
 }
 
 func TestSyncOneDagChangingAttr(t *testing.T) {
-	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	c, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +235,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 }
 
 func TestSyncOneDagChangingTasks(t *testing.T) {
-	c, err := db.NewInMemoryClient(sqlSchemaPath)
+	c, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
 	}
