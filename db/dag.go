@@ -147,13 +147,7 @@ func fromDagToDag(d dag.Dag, createTs string) Dag {
 	if jErr != nil {
 		attrJson = []byte("FAILED DAG ATTR SERIALIZATION")
 	}
-	var dagStart, sched *string
-	if d.Schedule != nil {
-		schedStr := (*d.Schedule).String()
-		sched = &schedStr
-		startStr := timeutils.ToString((*d.Schedule).StartTime())
-		dagStart = &startStr
-	}
+	dagStart, sched := dagStartAndScheduleStrings(d)
 	return Dag{
 		DagId:               string(d.Id),
 		StartTs:             dagStart,
@@ -173,10 +167,11 @@ func dagUpdate(d dag.Dag, currDagRow Dag, insertTs string) Dag {
 	if jErr != nil {
 		attrJson = []byte("FAILED DAG ATTR SERIALIZATION")
 	}
+	dagStart, sched := dagStartAndScheduleStrings(d)
 	return Dag{
 		DagId:               string(d.Id),
-		StartTs:             currDagRow.StartTs,
-		Schedule:            currDagRow.Schedule,
+		StartTs:             dagStart,
+		Schedule:            sched,
 		CreateTs:            currDagRow.CreateTs,
 		LatestUpdateTs:      &insertTs,
 		CreateVersion:       currDagRow.CreateVersion,
@@ -185,6 +180,17 @@ func dagUpdate(d dag.Dag, currDagRow Dag, insertTs string) Dag {
 		HashTasks:           d.HashTasks(),
 		Attributes:          string(attrJson),
 	}
+}
+
+func dagStartAndScheduleStrings(d dag.Dag) (*string, *string) {
+	var dagStart, sched *string
+	if d.Schedule != nil {
+		schedStr := (*d.Schedule).String()
+		sched = &schedStr
+		startStr := timeutils.ToString((*d.Schedule).StartTime())
+		dagStart = &startStr
+	}
+	return dagStart, sched
 }
 
 func (c *Client) readDagQuery() string {

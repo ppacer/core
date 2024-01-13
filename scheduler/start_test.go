@@ -179,6 +179,64 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	}
 }
 
+func TestSyncOneDagChangingSchedule(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// First sync
+	dagId := "very_simple_dag"
+	d := verySimpleDag(dagId)
+	s1Err := syncDag(ctx, c, d)
+	if s1Err != nil {
+		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
+		return
+	}
+
+	dagDb1, rErr := c.ReadDag(ctx, dagId)
+	if rErr != nil {
+		t.Fatalf("Unexpected error while reading dag from dags table: %s",
+			rErr.Error())
+	}
+
+	// Update DAG schedule
+	currentSched := *d.Schedule
+	var newSched dag.Schedule = dag.FixedSchedule{
+		Interval: 4 * time.Hour,
+		Start:    currentSched.StartTime(),
+	}
+	d.Schedule = &newSched
+
+	// Second sync - should not change anything
+	s2Err := syncDag(ctx, c, d)
+	if s2Err != nil {
+		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
+	}
+
+	dagDb2, r2Err := c.ReadDag(ctx, dagId)
+	if rErr != nil {
+		t.Fatalf("Unexpected error while reading dag after the update from dags table: %s",
+			r2Err.Error())
+	}
+	if dagDb1.Equals(dagDb2) {
+		t.Fatal("Expected the row in dags table to be different after DAG's schedule update")
+	}
+	if dagDb1.HashDagMeta == dagDb2.HashDagMeta {
+		t.Errorf("Expected different HashDagMeta after the updated, but is unchanged: %s",
+			dagDb1.HashDagMeta)
+	}
+	if *dagDb1.Schedule == *dagDb2.Schedule {
+		t.Errorf("Expected different schedule after the update, but got the same as earlier: %s",
+			*dagDb1.Schedule)
+	}
+	if dagDb1.HashTasks != dagDb2.HashTasks {
+		t.Errorf("Expected HashTasks to be unchanged after the update, got different - before: %s, after: %s",
+			dagDb1.HashTasks, dagDb1.HashTasks)
+	}
+}
+
 func TestSyncOneDagChangingTasks(t *testing.T) {
 	c, err := db.NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
