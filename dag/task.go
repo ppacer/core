@@ -32,6 +32,7 @@ const (
 	TaskNoStatus
 )
 
+// String serialized TaskStatus to its upper case string.
 func (s TaskStatus) String() string {
 	return [...]string{
 		"SCHEDULED",

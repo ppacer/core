@@ -1,3 +1,14 @@
+/*
+Package db contains all communication between ppacer and the database.
+
+# Introduction
+
+# Supported databases
+
+  - SQLite - <TODO> (include tmp files)
+  - Postgres - <TODO> not yet ready, but this would be the second client
+  - ...
+*/
 package db
 
 import (
