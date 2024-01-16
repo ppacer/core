@@ -410,6 +410,90 @@ func testScheduleDagTasksLinkedList(size int, t *testing.T) {
 	)
 }
 
+func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
+	const qLen = 100
+	const dagId = "sample_ll"
+	const llSize = 10
+	d := linkedListDagSchedule1Min(dagId, llSize)
+	ts := defaultTaskScheduler(t, qLen)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	errsChan := make(chan taskSchedulerError)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFunc()
+	addErr := dag.Add(d)
+	if addErr != nil {
+		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
+	}
+	t0 := (*d.Schedule).StartTime()
+	t0Str := timeutils.ToString(t0)
+
+	// Insert DAG run
+	_, iErr := ts.DbClient.InsertDagRun(ctx, dagId, timeutils.ToString(t0))
+	if iErr != nil {
+		t.Errorf("Cannot insert dag run for %s, %+v: %s", dagId, t0, iErr.Error())
+	}
+
+	// Insert few tasks to be done, to simulate starting scheduling after the
+	// restart
+	tasks := d.Flatten()
+	success := dag.TaskSuccess.String()
+	for i := 0; i < llSize/2; i++ {
+		taskId := tasks[i].Id()
+		iErr = ts.DbClient.InsertDagRunTask(ctx, dagId, t0Str, taskId, success)
+		if iErr != nil {
+			t.Errorf("Cannot insert DAG run task %s.%s at %s: %s",
+				dagId, taskId, t0Str, iErr.Error())
+		}
+	}
+
+	// Asserts before scheduling tasks
+	statusSuccess := fmt.Sprintf("Status='%s'", success)
+	drc := ts.DbClient.Count("dagruns")
+	if drc != 1 {
+		t.Errorf("Expected 1 DAG run in the database, got: %d", drc)
+	}
+	drcSuccess := ts.DbClient.CountWhere("dagruns", statusSuccess)
+	if drcSuccess != 0 {
+		t.Errorf("Expected 0 successful DAG run in the database before running scheduler, got: %d",
+			drcSuccess)
+	}
+	drtc := ts.DbClient.Count("dagruntasks")
+	if drtc != llSize/2 {
+		t.Errorf("Expected %d DAG run tasks in the database after running scheduler, but got: %d",
+			llSize/2, drtc)
+	}
+
+	go listenOnSchedulerErrors(errsChan, t)
+	go markSuccessAllTasks(ctx, ts, 1*time.Millisecond, t)
+	dr := DagRun{DagId: d.Id, AtTime: t0}
+	ts.scheduleDagTasks(ctx, dr, errsChan)
+	t.Log("Dag run is done!")
+
+	// Asserts after scheduleDagTasks is done.
+	drcAfter := ts.DbClient.CountWhere("dagruns", statusSuccess)
+	if drcAfter != 1 {
+		t.Errorf("Expected 1 successful DAG run in the database, got: %d",
+			drcAfter)
+	}
+	drtcAfter := ts.DbClient.CountWhere("dagruntasks", statusSuccess)
+	if drtcAfter != llSize {
+		t.Errorf("Expected %d successful DAG run tasks in the database after running scheduler, but got: %d",
+			llSize, drtcAfter)
+	}
+}
+
+func linkedListDagSchedule1Min(id string, size int) dag.Dag {
+	root := nodesLinkedList(size)
+	start := time.Date(2024, time.January, 16, 12, 0, 0, 0, time.UTC)
+	sched := dag.FixedSchedule{Start: start, Interval: 1 * time.Minute}
+
+	d := dag.New(dag.Id(id)).
+		AddSchedule(sched).
+		AddRoot(root).
+		Done()
+	return d
+}
+
 func testScheduleDagTasksSingleDagrun(
 	d dag.Dag,
 	dagrun DagRun,
