@@ -26,6 +26,8 @@ type DagRun struct {
 const (
 	statusReadyToSchedule = "READY_TO_SCHEDULE"
 	statusScheduled       = "SCHEDULED"
+	statusSuccess         = "SUCCESS"
+	statusFailed          = "FAILED"
 )
 
 // ReadDagRuns reads topN latest dag runs for given DAG ID.
@@ -210,15 +212,14 @@ func (c *Client) DagRunAlreadyScheduled(
 	return count > 0, nil
 }
 
-// Reads dag run from dagruns table which are in statuse READY_TO_SCHEDULE and
-// SCHEDULED.
-func (c *Client) ReadDagRunsToBeScheduled(ctx context.Context) ([]DagRun, error) {
+// Reads dag run from dagruns table which are not in terminal states.
+func (c *Client) ReadDagRunsNotFinished(ctx context.Context) ([]DagRun, error) {
 	start := time.Now()
 	slog.Debug("Start reading dag runs that should be scheduled")
 	dagruns := make([]DagRun, 0, 100)
 
-	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunToBeScheduledQuery(),
-		statusReadyToSchedule, statusScheduled)
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunNotFinishedQuery(),
+		statusSuccess, statusFailed)
 	if qErr != nil {
 		slog.Error("Failed querying dag run to be scheduled", "err", qErr)
 		return nil, qErr
@@ -363,7 +364,7 @@ func (c *Client) updateDagRunStatusByExecTsQuery() string {
 	`
 }
 
-func (c *Client) readDagRunToBeScheduledQuery() string {
+func (c *Client) readDagRunNotFinishedQuery() string {
 	return `
 		SELECT
 			RunId,
@@ -376,7 +377,7 @@ func (c *Client) readDagRunToBeScheduledQuery() string {
 		FROM
 			dagruns
 		WHERE
-			Status = ? OR Status = ?
+			Status NOT IN (?, ?)
 		ORDER BY
 			RunId ASC
 	`

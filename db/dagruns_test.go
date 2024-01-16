@@ -456,7 +456,7 @@ func TestDagRunExistsSimple(t *testing.T) {
 	}
 }
 
-func TestDagRunsToBeScheduledSimple(t *testing.T) {
+func TestDagRunsNotFinishedSimple(t *testing.T) {
 	c, err := NewInMemoryClient(sqlSchemaPath)
 	if err != nil {
 		t.Error(err)
@@ -474,11 +474,11 @@ func TestDagRunsToBeScheduledSimple(t *testing.T) {
 	for idx, ts := range timestamps {
 		insertDagRun(c, ctx, dagId, ts, t)
 		if idx != 2 {
-			c.UpdateDagRunStatus(ctx, int64(idx+1), "ANOTHER_STATUS")
+			c.UpdateDagRunStatus(ctx, int64(idx+1), statusSuccess)
 		}
 	}
 
-	dagRunsToBeScheduled, err := c.ReadDagRunsToBeScheduled(ctx)
+	dagRunsToBeScheduled, err := c.ReadDagRunsNotFinished(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -488,6 +488,71 @@ func TestDagRunsToBeScheduledSimple(t *testing.T) {
 	dr := dagRunsToBeScheduled[0]
 	if dr.RunId != 3 {
 		t.Errorf("Expected DAG with SCHEDULED status to have RunId=3, got: %d", dr.RunId)
+	}
+}
+
+func TestDagRunsNotFinishedForTerminalStates(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	const dagId = "mock_dag"
+	const N = 10
+	ctx := context.Background()
+	t0 := time.Now()
+
+	for i := 0; i < N; i++ {
+		ts := timeutils.ToString(t0.Add(time.Duration(i) * time.Hour))
+		insertDagRun(c, ctx, dagId, ts, t)
+		status := statusFailed
+		if i%2 == 0 {
+			status = statusSuccess
+		}
+		uErr := c.UpdateDagRunStatus(ctx, int64(i+1), status)
+		if uErr != nil {
+			t.Errorf("Cannot update DAG run status: %s", uErr.Error())
+		}
+	}
+
+	dagRunsToBeScheduled, err := c.ReadDagRunsNotFinished(ctx)
+	if err != nil {
+		t.Errorf("Cannot load not finished DAG runs: %s", err.Error())
+	}
+	if len(dagRunsToBeScheduled) != 0 {
+		t.Errorf("Expected 0 DAG runs that are not finished, got: %d",
+			len(dagRunsToBeScheduled))
+	}
+}
+
+func TestDagRunsNotFinishedForRunningStates(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	const dagId = "mock_dag"
+	const N = 10
+	ctx := context.Background()
+	t0 := time.Now()
+
+	for i := 0; i < N; i++ {
+		ts := timeutils.ToString(t0.Add(time.Duration(i) * time.Hour))
+		insertDagRun(c, ctx, dagId, ts, t)
+		status := "RUNNING"
+		uErr := c.UpdateDagRunStatus(ctx, int64(i+1), status)
+		if uErr != nil {
+			t.Errorf("Cannot update DAG run status: %s", uErr.Error())
+		}
+	}
+
+	dagRunsToBeScheduled, err := c.ReadDagRunsNotFinished(ctx)
+	if err != nil {
+		t.Errorf("Cannot load not finished DAG runs: %s", err.Error())
+	}
+	if len(dagRunsToBeScheduled) != N {
+		t.Errorf("Expected %d DAG runs that are not finished, got: %d",
+			N, len(dagRunsToBeScheduled))
 	}
 }
 

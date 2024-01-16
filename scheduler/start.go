@@ -133,7 +133,7 @@ func syncDagRunsQueue(
 	dbClient *db.Client,
 	config DagRunWatcherConfig,
 ) error {
-	dagrunsToSchedule, dbErr := dbClient.ReadDagRunsToBeScheduled(ctx)
+	dagrunsToSchedule, dbErr := dbClient.ReadDagRunsNotFinished(ctx)
 	if dbErr != nil {
 		return dbErr
 	}
