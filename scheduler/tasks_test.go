@@ -445,6 +445,11 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 				dagId, taskId, t0Str, iErr.Error())
 		}
 	}
+	// Read InsertTs from the calculation before the simulated restart
+	startTaskId := (*d.Root).Task.Id()
+	startInsertTsBefore, startStatusUpdateTsBefore := readDagRunTaskInsertAndUpdateTs(
+		ts.DbClient, ctx, dagId, t0Str, startTaskId, t,
+	)
 
 	// Asserts before scheduling tasks
 	statusSuccess := fmt.Sprintf("Status='%s'", success)
@@ -479,6 +484,20 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	if drtcAfter != llSize {
 		t.Errorf("Expected %d successful DAG run tasks in the database after running scheduler, but got: %d",
 			llSize, drtcAfter)
+	}
+
+	startInsertTsAfter, startStatusUpdateTsAfter := readDagRunTaskInsertAndUpdateTs(
+		ts.DbClient, ctx, dagId, t0Str, startTaskId, t,
+	)
+	if !startInsertTsBefore.Equal(startInsertTsAfter) {
+		t.Errorf("Expected the same InsertTs value for task <Start> before and "+
+			"after the restart. Expected %+v, but got: %+v",
+			startInsertTsBefore, startInsertTsAfter)
+	}
+	if !startStatusUpdateTsBefore.Equal(startStatusUpdateTsAfter) {
+		t.Errorf("Expected the same StatusUpdateTs value for task <Start> "+
+			"before and after the restart. Expected %+v, but got %+v",
+			startStatusUpdateTsBefore, startStatusUpdateTsAfter)
 	}
 }
 
@@ -997,6 +1016,30 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 		Config:      DefaultTaskSchedulerConfig,
 	}
 	return &ts
+}
+
+func readDagRunTaskInsertAndUpdateTs(
+	c *db.Client, ctx context.Context, dagId, execTs, taskId string,
+	t *testing.T,
+) (time.Time, time.Time) {
+	t.Helper()
+	task, dbErr := c.ReadDagRunTask(
+		ctx, dagId, execTs, taskId,
+	)
+	if dbErr != nil {
+		t.Errorf("Cannot read dag run task for %s: %s", taskId, dbErr.Error())
+	}
+	insertTs, tsErr := timeutils.FromString(task.InsertTs)
+	if tsErr != nil {
+		t.Errorf("Cannot parse InsertTs timestamp based on %s: %s",
+			task.InsertTs, tsErr.Error())
+	}
+	updateTs, tsErr := timeutils.FromString(task.StatusUpdateTs)
+	if tsErr != nil {
+		t.Errorf("Cannot parse StatusUpdateTs timestamp based on %s: %s",
+			task.StatusUpdateTs, tsErr.Error())
+	}
+	return insertTs, updateTs
 }
 
 //	   n21
