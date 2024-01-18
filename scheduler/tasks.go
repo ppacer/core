@@ -261,6 +261,15 @@ func (ts *TaskScheduler) walkAndSchedule(
 	taskId := node.Task.Id()
 	slog.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
 
+	// In case when scheduler has been restarted given task might been
+	// already completed from the previous unfinished DAG run.
+	alreadyFinished, status := ts.checkIfAlreadyFinished(dagrun, taskId)
+	if alreadyFinished {
+		if status != dag.TaskSuccess {
+			ts.scheduleSingleTask(dagrun, taskId)
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -268,7 +277,12 @@ func (ts *TaskScheduler) walkAndSchedule(
 			// queue for retries on DagRunTasks level.
 			slog.Error("Context canceled while walkAndSchedule", "dagrun",
 				dagrun, "taskId", node.Task.Id(), "err", ctx.Err())
+			// TODO: in this case we need to stop further scheduling and set
+			// appropriate status
 		default:
+		}
+		if alreadyFinished {
+			break
 		}
 
 		canSchedule, parentsStatus := ts.checkIfCanBeScheduled(
@@ -370,6 +384,26 @@ func (ts *TaskScheduler) markDownstreamTasks(
 				"dagrun", dagrun, "taskId", node.Task.Id(), "status", status)
 		}
 	}
+}
+
+// Checks whenever given task in a DAG run has been already finished. This is
+// very handy in case when the scheduler has been restarted and before the
+// restart not all tasks in a DAG run has been completed. In this case we shall
+// simply go through already finished tasks and continue to scheduling not yet
+// done tasks.
+func (ts *TaskScheduler) checkIfAlreadyFinished(
+	dagrun DagRun, taskId string,
+) (bool, dag.TaskStatus) {
+	status, err := ts.getDagRunTaskStatus(dagrun, taskId)
+	if err == sql.ErrNoRows {
+		return false, dag.TaskNoStatus
+	}
+	if err != nil {
+		slog.Error("Canot get DAG run task status",
+			"dagrun", dagrun, "taskId", taskId, "err", err.Error())
+		return false, dag.TaskNoStatus
+	}
+	return status.IsTerminal(), status
 }
 
 // Checks if dependecies (parent tasks) are done and we can proceed.
