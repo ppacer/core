@@ -788,6 +788,101 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 }
 
+func TestCheckIfAlreadyFinishedNoTask(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+	taskId := "mock_task_id"
+	expectedStatus := dag.TaskNoStatus
+
+	isFinished, status := ts.checkIfAlreadyFinished(dagrun, taskId)
+	testAlreadyFinishedTaskExpectedStatus(
+		isFinished, false, status, expectedStatus, t,
+	)
+}
+
+func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	dagId := "mock_dag"
+	dagrun := DagRun{dag.Id(dagId), time.Now()}
+
+	// test cases
+	data := []struct {
+		taskId             string
+		expectedStatus     dag.TaskStatus
+		expectedIsFinished bool
+	}{
+		{"task1", dag.TaskScheduled, false},
+		{"task2", dag.TaskRunning, false},
+		{"task3", dag.TaskNoStatus, false},
+		{"task4", dag.TaskFailed, true},
+		{"task5", dag.TaskSuccess, true},
+	}
+
+	for _, d := range data {
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, d.taskId}
+		status := DagRunTaskState{d.expectedStatus, dagrun.AtTime.Add(1 * time.Second)}
+		ts.TaskCache.Put(drt, status)
+
+		isFinished, tStatus := ts.checkIfAlreadyFinished(dagrun, d.taskId)
+		testAlreadyFinishedTaskExpectedStatus(
+			isFinished, d.expectedIsFinished, tStatus, d.expectedStatus, t,
+		)
+	}
+}
+
+func TestCheckIfAlreadyFinishedInDb(t *testing.T) {
+	ts := defaultTaskScheduler(t, 10)
+	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	ctx := context.Background()
+	dagId := "mock_dag"
+	dagrun := DagRun{dag.Id(dagId), time.Now()}
+	execTs := timeutils.ToString(dagrun.AtTime)
+
+	// test cases
+	data := []struct {
+		taskId             string
+		expectedStatus     dag.TaskStatus
+		expectedIsFinished bool
+	}{
+		{"task1", dag.TaskScheduled, false},
+		{"task2", dag.TaskRunning, false},
+		{"task3", dag.TaskNoStatus, false},
+		{"task4", dag.TaskFailed, true},
+		{"task5", dag.TaskSuccess, true},
+	}
+
+	for _, d := range data {
+		iErr := ts.DbClient.InsertDagRunTask(
+			ctx, dagId, execTs, d.taskId, d.expectedStatus.String(),
+		)
+		if iErr != nil {
+			t.Errorf("Cannot insert new DAG run task into DB: %s",
+				iErr.Error())
+		}
+
+		isFinished, tStatus := ts.checkIfAlreadyFinished(dagrun, d.taskId)
+		testAlreadyFinishedTaskExpectedStatus(
+			isFinished, d.expectedIsFinished, tStatus, d.expectedStatus, t,
+		)
+	}
+}
+
+func testAlreadyFinishedTaskExpectedStatus(
+	isFinished, expIsFinished bool, status, expectedStatus dag.TaskStatus, t *testing.T,
+) {
+	t.Helper()
+
+	if isFinished != expIsFinished {
+		t.Errorf("Expected task status to be finished=%v (%+v), but got: %v (%+v)",
+			expIsFinished, expectedStatus, isFinished, status)
+	}
+	if status != expectedStatus {
+		t.Errorf("Expected task status %+v, got: %+v", expectedStatus, status)
+	}
+}
+
 func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
