@@ -47,7 +47,7 @@ func (s *Scheduler) Start() http.Handler {
 	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
-	syncWithDatabase(s.queues.DagRuns, s.dbClient, s.config)
+	syncWithDatabase(s.queues.DagRuns, taskCache, s.dbClient, s.config)
 	//syncDagRunTaskCache(context.TODO(), taskCache, s.dbClient) // TODO
 
 	dagRunWatcher := NewDagRunWatcher(

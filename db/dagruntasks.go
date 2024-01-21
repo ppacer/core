@@ -154,6 +154,42 @@ func (c *Client) UpdateDagRunTaskStatus(
 	return nil
 }
 
+// ReadDagRunTasksNotFinished reads tasks from dagruntasks table which are not
+// in terminal state (success or failed). Tasks are sorted from oldest to
+// newest based on execTs and insertTs.
+func (c *Client) ReadDagRunTasksNotFinished(ctx context.Context) ([]DagRunTask, error) {
+	start := time.Now()
+	slog.Debug("Start reading not finished dag run tasks")
+	dagruntasks := make([]DagRunTask, 0, 10)
+
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readNotFinishedDagRunTasksQuery(),
+		statusFailed, statusSuccess)
+	if qErr != nil {
+		slog.Error("Failed querying not finished dag run tasks", "err", qErr)
+		return nil, qErr
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			slog.Warn("Context done while processing dag run tasks", "dagId",
+				"err", ctx.Err())
+			return nil, ctx.Err()
+		default:
+		}
+		dagruntask, scanErr := parseDagRunTask(rows)
+		if scanErr != nil {
+			slog.Error("Failed scanning a DagRunTask record", "err", scanErr)
+			continue
+		}
+		dagruntasks = append(dagruntasks, dagruntask)
+	}
+	slog.Debug("Finished reading not finished dag run tasks", "duration",
+		time.Since(start))
+	return dagruntasks, nil
+}
+
 func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
 	var dagId, execTs, taskId, insertTs, status, statusTs, version string
 	scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &status,
@@ -227,5 +263,25 @@ func (c *Client) updateDagRunTaskStatusQuery() string {
 			DagId = ?
 		AND ExecTs = ?
 		AND TaskId = ?
+	`
+}
+
+func (c *Client) readNotFinishedDagRunTasksQuery() string {
+	return `
+	SELECT
+		DagId,
+		ExecTs,
+		TaskId,
+		InsertTs,
+		Status,
+		StatusUpdateTs,
+		Version
+	FROM
+		dagruntasks
+	WHERE
+		Status NOT IN (?, ?)
+	ORDER BY
+		ExecTs ASC,
+		InsertTs ASC,
 	`
 }

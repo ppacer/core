@@ -185,6 +185,18 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 	}
 }
 
+func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
+	// TODO
+}
+
+func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
+	// TODO
+}
+
+func TestReadDagRunTasksNotFinishedSmallCache(t *testing.T) {
+	// TODO
+}
+
 func insertDagRunTask(
 	c *Client,
 	ctx context.Context,

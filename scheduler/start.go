@@ -19,7 +19,8 @@ import (
 
 // This function is called on scheduler start up. TODO: more docs.
 func syncWithDatabase(
-	queue ds.Queue[DagRun], dbClient *db.Client, config Config,
+	queue ds.Queue[DagRun], cache ds.Cache[DagRunTask, DagRunTaskState],
+	dbClient *db.Client, config Config,
 ) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
@@ -39,6 +40,11 @@ func syncWithDatabase(
 	if queueSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
 		slog.Error("Cannot sync up dag runs queue", "err", queueSyncErr)
+	}
+	drtCacheSyncErr := syncDagRunTaskCache(ctx, cache, dbClient)
+	if drtCacheSyncErr != nil {
+		slog.Error("Cannot sync DAG run task cache", "err", drtCacheSyncErr)
+		// There is no need to retry, it's just a cache.
 	}
 }
 
@@ -123,10 +129,9 @@ func syncDag(ctx context.Context, dbClient *db.Client, d dag.Dag) error {
 	return nil
 }
 
-// Synchronize dag runs with statuses SCHEDULED and READY_TO_SCHEDULE in the
-// database, to be put on the queue. This might happen when dag runs were
-// scheduled but before they started to run scheduler restarted or something
-// else happened.
+// Synchronize not completed dag runs in the database, to be put on the queue.
+// This might happen when dag runs were scheduled but before they started to
+// run scheduler restarted or something else happened.
 func syncDagRunsQueue(
 	ctx context.Context,
 	q ds.Queue[DagRun],
@@ -142,6 +147,11 @@ func syncDagRunsQueue(
 			slog.Warn("The dag run queue is full. Will try in moment",
 				"QueueIsFullInterval", config.QueueIsFullInterval)
 			time.Sleep(config.QueueIsFullInterval)
+			// TODO: this might blocks forever. Currently sync is done at the
+			// startup when DagRunWatcher is not yet started, so DagRun cannot
+			// be consumed from that queue. In another words, currently we can
+			// only sync up to DagRun queue length of not finished DagRuns.
+			// That should be rather rare case, but we need to fix it!
 		}
 		q.Put(DagRun{
 			DagId:  dag.Id(dr.DagId),
@@ -151,14 +161,36 @@ func syncDagRunsQueue(
 	return nil
 }
 
-// TODO
+// Synchronize not finished DAG run tasks based on database table. Those DAG
+// run tasks and their statuses are put into a cache. If number of unfinished
+// tasks are greater than size of the cache, then older tasks won't fit into
+// the cache. Newer tasks are more relevant.
 func syncDagRunTaskCache(
 	ctx context.Context,
 	cache ds.Cache[DagRunTask, DagRunTaskState],
 	dbClient *db.Client,
 ) error {
-	// TODO: We want to sync DagRunTasks which are not in terminal states
-	// (failed, success)
-	slog.Error("TODO: syncDagRunTaskCache is not yet implemented!")
+	drtNotFinished, dbErr := dbClient.ReadDagRunTasksNotFinished(ctx)
+	if dbErr != nil {
+		return dbErr
+	}
+	for _, drtDb := range drtNotFinished {
+		drt := DagRunTask{
+			DagId:  dag.Id(drtDb.DagId),
+			AtTime: timeutils.FromStringMust(drtDb.ExecTs),
+			TaskId: drtDb.TaskId,
+		}
+		status, sErr := dag.ParseTaskStatus(drtDb.Status)
+		if sErr != nil {
+			slog.Error("Cannot parse dag run task status from string from dagruntasks table",
+				"status", drtDb.Status, "err", sErr.Error())
+			continue
+		}
+		drts := DagRunTaskState{
+			Status:         status,
+			StatusUpdateTs: timeutils.FromStringMust(drtDb.StatusUpdateTs),
+		}
+		cache.Put(drt, drts)
+	}
 	return nil
 }
