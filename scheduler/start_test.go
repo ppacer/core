@@ -9,6 +9,8 @@ import (
 
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
+	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/timeutils"
 )
 
 func TestSyncOneDagNoChanges(t *testing.T) {
@@ -305,6 +307,174 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	}
 }
 
+func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+	data := []struct {
+		dagId  string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"dag1", "task1", dag.TaskSuccess},
+		{"dag1", "end", dag.TaskSuccess},
+		{"dag2", "start", dag.TaskFailed},
+		{"dag3", "T", dag.TaskSuccess},
+	}
+
+	for _, d := range data {
+		insertDagRunTask(c, ctx, d.dagId, ts, d.taskId, d.status.String(), t)
+	}
+
+	const size = 10
+	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
+	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	if syncErr != nil {
+		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
+	}
+	if drtCache.Len() != 0 {
+		t.Errorf("Expected no items in the cache, got %d", drtCache.Len())
+	}
+}
+
+func TestSyncDagRunTaskCacheSimple(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+	data := []struct {
+		dagId  string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"dag1", "task1", dag.TaskSuccess},
+		{"dag1", "task2", dag.TaskSuccess},
+		{"dag1", "task3", dag.TaskRunning},
+		{"dag2", "start", dag.TaskFailed},
+		{"dag2", "end", dag.TaskUpstreamFailed},
+		{"dag3", "T", dag.TaskRunning},
+	}
+
+	for _, d := range data {
+		insertDagRunTask(c, ctx, d.dagId, ts, d.taskId, d.status.String(), t)
+	}
+
+	const size = 10
+	const expected = 3
+	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
+	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	if syncErr != nil {
+		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
+	}
+	if drtCache.Len() != expected {
+		t.Errorf("Expected %d items in the cache, got %d", expected,
+			drtCache.Len())
+	}
+
+	expectedInCache := []struct {
+		dagId  string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"dag1", "task3", dag.TaskRunning},
+		{"dag2", "end", dag.TaskUpstreamFailed},
+		{"dag3", "T", dag.TaskRunning},
+	}
+	for _, e := range expectedInCache {
+		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId))
+		if !exists {
+			t.Errorf("Expected DAG run task %s.%s.%s to be in the cache",
+				e.dagId, ts, e.taskId)
+		}
+		if drts.Status != e.status {
+			t.Errorf("Expected DAG run task %s.%s.%s to be in state: %s, but is: %s",
+				e.dagId, ts, e.taskId, e.status.String(), drts.Status.String())
+		}
+	}
+}
+
+func TestSyncDagRunTaskCacheSmall(t *testing.T) {
+	c, err := db.NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	const size = 2
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+	data := []struct {
+		dagId  string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"dag1", "task1", dag.TaskSuccess},
+		{"dag1", "task2", dag.TaskSuccess},
+		{"dag1", "task3", dag.TaskRunning},
+		{"dag2", "start", dag.TaskFailed},
+		{"dag2", "end", dag.TaskUpstreamFailed},
+		{"dag3", "T", dag.TaskRunning},
+	}
+
+	for _, d := range data {
+		insertDagRunTask(c, ctx, d.dagId, ts, d.taskId, d.status.String(), t)
+	}
+
+	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
+	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	if syncErr != nil {
+		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
+	}
+	if drtCache.Len() != size {
+		t.Errorf("Expected %d items in the cache, got %d", size,
+			drtCache.Len())
+	}
+
+	// dag1.ts.task3 should not be in the cache in case when cache size is 2.
+	_, d1t3Exists := drtCache.Get(drt("dag1", ts, "task3"))
+	if d1t3Exists {
+		t.Errorf("DAG run task dag1.%s.task3 should not be in the cache, but it is",
+			ts)
+	}
+
+	expectedInCache := []struct {
+		dagId  string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"dag2", "end", dag.TaskUpstreamFailed},
+		{"dag3", "T", dag.TaskRunning},
+	}
+	for _, e := range expectedInCache {
+		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId))
+		if !exists {
+			t.Errorf("Expected DAG run task %s.%s.%s to be in the cache",
+				e.dagId, ts, e.taskId)
+		}
+		if drts.Status != e.status {
+			t.Errorf("Expected DAG run task %s.%s.%s to be in state: %s, but is: %s",
+				e.dagId, ts, e.taskId, e.status.String(), drts.Status.String())
+		}
+	}
+}
+
+func drt(dagId, execTs, taskId string) DagRunTask {
+	return DagRunTask{
+		DagId:  dag.Id(dagId),
+		AtTime: timeutils.FromStringMust(execTs),
+		TaskId: taskId,
+	}
+}
+
 func dagtasksCountCheck(
 	expDagCnt,
 	expDagTasksCnt int,
@@ -319,6 +489,18 @@ func dagtasksCountCheck(
 	if dagtasksCount != expDagTasksCnt {
 		t.Fatalf("Expected %d rows in dagtasks table, got: %d", expDagTasksCnt,
 			dagtasksCount)
+	}
+}
+
+func insertDagRunTask(
+	c *db.Client,
+	ctx context.Context,
+	dagId, execTs, taskId, status string,
+	t *testing.T,
+) {
+	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, status)
+	if iErr != nil {
+		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}
 }
 
