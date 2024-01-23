@@ -282,6 +282,6 @@ func (c *Client) readNotFinishedDagRunTasksQuery() string {
 		Status NOT IN (?, ?)
 	ORDER BY
 		ExecTs ASC,
-		InsertTs ASC,
+		InsertTs ASC
 	`
 }

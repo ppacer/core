@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -186,15 +187,70 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 }
 
 func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
-	// TODO
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	// do not insert data intentionally - dagruntasks is empty
+	ctx := context.Background()
+	drts, err := c.ReadDagRunTasksNotFinished(ctx)
+	if err != nil {
+		t.Errorf("Error while reading not finished DAG run tasks: %s",
+			err.Error())
+	}
+	if len(drts) != 0 {
+		t.Errorf("Expected no results based on empty table, got %d tasks",
+			len(drts))
+	}
 }
 
 func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
-	// TODO
-}
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	ctx := context.Background()
+	dId := "mock_dag_1"
+	ts := timeutils.ToString(time.Now())
 
-func TestReadDagRunTasksNotFinishedSmallCache(t *testing.T) {
-	// TODO
+	inputData := []struct {
+		taskId string
+		status dag.TaskStatus
+	}{
+		{"task_1", dag.TaskSuccess},
+		{"task_2", dag.TaskSuccess},
+		{"task_3", dag.TaskRunning},
+		{"task_4", dag.TaskFailed},
+	}
+
+	// Insert data
+	for _, d := range inputData {
+		insertDagRunTask(c, ctx, dId, ts, d.taskId, t)
+		uErr := c.UpdateDagRunTaskStatus(
+			ctx, dId, ts, d.taskId, d.status.String(),
+		)
+		if uErr != nil {
+			t.Errorf("Cannot update DAG run task status for %s: %s",
+				d.taskId, uErr.Error())
+		}
+	}
+
+	drts, err := c.ReadDagRunTasksNotFinished(ctx)
+	if err != nil {
+		t.Errorf("Error while reading not finished DAG run tasks: %s",
+			err.Error())
+	}
+	if len(drts) != 1 {
+		t.Fatalf("Expected 1 not finished task, got %d (%+v)",
+			len(drts), drts)
+	}
+	if drts[0].TaskId != "task_3" {
+		t.Errorf("Expected not finished DAG run task id to be %s, got %s",
+			"task_3", drts[0].TaskId)
+	}
 }
 
 func insertDagRunTask(
