@@ -48,7 +48,11 @@ func (s *Scheduler) Start() http.Handler {
 
 	// Syncing queues with the database in case of program restarts.
 	syncWithDatabase(s.queues.DagRuns, taskCache, s.dbClient, s.config)
-	//syncDagRunTaskCache(context.TODO(), taskCache, s.dbClient) // TODO
+	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.config)
+	if cacheSyncErr != nil {
+		slog.Error("Cannot sync DAG run task cache", "err", cacheSyncErr)
+		// There is no need to retry, it's just a cache.
+	}
 
 	dagRunWatcher := NewDagRunWatcher(
 		s.queues.DagRuns, s.dbClient, s.config.DagRunWatcherConfig,

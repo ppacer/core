@@ -333,7 +333,7 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 
 	const size = 10
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -371,7 +371,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 	const size = 10
 	const expected = 3
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -430,7 +430,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 	}
 
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(ctx, drtCache, c)
+	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}

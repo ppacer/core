@@ -41,11 +41,6 @@ func syncWithDatabase(
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
 		slog.Error("Cannot sync up dag runs queue", "err", queueSyncErr)
 	}
-	drtCacheSyncErr := syncDagRunTaskCache(ctx, cache, dbClient)
-	if drtCacheSyncErr != nil {
-		slog.Error("Cannot sync DAG run task cache", "err", drtCacheSyncErr)
-		// There is no need to retry, it's just a cache.
-	}
 }
 
 // Synchronize all DAGs from dag.registry with dags and dagtasks tables in the
@@ -166,10 +161,12 @@ func syncDagRunsQueue(
 // tasks are greater than size of the cache, then older tasks won't fit into
 // the cache. Newer tasks are more relevant.
 func syncDagRunTaskCache(
-	ctx context.Context,
 	cache ds.Cache[DagRunTask, DagRunTaskState],
 	dbClient *db.Client,
+	config Config,
 ) error {
+	ctx, cancel := context.WithTimeout(context.Background(), config.StartupContextTimeout)
+	defer cancel()
 	drtNotFinished, dbErr := dbClient.ReadDagRunTasksNotFinished(ctx)
 	if dbErr != nil {
 		return dbErr
