@@ -100,3 +100,14 @@ func DefaultQueues(config Config) Queues {
 		DagRunTasks: &tasks,
 	}
 }
+
+type ClientConfig struct {
+	// HTTP client timeout value in case when http.Client needs to be
+	// initialized within NewClient.
+	HttpClientTimeout time.Duration
+}
+
+// Default Client configuration.
+var DefaultClientConfig ClientConfig = ClientConfig{
+	HttpClientTimeout: 15 * time.Second,
+}

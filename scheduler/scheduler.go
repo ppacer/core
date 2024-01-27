@@ -85,8 +85,8 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 }
 
 func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
-	mux.HandleFunc("/dag/task/pop", ts.popTask)
-	mux.HandleFunc("/dag/task/update", ts.updateTaskStatus)
+	mux.HandleFunc(getTaskEndpoint, ts.popTask)
+	mux.HandleFunc(updateTaskStatusEndpoint, ts.updateTaskStatus)
 }
 
 // HTTP handler for popping dag run task from the queue.

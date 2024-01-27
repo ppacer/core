@@ -9,10 +9,11 @@ import (
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
+	"github.com/ppacer/core/scheduler"
 )
 
 type Executor struct {
-	schedClient *SchedulerClient
+	schedClient *scheduler.Client
 	config      Config
 }
 
@@ -40,7 +41,7 @@ func New(schedAddr string, config *Config) *Executor {
 		cfg = defaultConfig()
 	}
 	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
-	sc := NewSchedulerClient(schedAddr, httpClient)
+	sc := scheduler.NewClient(schedAddr, httpClient, scheduler.DefaultClientConfig)
 	return &Executor{
 		schedClient: sc,
 		config:      cfg,
@@ -76,7 +77,7 @@ func (e *Executor) Start(dags dag.Registry) {
 }
 
 func executeTask(
-	tte models.TaskToExec, task dag.Task, schedClient *SchedulerClient,
+	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
 ) {
 	defer func() {
 		if r := recover(); r != nil {

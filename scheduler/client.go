@@ -1,4 +1,4 @@
-package exec
+package scheduler
 
 import (
 	"bytes"
@@ -18,26 +18,25 @@ const (
 	updateTaskStatusEndpoint = "/dag/task/update"
 )
 
-type SchedulerClient struct {
+// Client provides API for interacting with Scheduler.
+type Client struct {
 	httpClient   *http.Client
 	schedulerUrl string
 }
 
-// Instantiate new Client.
-func NewSchedulerClient(
-	schedulerUrl string, httpClient *http.Client,
-) *SchedulerClient {
+// NewClient instantiate new Client.
+func NewClient(url string, httpClient *http.Client, config ClientConfig) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = &http.Client{Timeout: config.HttpClientTimeout}
 	}
-	return &SchedulerClient{
+	return &Client{
 		httpClient:   httpClient,
-		schedulerUrl: schedulerUrl,
+		schedulerUrl: url,
 	}
 }
 
 // GetTask gets new task from scheduler to be executed by executor.
-func (c *SchedulerClient) GetTask() (models.TaskToExec, error) {
+func (c *Client) GetTask() (models.TaskToExec, error) {
 	startTs := time.Now()
 	var taskToExec models.TaskToExec
 
@@ -75,7 +74,7 @@ func (c *SchedulerClient) GetTask() (models.TaskToExec, error) {
 	return taskToExec, nil
 }
 
-func (c *SchedulerClient) UpdateTaskStatus(
+func (c *Client) UpdateTaskStatus(
 	tte models.TaskToExec, status string,
 ) error {
 	start := time.Now()
@@ -114,10 +113,10 @@ func (c *SchedulerClient) UpdateTaskStatus(
 	return nil
 }
 
-func (c *SchedulerClient) getTaskUrl() string {
+func (c *Client) getTaskUrl() string {
 	return fmt.Sprintf("%s%s", c.schedulerUrl, getTaskEndpoint)
 }
 
-func (c *SchedulerClient) getUpdateTaskStatusUrl() string {
+func (c *Client) getUpdateTaskStatusUrl() string {
 	return fmt.Sprintf("%s%s", c.schedulerUrl, updateTaskStatusEndpoint)
 }
