@@ -42,12 +42,12 @@ func New(dbClient *db.Client, queues Queues, config Config) *Scheduler {
 // fires up DAG watcher, task scheduler and finally returns HTTP ServeMux
 // with attached HTTP endpoints for communication between scheduler and
 // executors. TODO(dskrzypiec): more docs
-func (s *Scheduler) Start() http.Handler {
+func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
 	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
-	syncWithDatabase(s.queues.DagRuns, taskCache, s.dbClient, s.config)
+	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.config)
 	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.config)
 	if cacheSyncErr != nil {
 		slog.Error("Cannot sync DAG run task cache", "err", cacheSyncErr)
@@ -70,12 +70,12 @@ func (s *Scheduler) Start() http.Handler {
 		// Running in the background dag run watcher
 		// TODO(dskrzypiec): Probably move it as Start parameter (dags
 		// []dag.Dag).
-		dagRunWatcher.Watch(dag.List())
+		dagRunWatcher.Watch(dags)
 	}()
 
 	go func() {
 		// Running in the background task scheduler
-		taskScheduler.Start()
+		taskScheduler.Start(dags)
 	}()
 
 	mux := http.NewServeMux()

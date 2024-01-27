@@ -46,7 +46,7 @@ func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, config DagRun
 // queue would be full for longer then an interval between two next DAG runs,
 // those DAG runs won't be skipped. They will be scheduled in expected order
 // but possibly a bit later.
-func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
+func (drw *DagRunWatcher) Watch(dags dag.Registry) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
 	defer cancel()
@@ -60,7 +60,7 @@ func (drw *DagRunWatcher) Watch(dags []dag.Dag) {
 }
 
 func trySchedule(
-	dags []dag.Dag,
+	dags dag.Registry,
 	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
 	currentTime time.Time,
@@ -194,7 +194,7 @@ func shouldBeSheduled(
 // schedule this DAG is still in output map but with nil next schedule time.
 func updateNextSchedules(
 	ctx context.Context,
-	dags []dag.Dag,
+	dags dag.Registry,
 	currentTime time.Time,
 	dbClient *db.Client,
 	nextSchedules map[dag.Id]*time.Time,

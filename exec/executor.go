@@ -48,7 +48,7 @@ func New(schedAddr string, config *Config) *Executor {
 }
 
 // Start starts executor. TODO...
-func (e *Executor) Start() {
+func (e *Executor) Start(dags dag.Registry) {
 	for {
 		tte, err := e.schedClient.GetTask()
 		if err == ds.ErrQueueIsEmpty {
@@ -60,10 +60,10 @@ func (e *Executor) Start() {
 			break
 		}
 		slog.Info("Start executing task", "taskToExec", tte)
-		d, dErr := dag.Get(dag.Id(tte.DagId))
-		if dErr != nil {
+		d, dagExists := dags[dag.Id(tte.DagId)]
+		if !dagExists {
 			slog.Error("Could not get DAG from registry", "dagId", tte.DagId)
-			break
+			continue
 		}
 		task, tErr := d.GetTask(tte.TaskId)
 		if tErr != nil {

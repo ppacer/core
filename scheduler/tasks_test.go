@@ -420,10 +420,6 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	addErr := dag.Add(d)
-	if addErr != nil {
-		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
-	}
 	t0 := (*d.Schedule).StartTime()
 	t0Str := timeutils.ToString(t0)
 
@@ -471,7 +467,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	go listenOnSchedulerErrors(errsChan, t)
 	go markSuccessAllTasks(ctx, ts, 1*time.Millisecond, t)
 	dr := DagRun{DagId: d.Id, AtTime: t0}
-	ts.scheduleDagTasks(ctx, dr, errsChan)
+	ts.scheduleDagTasks(ctx, d, dr, errsChan)
 	t.Log("Dag run is done!")
 
 	// Asserts after scheduleDagTasks is done.
@@ -526,10 +522,6 @@ func testScheduleDagTasksSingleDagrun(
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	addErr := dag.Add(d)
-	if addErr != nil {
-		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
-	}
 	_, iErr := ts.DbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
 	)
@@ -539,7 +531,7 @@ func testScheduleDagTasksSingleDagrun(
 
 	go listenOnSchedulerErrors(errsChan, t)
 	go markSuccessAllTasks(ctx, ts, delay, t)
-	ts.scheduleDagTasks(ctx, dagrun, errsChan)
+	ts.scheduleDagTasks(ctx, d, dagrun, errsChan)
 	t.Log("Dag run is done!")
 
 	// Asssertions after the dag run is done
@@ -569,10 +561,6 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	addErr := dag.Add(d)
-	if addErr != nil {
-		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
-	}
 	_, iErr := ts.DbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
 	)
@@ -582,7 +570,7 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 
 	go listenOnSchedulerErrors(errsChan, t)
 	go markSuccessAllTasksExceptFew(ctx, ts, taskIdsToFail, delay, t)
-	ts.scheduleDagTasks(ctx, dagrun, errsChan)
+	ts.scheduleDagTasks(ctx, d, dagrun, errsChan)
 	t.Log("Dag run is done!")
 
 	// Asssertions after the dag run is done
@@ -616,10 +604,6 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	addErr := dag.Add(d)
-	if addErr != nil {
-		t.Errorf("Cannot add mock_dag to the dag.registry: %s", addErr.Error())
-	}
 	_, iErr := ts.DbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun1.AtTime),
 	)
@@ -639,11 +623,11 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 	go listenOnSchedulerErrors(errsChan, t)
 	go markSuccessAllTasks(ctx, ts, delay, t)
 	go func() {
-		ts.scheduleDagTasks(ctx, dagrun1, errsChan)
+		ts.scheduleDagTasks(ctx, d, dagrun1, errsChan)
 		wg.Done()
 	}()
 	go func() {
-		ts.scheduleDagTasks(ctx, dagrun2, errsChan)
+		ts.scheduleDagTasks(ctx, d, dagrun2, errsChan)
 		wg.Done()
 	}()
 	wg.Wait()

@@ -19,8 +19,8 @@ import (
 
 // This function is called on scheduler start up. TODO: more docs.
 func syncWithDatabase(
-	queue ds.Queue[DagRun], cache ds.Cache[DagRunTask, DagRunTaskState],
-	dbClient *db.Client, config Config,
+	dags dag.Registry, queue ds.Queue[DagRun], dbClient *db.Client,
+	config Config,
 ) {
 	ctx, cancel := context.WithTimeoutCause(
 		context.Background(),
@@ -28,10 +28,10 @@ func syncWithDatabase(
 		errors.New("scheduler initial sync timeouted"),
 	)
 	defer cancel()
-	dagTasksSyncErr := syncDags(ctx, dbClient)
+	dagTasksSyncErr := syncDags(ctx, dags, dbClient)
 	if dagTasksSyncErr != nil {
 		// TODO(dskrzypiec): what now? Probably retries... and eventually panic
-		slog.Error("Cannot sync up dag.registry and dagtasks", "err",
+		slog.Error("Cannot sync up dags and dagtasks", "err",
 			dagTasksSyncErr)
 	}
 	queueSyncErr := syncDagRunsQueue(
@@ -43,13 +43,13 @@ func syncWithDatabase(
 	}
 }
 
-// Synchronize all DAGs from dag.registry with dags and dagtasks tables in the
-// database. If only DAG attributes were changed then the record in dags table
-// would be updated and dagtasks would not.
-func syncDags(ctx context.Context, dbClient *db.Client) error {
+// Synchronize all DAGs from given registry with dags and dagtasks tables in
+// the database. If only DAG attributes were changed then the record in dags
+// table would be updated and dagtasks would not.
+func syncDags(ctx context.Context, dags dag.Registry, dbClient *db.Client) error {
 	start := time.Now()
-	slog.Info("Start syncing dag.registry with dags and dagtasks tables")
-	for _, d := range dag.List() {
+	slog.Info("Start syncing DAG registry with dags and dagtasks tables")
+	for _, d := range dags {
 		select {
 		case <-ctx.Done():
 			// TODO(dskrzypiec): what now? Probably retries... and eventually
@@ -67,7 +67,7 @@ func syncDags(ctx context.Context, dbClient *db.Client) error {
 			return syncErr
 		}
 	}
-	slog.Info("Finished syncing dag.Registry with dags and dagtasks tables",
+	slog.Info("Finished syncing DAG registry with dags and dagtasks tables",
 		"duration", time.Since(start))
 	return nil
 }

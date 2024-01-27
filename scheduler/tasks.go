@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -49,7 +48,7 @@ type taskSchedulerError struct {
 // the DagRunQueue and if so, it spins up DAG tasks scheduling for that DagRun
 // in a separate goroutine. If DagRunQueue is empty at the moment, then main
 // loop waits Config.HeartbeatMs milliseconds before the next try.
-func (ts *TaskScheduler) Start() {
+func (ts *TaskScheduler) Start(dags dag.Registry) {
 	taskSchedulerErrors := make(chan taskSchedulerError, 100)
 	for {
 		select {
@@ -77,7 +76,13 @@ func (ts *TaskScheduler) Start() {
 		// TODO(dskrzypiec): Think about the context. At least we need to add
 		// timeout for overall DAG run timeout. Start scheduling new DAG run in
 		// a separate goroutine.
-		go ts.scheduleDagTasks(context.TODO(), dagrun, taskSchedulerErrors)
+		d, existInRegistry := dags[dagrun.DagId]
+		if !existInRegistry {
+			slog.Error("TaskScheduler got DAG run for DAG which is not in given registry",
+				"dagId", string(dagrun.DagId))
+			continue
+		}
+		go ts.scheduleDagTasks(context.TODO(), d, dagrun, taskSchedulerErrors)
 	}
 }
 
@@ -136,6 +141,7 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 // goroutine.
 func (ts *TaskScheduler) scheduleDagTasks(
 	ctx context.Context,
+	d dag.Dag,
 	dagrun DagRun,
 	errorsChan chan taskSchedulerError,
 ) {
@@ -154,18 +160,6 @@ func (ts *TaskScheduler) scheduleDagTasks(
 		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
 
-	// Schedule tasks, starting from root - put on the task queue
-	d, dagGetErr := dag.Get(dagrun.DagId)
-	if dagGetErr != nil {
-		err := fmt.Errorf("cannot get DAG %s from DAG registry: %s", dagId,
-			dagGetErr.Error())
-		errorsChan <- taskSchedulerError{
-			DagId:  dagrun.DagId,
-			ExecTs: dagrun.AtTime,
-			Err:    err,
-		}
-		return
-	}
 	if d.Root == nil {
 		slog.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
 			dagrun.DagId)

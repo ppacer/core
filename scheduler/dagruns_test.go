@@ -37,7 +37,8 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 
 	currentTime := startTs.Add(time.Duration(dagRuns)*time.Hour + 45*time.Minute)
 	nextSchedulesMap := make(map[dag.Id]*time.Time)
-	updateNextSchedules(ctx, []dag.Dag{d}, currentTime, c, nextSchedulesMap)
+	reg := dag.Registry{d.Id: d}
+	updateNextSchedules(ctx, reg, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 1 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -80,7 +81,8 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 
 	currentTime := time.Date(2023, time.October, 10, 10, 0, 0, 0, time.UTC)
 	nextSchedulesMap := make(map[dag.Id]*time.Time)
-	updateNextSchedules(ctx, []dag.Dag{d}, currentTime, c, nextSchedulesMap)
+	reg := dag.Registry{d.Id: d}
+	updateNextSchedules(ctx, reg, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 1 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -125,7 +127,12 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 
 	currentTime := start.Add(5 * time.Minute)
 	nextSchedulesMap := make(map[dag.Id]*time.Time)
-	updateNextSchedules(ctx, []dag.Dag{d1, d2, d3}, currentTime, c, nextSchedulesMap)
+	reg := dag.Registry{
+		d1.Id: d1,
+		d2.Id: d2,
+		d3.Id: d3,
+	}
+	updateNextSchedules(ctx, reg, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 3 {
 		t.Errorf("Expected to got next schedule for single DAG, got for %d",
@@ -158,7 +165,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	}
 	dagNumber := 100
 	ctx := context.Background()
-	dags := make([]dag.Dag, 0, dagNumber)
+	dags := make(dag.Registry)
 	attr := dag.Attr{}
 
 	for i := 0; i < dagNumber; i++ {
@@ -169,7 +176,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 			Start:    start,
 		}
 		d := emptyDag(fmt.Sprintf("d_%d", i), &sched, attr)
-		dags = append(dags, d)
+		dags[d.Id] = d
 	}
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)
@@ -207,7 +214,8 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)
 	nextSchedulesMap := make(map[dag.Id]*time.Time)
-	updateNextSchedules(ctx, []dag.Dag{d1, d2}, currentTime, c, nextSchedulesMap)
+	reg := dag.Registry{d1.Id: d1, d2.Id: d2}
+	updateNextSchedules(ctx, reg, currentTime, c, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 2 {
 		t.Errorf("Expected to got next schedule for %d DAGs, got for %d", 2,
@@ -524,7 +532,7 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	// 8:00.
 	cfg := DefaultDagRunWatcherConfig
 	timeAfterRestart := time.Date(2023, time.November, 11, 12, 10, 0, 0, time.UTC)
-	trySchedule([]dag.Dag{d}, &queue, nextSchedules, timeAfterRestart, c, cfg)
+	trySchedule(dag.Registry{d.Id: d}, &queue, nextSchedules, timeAfterRestart, c, cfg)
 
 	if len(nextSchedules) < 1 {
 		t.Error("Expected at least one entry in nextSchedules, got 0")

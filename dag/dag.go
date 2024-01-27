@@ -45,6 +45,9 @@ type Dag struct {
 	Root     *Node
 }
 
+// DAG string identifier.
+type Id string
+
 // Attr represents additional attributes and parameters about Dag and its
 // scheduling. This object is stored in the database as single value by
 // serializing it to JSON.
@@ -54,6 +57,9 @@ type Attr struct {
 	CatchUp bool     `json:"catchUp"`
 	Tags    []string `json:"tags"`
 }
+
+// Registry for DAGs.
+type Registry map[Id]Dag
 
 // New creates new Dag instance for given DAG identifier.
 func New(id Id) *Dag {
