@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -27,6 +28,9 @@ type Scheduler struct {
 	dbClient *db.Client
 	config   Config
 	queues   Queues
+
+	sync.Mutex
+	state State
 }
 
 // New returns new instance of Scheduler. Scheduler needs database client,
@@ -39,6 +43,7 @@ func New(dbClient *db.Client, queues Queues, config Config) *Scheduler {
 		dbClient: dbClient,
 		config:   config,
 		queues:   queues,
+		state:    StateStarted,
 	}
 }
 
@@ -51,6 +56,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
+	s.setState(StateSynchronizing)
 	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.config)
 	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.config)
 	if cacheSyncErr != nil {
@@ -70,10 +76,9 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 		Config:      s.config.TaskSchedulerConfig,
 	}
 
+	s.setState(StateRunning)
 	go func() {
 		// Running in the background dag run watcher
-		// TODO(dskrzypiec): Probably move it as Start parameter (dags
-		// []dag.Dag).
 		dagRunWatcher.Watch(dags)
 	}()
 
@@ -88,9 +93,37 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	return mux
 }
 
+// Changes Scheduler state.
+func (s *Scheduler) setState(newState State) {
+	s.Lock()
+	defer s.Unlock()
+	s.state = newState
+}
+
+// Register HTTP server endpoints for the Scheduler.
 func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
+	mux.HandleFunc(getStateEndpoint, s.currentState)
 	mux.HandleFunc(getTaskEndpoint, ts.popTask)
 	mux.HandleFunc(upsertTaskStatusEndpoint, ts.upsertTaskStatus)
+}
+
+// HTTP handler for getting the current Scheduler State.
+func (s *Scheduler) currentState(w http.ResponseWriter, _ *http.Request) {
+	s.Lock()
+	state := s.state
+	s.Unlock()
+
+	forJson := struct {
+		StateString string `json:"state"`
+	}{state.String()}
+
+	stateJson, jsonErr := json.Marshal(forJson)
+	if jsonErr != nil {
+		http.Error(w, jsonErr.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(stateJson))
 }
 
 // HTTP handler for popping dag run task from the queue.
@@ -169,4 +202,42 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 	}
 	slog.Debug("Updated task status", "dagruntask", drt, "status", status,
 		"duration", time.Since(start))
+}
+
+// State for representing current Scheduler state.
+type State int
+
+const (
+	StateStarted State = iota
+	StateSynchronizing
+	StateRunning
+	StateStopping
+	StateStopped
+)
+
+// String serializes State to its upper case string.
+func (s State) String() string {
+	return [...]string{
+		"STARTED",
+		"SYNCHRONIZING",
+		"RUNNING",
+		"STOPPING",
+		"STOPPED",
+	}[s]
+}
+
+// ParseState parses State based on given string. If that string does not match
+// any State, then non-nil error is returned. State strings are case-sensitive.
+func ParseState(s string) (State, error) {
+	states := map[string]State{
+		"STARTED":       StateStarted,
+		"SYNCHRONIZING": StateSynchronizing,
+		"RUNNING":       StateRunning,
+		"STOPPING":      StateStopping,
+		"STOPPED":       StateStopped,
+	}
+	if state, ok := states[s]; ok {
+		return state, nil
+	}
+	return 0, fmt.Errorf("invalid Scheduler State: %s", s)
 }

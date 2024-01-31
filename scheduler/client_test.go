@@ -241,6 +241,24 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 	}
 }
 
+func TestClientGetStateSimple(t *testing.T) {
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+
+	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedState, err := schedClient.GetState()
+	if err != nil {
+		t.Errorf("Error when getting scheduler state: %s", err.Error())
+	}
+	if schedState != StateStarted && schedState != StateSynchronizing && schedState != StateRunning {
+		t.Errorf("Got unexpected Scheduler State: %s", schedState.String())
+	}
+}
+
 func taskToExecEqualsDRT(
 	task models.TaskToExec, expectedDrt DagRunTask, t *testing.T,
 ) {

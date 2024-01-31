@@ -20,6 +20,7 @@ import (
 
 const (
 	getTaskEndpoint          = "/dag/task/pop"
+	getStateEndpoint         = "/state"
 	upsertTaskStatusEndpoint = "/dag/task/update"
 )
 
@@ -120,6 +121,29 @@ func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus) 
 	return nil
 }
 
+// GetState gets the current Scheduler state.
+func (c *Client) GetState() (State, error) {
+	resp, err := c.httpClient.Get(c.getStateUrl())
+	if err != nil {
+		return 0, fmt.Errorf("error while making HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, rErr := io.ReadAll(resp.Body)
+	if rErr != nil {
+		slog.Error("Could not read GetTask response body", "err", rErr)
+		return 0, rErr
+	}
+
+	var stateJson struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(body, &stateJson); err != nil {
+		return 0, fmt.Errorf("error while decoding JSON response: %w", err)
+	}
+	return ParseState(stateJson.State)
+}
+
 // Stop stops the Scheduler.
 func (c *Client) Stop() error {
 	// TODO
@@ -128,6 +152,10 @@ func (c *Client) Stop() error {
 
 func (c *Client) getTaskUrl() string {
 	return fmt.Sprintf("%s%s", c.schedulerUrl, getTaskEndpoint)
+}
+
+func (c *Client) getStateUrl() string {
+	return fmt.Sprintf("%s%s", c.schedulerUrl, getStateEndpoint)
 }
 
 func (c *Client) getUpdateTaskStatusUrl() string {
