@@ -85,19 +85,19 @@ func executeTask(
 ) {
 	defer func() {
 		if r := recover(); r != nil {
-			schedClient.UpdateTaskStatus(tte, dag.TaskFailed.String())
+			schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
 			slog.Error("Recovered from panic:", "err", r, "stack",
 				string(debug.Stack()))
 		}
 	}()
-	uErr := schedClient.UpdateTaskStatus(tte, dag.TaskRunning.String())
+	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskRunning)
 	if uErr != nil {
 		slog.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskRunning.String(), "err", uErr.Error())
 	}
 	task.Execute()
 	slog.Info("Finished executing task", "taskToExec", tte)
-	uErr = schedClient.UpdateTaskStatus(tte, dag.TaskSuccess.String())
+	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
 	if uErr != nil {
 		slog.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskSuccess.String(), "err", uErr.Error())

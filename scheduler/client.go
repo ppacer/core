@@ -13,13 +13,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
 )
 
 const (
 	getTaskEndpoint          = "/dag/task/pop"
-	updateTaskStatusEndpoint = "/dag/task/update"
+	upsertTaskStatusEndpoint = "/dag/task/update"
 )
 
 // Client provides API for interacting with Scheduler.
@@ -78,16 +79,18 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 	return taskToExec, nil
 }
 
-func (c *Client) UpdateTaskStatus(
-	tte models.TaskToExec, status string,
-) error {
+// UpsertTaskStatus either updates existing DAG run task status or inserts new
+// one.
+func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus) error {
 	start := time.Now()
-	slog.Debug("Start updating task status", "taskToExec", tte, "status", status)
+	statusStr := status.String()
+	slog.Debug("Start updating task status", "taskToExec", tte, "status",
+		statusStr)
 	drts := models.DagRunTaskStatus{
 		DagId:  tte.DagId,
 		ExecTs: tte.ExecTs,
 		TaskId: tte.TaskId,
-		Status: status,
+		Status: statusStr,
 	}
 	drtsJson, jErr := json.Marshal(drts)
 	if jErr != nil {
@@ -100,20 +103,26 @@ func (c *Client) UpdateTaskStatus(
 	)
 	if postErr != nil {
 		return fmt.Errorf("could not do POST %s request: %s",
-			updateTaskStatusEndpoint, postErr)
+			upsertTaskStatusEndpoint, postErr)
 	}
 	defer resp.Body.Close()
 	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
 		return fmt.Errorf("cannot read POST %s response body: %s",
-			updateTaskStatusEndpoint, rErr.Error())
+			upsertTaskStatusEndpoint, rErr.Error())
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("error with status %s for POST %s: %s",
-			resp.Status, updateTaskStatusEndpoint, string(body))
+			resp.Status, upsertTaskStatusEndpoint, string(body))
 	}
 	slog.Debug("Updated task status", "taskToExec", tte, "status", status,
 		"duration", time.Since(start))
+	return nil
+}
+
+// Stop stops the Scheduler.
+func (c *Client) Stop() error {
+	// TODO
 	return nil
 }
 
@@ -122,5 +131,5 @@ func (c *Client) getTaskUrl() string {
 }
 
 func (c *Client) getUpdateTaskStatusUrl() string {
-	return fmt.Sprintf("%s%s", c.schedulerUrl, updateTaskStatusEndpoint)
+	return fmt.Sprintf("%s%s", c.schedulerUrl, upsertTaskStatusEndpoint)
 }

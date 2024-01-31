@@ -90,7 +90,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 
 func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	mux.HandleFunc(getTaskEndpoint, ts.popTask)
-	mux.HandleFunc(updateTaskStatusEndpoint, ts.updateTaskStatus)
+	mux.HandleFunc(upsertTaskStatusEndpoint, ts.upsertTaskStatus)
 }
 
 // HTTP handler for popping dag run task from the queue.
@@ -125,7 +125,7 @@ func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Updates task status in the task cache and the database.
-func (ts *TaskScheduler) updateTaskStatus(w http.ResponseWriter, r *http.Request) {
+func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	if r.Method != "POST" {
 		http.Error(w, "Only POST requests are allowed",
