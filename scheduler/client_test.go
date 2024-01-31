@@ -5,6 +5,8 @@
 package scheduler
 
 import (
+	"context"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -19,7 +21,10 @@ import (
 func TestClientGetTaskEmptyDb(t *testing.T) {
 	cfg := DefaultConfig
 	dags := dag.Registry{}
-	testServer := schedulerTestServer(dags, DefaultQueues(cfg), cfg, t)
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer testServer.Close()
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 
 	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
 	_, err := schedClient.GetTask()
@@ -35,7 +40,10 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 	cfg := DefaultConfig
 	queues := DefaultQueues(cfg)
 	dags := dag.Registry{}
-	testServer := schedulerTestServer(dags, queues, cfg, t)
+	scheduler := schedulerWithSqlite(queues, cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
 
 	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
 
@@ -45,12 +53,21 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 		t.Errorf("Cannot put new DAG run task onto the queue: %s",
 			putErr.Error())
 	}
+	if queues.DagRunTasks.Size() != 1 {
+		t.Errorf("Expected 1 task on the queue, got: %d",
+			queues.DagRunTasks.Size())
+	}
 
 	task, err := schedClient.GetTask()
 	if err != nil {
 		t.Errorf("Unexpected error for GetTask(): %s", err.Error())
 	}
 	taskToExecEqualsDRT(task, drt, t)
+
+	if queues.DagRunTasks.Size() != 0 {
+		t.Errorf("Expected 0 task on the queue, got: %d",
+			queues.DagRunTasks.Size())
+	}
 
 	_, err2 := schedClient.GetTask()
 	if err2 == nil {
@@ -65,7 +82,10 @@ func TestClientGetTaskMockMany(t *testing.T) {
 	cfg := DefaultConfig
 	queues := DefaultQueues(cfg)
 	dags := dag.Registry{}
-	testServer := schedulerTestServer(dags, queues, cfg, t)
+	scheduler := schedulerWithSqlite(queues, cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
 	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
 
 	dagId := dag.Id("mock_dag")
@@ -85,6 +105,11 @@ func TestClientGetTaskMockMany(t *testing.T) {
 				putErr.Error())
 		}
 	}
+	size := queues.DagRunTasks.Size()
+	if size != len(data) {
+		t.Errorf("At this point DagrunTask queue should have %d elements, got: %d",
+			len(data), size)
+	}
 
 	// Get and verify tasks
 	for _, drt := range data {
@@ -96,7 +121,125 @@ func TestClientGetTaskMockMany(t *testing.T) {
 	}
 }
 
-// TODO: Add tests for UpdateTaskStatus
+func TestClientUpsertTaskEmptyDb(t *testing.T) {
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+
+	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	tte := models.TaskToExec{
+		DagId:  "mock_dag",
+		ExecTs: timeutils.ToString(time.Now()),
+		TaskId: "task1",
+	}
+	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
+	if uErr != nil {
+		t.Errorf("Cannot insert new DAG run task on empty dagruntasks table: %s",
+			uErr.Error())
+	}
+	tasksInDb := scheduler.dbClient.Count("dagruntasks")
+	if tasksInDb != 1 {
+		t.Errorf("Expected 1 row in dagruntasks table, got: %d", tasksInDb)
+	}
+}
+
+func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+
+	ctx := context.Background()
+	const dagId = "mock_dag"
+	execTs := timeutils.ToString(time.Now())
+	taskIds := []string{
+		"start",
+		"task1",
+		"task2",
+		"end",
+	}
+	initStatus := dag.TaskScheduled.String()
+	newStatus := dag.TaskSuccess
+
+	// Insert tasks with SCHEDULED status
+	for _, taskId := range taskIds {
+		iErr := scheduler.dbClient.InsertDagRunTask(ctx, dagId, execTs, taskId,
+			initStatus)
+		if iErr != nil {
+			t.Errorf("Cannot insert DAG run task into DB: %s", iErr.Error())
+		}
+	}
+
+	// Update task statuses to SUCCESS
+	for _, taskId := range taskIds {
+		tte := newTaskToExec(dagId, execTs, taskId)
+		uErr := schedClient.UpsertTaskStatus(tte, newStatus)
+		if uErr != nil {
+			t.Errorf("Error while updating task status by the client: %s",
+				uErr.Error())
+		}
+	}
+
+	// Test statuses in the database
+	where := fmt.Sprintf("Status = '%s'", newStatus.String())
+	cnt := scheduler.dbClient.CountWhere("dagruntasks", where)
+	if cnt != len(taskIds) {
+		t.Errorf("Expected %d tasks in dagruntasks table with %s status, got: %d",
+			len(taskIds), newStatus, cnt)
+	}
+}
+
+func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+
+	const dagId = "mock_dag"
+	execTs := time.Now()
+	execTsStr := timeutils.ToString(execTs)
+	const taskId = "mock_task_id"
+	tte := newTaskToExec(dagId, execTsStr, taskId)
+
+	u1Err := schedClient.UpsertTaskStatus(tte, dag.TaskScheduled)
+	if u1Err != nil {
+		t.Errorf("Cannot insert new DAG run task %+v: %s", tte, u1Err.Error())
+	}
+
+	statuses := []dag.TaskStatus{
+		dag.TaskRunning,
+		dag.TaskNoStatus,
+		dag.TaskSuccess,
+	}
+
+	prev := readDagRunTaskFromDb(scheduler.dbClient, dagId, execTsStr, taskId, t)
+	for _, status := range statuses {
+		uErr := schedClient.UpsertTaskStatus(tte, status)
+		if uErr != nil {
+			t.Errorf("Error while upserting task %+v: %s", tte, uErr.Error())
+		}
+		act := readDagRunTaskFromDb(scheduler.dbClient, dagId, execTsStr, taskId, t)
+		if act.Status != status.String() {
+			t.Errorf("Expected status %s after the update, got: %s",
+				status.String(), act.Status)
+		}
+		prevUpdateTs := timeutils.FromStringMust(prev.StatusUpdateTs)
+		actUpdateTs := timeutils.FromStringMust(act.StatusUpdateTs)
+		if actUpdateTs.Before(prevUpdateTs) {
+			t.Errorf("Current update timestamp %+v should be after the last one %+v",
+				actUpdateTs, prevUpdateTs)
+		}
+	}
+}
 
 func taskToExecEqualsDRT(
 	task models.TaskToExec, expectedDrt DagRunTask, t *testing.T,
@@ -115,19 +258,29 @@ func taskToExecEqualsDRT(
 	}
 }
 
-// Initialize test HTTP server for running Scheduler.
-func schedulerTestServer(
-	dags dag.Registry, queues Queues, config Config, t *testing.T,
-) *httptest.Server {
+func newTaskToExec(dagId, execTs, taskId string) models.TaskToExec {
+	return models.TaskToExec{
+		DagId:  dagId,
+		ExecTs: execTs,
+		TaskId: taskId,
+	}
+}
+
+func readDagRunTaskFromDb(
+	dbClient *db.Client, dagId, execTs, taskId string, t *testing.T,
+) db.DagRunTask {
 	t.Helper()
-	scheduler := schedulerTmp(queues, config, t)
-	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
-	handler := scheduler.Start(dags)
-	return httptest.NewServer(handler)
+	ctx := context.Background()
+	drt, dbErr := dbClient.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	if dbErr != nil {
+		t.Errorf("Cannot read DAG run task (%s, %s, %s) from DB: %s",
+			dagId, execTs, taskId, dbErr.Error())
+	}
+	return drt
 }
 
 // Initialize Scheduler for tests.
-func schedulerTmp(queues Queues, config Config, t *testing.T) *Scheduler {
+func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler {
 	t.Helper()
 	dbClient, err := db.NewSqliteTmpClient()
 	if err != nil {
