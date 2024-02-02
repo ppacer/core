@@ -257,6 +257,17 @@ func TestClientGetStateSimple(t *testing.T) {
 	if schedState != StateStarted && schedState != StateSynchronizing && schedState != StateRunning {
 		t.Errorf("Got unexpected Scheduler State: %s", schedState.String())
 	}
+
+	scheduler.setState(StateStopping)
+	schedState2, err2 := schedClient.GetState()
+	if err2 != nil {
+		t.Errorf("Error when getting scheduler state for the second time: %s",
+			err2.Error())
+	}
+	if schedState2 != StateStopping {
+		t.Errorf("Expected Scheduled State %s, got: %s", StateStopping.String(),
+			schedState2.String())
+	}
 }
 
 func taskToExecEqualsDRT(

@@ -29,17 +29,19 @@ type DagRun struct {
 //
 // If you use Scheduler, you probably don't need to use this object directly.
 type DagRunWatcher struct {
-	queue    ds.Queue[DagRun]
-	dbClient *db.Client
-	config   DagRunWatcherConfig
+	queue              ds.Queue[DagRun]
+	dbClient           *db.Client
+	schedulerStateFunc GetStateFunc
+	config             DagRunWatcherConfig
 }
 
 // NewDagRunWatcher creates new instance of DagRunWatcher.
-func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, config DagRunWatcherConfig) *DagRunWatcher {
+func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, stateFunc GetStateFunc, config DagRunWatcherConfig) *DagRunWatcher {
 	return &DagRunWatcher{
-		queue:    queue,
-		dbClient: dbClient,
-		config:   config,
+		queue:              queue,
+		dbClient:           dbClient,
+		schedulerStateFunc: stateFunc,
+		config:             config,
 	}
 }
 
@@ -57,6 +59,10 @@ func (drw *DagRunWatcher) Watch(dags dag.Registry) {
 	nextSchedules := make(map[dag.Id]*time.Time)
 	updateNextSchedules(ctx, dags, time.Now(), drw.dbClient, nextSchedules)
 	for {
+		if drw.schedulerStateFunc() == StateStopping {
+			slog.Warn("Scheduler is stopping. DagRunWatcher will not schedule other runs.")
+			return
+		}
 		now := time.Now()
 		trySchedule(dags, drw.queue, nextSchedules, now, drw.dbClient, drw.config)
 		time.Sleep(drw.config.WatchInterval)

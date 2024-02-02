@@ -65,7 +65,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	}
 
 	dagRunWatcher := NewDagRunWatcher(
-		s.queues.DagRuns, s.dbClient, s.config.DagRunWatcherConfig,
+		s.queues.DagRuns, s.dbClient, s.getState, s.config.DagRunWatcherConfig,
 	)
 
 	taskScheduler := TaskScheduler{
@@ -91,6 +91,13 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	s.registerEndpoints(mux, &taskScheduler)
 
 	return mux
+}
+
+// Gets Scheduler current state.
+func (s *Scheduler) getState() State {
+	s.Lock()
+	defer s.Unlock()
+	return s.state
 }
 
 // Changes Scheduler state.
@@ -206,6 +213,9 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 
 // State for representing current Scheduler state.
 type State int
+
+// Signature for function which return current Scheduler state.
+type GetStateFunc func() State
 
 const (
 	StateStarted State = iota
