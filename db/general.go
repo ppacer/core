@@ -5,6 +5,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -46,4 +47,20 @@ func (c *Client) CountWhere(table, where string) int {
 	slog.Debug("Finished COUNT(*) query", "table", table, "where", where,
 		"duration", time.Since(start))
 	return count
+}
+
+func (c *Client) singleInt64(ctx context.Context, cntQuery string, args ...any) (int64, error) {
+	start := time.Now()
+	slog.Debug("Start single value query", "query", cntQuery, "args", args)
+
+	row := c.dbConn.QueryRowContext(ctx, cntQuery, args...)
+	var count int64
+	err := row.Scan(&count)
+	if err != nil {
+		slog.Error("Cannot execute count query", "query", cntQuery, "args", args)
+		return -1, err
+	}
+	slog.Debug("Finished single value query", "query", cntQuery, "args", args,
+		"duration", time.Since(start))
+	return count, nil
 }

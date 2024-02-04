@@ -30,9 +30,7 @@ type DagRunTask struct {
 }
 
 // Reads DAG run tasks information from dagruntasks table for given DAG run.
-func (c *Client) ReadDagRunTasks(
-	ctx context.Context, dagId, execTs string,
-) ([]DagRunTask, error) {
+func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]DagRunTask, error) {
 	start := time.Now()
 	slog.Debug("Start reading dag run tasks", "dagId", dagId, "execTs", execTs)
 	dagruntasks := make([]DagRunTask, 0, 100)
@@ -68,9 +66,7 @@ func (c *Client) ReadDagRunTasks(
 }
 
 // Inserts new DagRunTask with default status SCHEDULED.
-func (c *Client) InsertDagRunTask(
-	ctx context.Context, dagId, execTs, taskId, status string,
-) error {
+func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId, status string) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(start)
 	slog.Debug("Start inserting new dag run task", "dagId", dagId, "execTs",
@@ -90,10 +86,7 @@ func (c *Client) InsertDagRunTask(
 }
 
 // ReadDagRunTask reads information about given taskId in given dag run.
-func (c *Client) ReadDagRunTask(
-	ctx context.Context,
-	dagId, execTs, taskId string,
-) (DagRunTask, error) {
+func (c *Client) ReadDagRunTask(ctx context.Context, dagId, execTs, taskId string) (DagRunTask, error) {
 	start := time.Now()
 	slog.Debug("Start reading single dag run task", "dagId", dagId, "execTs",
 		execTs, "taskId", taskId)
@@ -126,9 +119,7 @@ func (c *Client) ReadDagRunTask(
 }
 
 // Updates dagruntask status for given dag run task.
-func (c *Client) UpdateDagRunTaskStatus(
-	ctx context.Context, dagId, execTs, taskId, status string,
-) error {
+func (c *Client) UpdateDagRunTaskStatus(ctx context.Context, dagId, execTs, taskId, status string) error {
 	start := time.Now()
 	updateTs := timeutils.ToString(time.Now())
 	slog.Debug("Start updating dag run task status", "dagId", dagId, "execTs",
@@ -192,6 +183,17 @@ func (c *Client) ReadDagRunTasksNotFinished(ctx context.Context) ([]DagRunTask, 
 	slog.Debug("Finished reading not finished dag run tasks", "duration",
 		time.Since(start))
 	return dagruntasks, nil
+}
+
+// RunningTasksNum returns number of currently running tasks. That means rows
+// in dagruntasks table with status 'RUNNING'.
+func (c *Client) RunningTasksNum(ctx context.Context) (int, error) {
+	q := "SELECT COUNT(*) FROM dagruntasks WHERE Status=?"
+	rows, err := c.singleInt64(ctx, q, statusRunning)
+	if err != nil {
+		return -1, err
+	}
+	return int(rows), nil
 }
 
 func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {

@@ -32,6 +32,7 @@ const (
 	statusScheduled       = "SCHEDULED"
 	statusSuccess         = "SUCCESS"
 	statusFailed          = "FAILED"
+	statusRunning         = "RUNNING"
 )
 
 // ReadDagRuns reads topN latest dag runs for given DAG ID.

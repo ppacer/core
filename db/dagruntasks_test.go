@@ -257,6 +257,141 @@ func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
 	}
 }
 
+func TestRunningTasksNumEmpty(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	ctx := context.Background()
+	num, dErr := c.RunningTasksNum(ctx)
+	if dErr != nil {
+		t.Errorf("Error while RunningTasksNum: %s", dErr.Error())
+	}
+	if num != 0 {
+		t.Errorf("Expected 0 running tasks on empty database, got: %d", num)
+	}
+}
+
+func TestRunningTasksNumAllFinished(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dags := []string{"mock_dag", "mock_dag_2"}
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+
+	data := []struct {
+		dagId  string
+		taskId string
+		status string
+	}{
+		{dags[0], "task_1", statusSuccess},
+		{dags[0], "task_2", statusSuccess},
+		{dags[0], "task_3", statusSuccess},
+		{dags[1], "task_1", statusSuccess},
+		{dags[1], "task_2", statusFailed},
+	}
+
+	for _, d := range data {
+		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, d.status, t)
+	}
+
+	num, dErr := c.RunningTasksNum(ctx)
+	if dErr != nil {
+		t.Errorf("Error while RunningTasksNum: %s", dErr.Error())
+	}
+	if num != 0 {
+		t.Errorf("Expected 0 running tasks, but got %d", num)
+	}
+}
+
+func TestRunningTasksNumWithRunningTasks(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dags := []string{"mock_dag", "mock_dag_2"}
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+
+	data := []struct {
+		dagId  string
+		taskId string
+		status string
+	}{
+		{dags[0], "task_1", statusSuccess},
+		{dags[0], "task_2", statusRunning},
+		{dags[0], "task_3", statusRunning},
+		{dags[1], "task_1", statusSuccess},
+		{dags[1], "task_2", statusRunning},
+	}
+
+	for _, d := range data {
+		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, d.status, t)
+	}
+
+	num, dErr := c.RunningTasksNum(ctx)
+	if dErr != nil {
+		t.Errorf("Error while RunningTasksNum: %s", dErr.Error())
+	}
+	if num != 3 {
+		t.Errorf("Expected 3 running tasks, got: %d", num)
+	}
+}
+
+func TestRunningTasksNumWithUpdate(t *testing.T) {
+	c, err := NewSqliteTmpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	ctx := context.Background()
+	ts := timeutils.ToString(time.Now())
+
+	data := []struct {
+		taskId string
+		status string
+	}{
+		{"task_1", statusSuccess},
+		{"task_2", statusSuccess},
+		{"task_3", statusRunning},
+	}
+
+	for _, d := range data {
+		insertDagRunTaskStatus(c, ctx, dagId, ts, d.taskId, d.status, t)
+	}
+
+	num1, dErr := c.RunningTasksNum(ctx)
+	if dErr != nil {
+		t.Errorf("Error while RunningTasksNum: %s", dErr.Error())
+	}
+	if num1 != 1 {
+		t.Errorf("Expected 1 running task, got: %d", num1)
+	}
+
+	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, ts, "task_3", statusSuccess)
+	if uErr != nil {
+		t.Errorf("Error when updating DAG run task status: %s", uErr.Error())
+	}
+
+	num2, dErr2 := c.RunningTasksNum(ctx)
+	if dErr2 != nil {
+		t.Errorf("Error while RunningTasksNum: %s", dErr.Error())
+	}
+	if num2 != 0 {
+		t.Errorf("Expected 0 running tasks, got: %d", num2)
+	}
+}
+
 func insertDagRunTask(
 	c *Client,
 	ctx context.Context,
@@ -268,5 +403,15 @@ func insertDagRunTask(
 	)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
+	}
+}
+
+func insertDagRunTaskStatus(
+	c *Client, ctx context.Context, dagId, execTs, taskId, status string,
+	t *testing.T,
+) {
+	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, status)
+	if iErr != nil {
+		t.Errorf("Error while inserting dag run task: %s", iErr.Error())
 	}
 }
