@@ -217,9 +217,9 @@ func (ts *TaskScheduler) scheduleDagTasks(
 }
 
 // Waits for currently running tasks or timeouts.
-func (ts *TaskScheduler) waitForRunningTasks(pollInteral, timeout time.Duration) {
+func (ts *TaskScheduler) waitForRunningTasks(pollInterval, timeout time.Duration) {
 	ctx := context.TODO()
-	ticker := time.NewTicker(pollInteral)
+	ticker := time.NewTicker(pollInterval)
 	timeoutChan := time.After(timeout)
 	for {
 		select {
