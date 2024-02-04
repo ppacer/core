@@ -35,11 +35,12 @@ type DagRunTaskState struct {
 //
 // If you use Scheduler, you probably don't need to use this object directly.
 type TaskScheduler struct {
-	DbClient    *db.Client
-	DagRunQueue ds.Queue[DagRun]
-	TaskQueue   ds.Queue[DagRunTask]
-	TaskCache   ds.Cache[DagRunTask, DagRunTaskState]
-	Config      TaskSchedulerConfig
+	DbClient           *db.Client
+	DagRunQueue        ds.Queue[DagRun]
+	TaskQueue          ds.Queue[DagRunTask]
+	TaskCache          ds.Cache[DagRunTask, DagRunTaskState]
+	Config             TaskSchedulerConfig
+	SchedulerStateFunc GetStateFunc
 }
 
 type taskSchedulerError struct {
@@ -61,6 +62,12 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 			slog.Error("Error while scheduling new tasks", "dagId",
 				string(err.DagId), "execTs", err.ExecTs, "err", err.Err)
 		default:
+		}
+		if ts.SchedulerStateFunc() == StateStopping {
+			slog.Warn("Scheduler is stopping. TaskScheduler will not schedule other tasks")
+			slog.Warn("Waiting for currently running tasks...")
+			ts.waitForRunningTasks(1*time.Second, 1*time.Minute)
+			return
 		}
 		if ts.DagRunQueue.Size() == 0 {
 			// DagRunQueue is empty, we wait for a bit and then we'll try again
@@ -178,6 +185,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 		return
 	}
 
+	defer ts.cleanTaskCache(dagrun, d.Flatten())
 	sharedState := newDagRunSharedState(d.TaskParents())
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -187,6 +195,10 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	// Check whenever any task has failed and if so, then mark downstream tasks
 	// with status UPSTREAM_FAILED.
 	ts.checkFailsAndMarkDownstream(ctx, dagrun, d.Root, sharedState)
+
+	if ts.SchedulerStateFunc() == StateStopping {
+		return
+	}
 
 	// At this point all tasks has been scheduled, but not necessarily done.
 	tasks := d.Flatten()
@@ -202,7 +214,29 @@ func (ts *TaskScheduler) scheduleDagTasks(
 		// TODO(dskrzypiec): should we add retries? Probably...
 		sendTaskSchedulerErr(errorsChan, dagrun, stateUpdateErr)
 	}
-	ts.cleanTaskCache(dagrun, d.Flatten())
+}
+
+// Waits for currently running tasks or timeouts.
+func (ts *TaskScheduler) waitForRunningTasks(pollInteral, timeout time.Duration) {
+	ctx := context.TODO()
+	ticker := time.NewTicker(pollInteral)
+	timeoutChan := time.After(timeout)
+	for {
+		select {
+		case <-ticker.C:
+			runningTasks, err := ts.DbClient.RunningTasksNum(ctx)
+			if err != nil {
+				slog.Error("Error while checking DAG run running tasks", "err",
+					err)
+			}
+			if runningTasks == 0 {
+				return
+			}
+		case <-timeoutChan:
+			slog.Error("Time out! No longer waiting for running tasks before quiting scheduler")
+			return
+		}
+	}
 }
 
 // Type dagRunSharedState represents shared state for goroutines spinned within
@@ -279,7 +313,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 			// appropriate status
 		default:
 		}
-		if alreadyFinished {
+		if alreadyFinished || ts.SchedulerStateFunc() == StateStopping {
 			break
 		}
 

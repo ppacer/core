@@ -69,11 +69,12 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	)
 
 	taskScheduler := TaskScheduler{
-		DbClient:    s.dbClient,
-		DagRunQueue: s.queues.DagRuns,
-		TaskQueue:   s.queues.DagRunTasks,
-		TaskCache:   taskCache,
-		Config:      s.config.TaskSchedulerConfig,
+		DbClient:           s.dbClient,
+		DagRunQueue:        s.queues.DagRuns,
+		TaskQueue:          s.queues.DagRunTasks,
+		TaskCache:          taskCache,
+		Config:             s.config.TaskSchedulerConfig,
+		SchedulerStateFunc: s.getState,
 	}
 
 	s.setState(StateRunning)
