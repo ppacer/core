@@ -2,6 +2,7 @@ package e2etests
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ppacer/core/dag"
 )
@@ -24,16 +25,15 @@ func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	return d.Done()
 }
 
-func newLinkedListWriteToSliceDAG(
+func linkedListEmptyTasksDAG(
 	dagId dag.Id, size int, sched *dag.Schedule,
-) (dag.Dag, []string) {
-	data := make([]string, 0, 10)
-	t0 := writeToSliceTask{taskId: "task_0", data: data}
+) dag.Dag {
+	t0 := emptyTask{taskId: "task_0"}
 	s := dag.Node{Task: &t0}
 	prev := &s
 
 	for i := 1; i < size; i++ {
-		t := writeToSliceTask{taskId: fmt.Sprintf("task_%d", i), data: data}
+		t := emptyTask{taskId: fmt.Sprintf("task_%d", i)}
 		n := dag.Node{Task: &t}
 		prev.Next(&n)
 		prev = &n
@@ -43,5 +43,26 @@ func newLinkedListWriteToSliceDAG(
 	if sched != nil {
 		d.AddSchedule(*sched)
 	}
-	return d.Done(), data
+	return d.Done()
+}
+
+func linkedListWaitTasksDAG(
+	dagId dag.Id, size int, interval time.Duration, sched *dag.Schedule,
+) dag.Dag {
+	t0 := waitTask{taskId: "task_0", interval: interval}
+	s := dag.Node{Task: &t0}
+	prev := &s
+
+	for i := 1; i < size; i++ {
+		t := waitTask{taskId: fmt.Sprintf("task_%d", i), interval: interval}
+		n := dag.Node{Task: &t}
+		prev.Next(&n)
+		prev = &n
+	}
+
+	d := dag.New(dagId).AddRoot(&s)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
 }

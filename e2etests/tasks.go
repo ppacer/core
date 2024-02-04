@@ -1,6 +1,6 @@
 package e2etests
 
-import "sync"
+import "time"
 
 // Empty task with no action.
 type emptyTask struct {
@@ -10,17 +10,11 @@ type emptyTask struct {
 func (et emptyTask) Id() string { return et.taskId }
 func (et emptyTask) Execute()   {}
 
-// Task which writes messages to internal string slice.
-type writeToSliceTask struct {
-	taskId string
-	sync.Mutex
-	data []string
+// Task with just waiting action.
+type waitTask struct {
+	taskId   string
+	interval time.Duration
 }
 
-func (wst *writeToSliceTask) Id() string { return wst.taskId }
-
-func (wst *writeToSliceTask) Execute() {
-	wst.Lock()
-	defer wst.Unlock()
-	wst.data = append(wst.data, wst.taskId)
-}
+func (wt waitTask) Id() string { return wt.taskId }
+func (wt waitTask) Execute()   { time.Sleep(wt.interval) }

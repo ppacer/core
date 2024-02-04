@@ -13,14 +13,62 @@ import (
 	"github.com/ppacer/core/timeutils"
 )
 
-func TestSchedulerE2eSimpleDag(t *testing.T) {
-	cfg := scheduler.DefaultConfig
-	queues := scheduler.DefaultQueues(cfg)
+func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
 	dagId := dag.Id("mock_dag_1")
 	dags[dagId] = simple131DAG(dagId, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+}
+
+func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
+	dags := dag.Registry{}
+	dagId := dag.Id("mock_dag_1")
+	dags[dagId] = simple131DAG(dagId, nil)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+}
+
+func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_LL_1")
+	const llSize = 10
+	dags[dagId] = linkedListEmptyTasksDAG(dagId, llSize, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+}
+
+func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_LL_wait_1")
+	const llSize = 10
+	dags[dagId] = linkedListWaitTasksDAG(dagId, llSize, 1*time.Millisecond, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+}
+
+// This test runs end-to-end test (scheduler and executor run in separate
+// goroutines communicating via HTTP) for single DAG run.
+func testSchedulerE2eSingleDagRun(
+	dags dag.Registry, dr scheduler.DagRun, timeout time.Duration, t *testing.T,
+) {
+	t.Helper()
+	cfg := scheduler.DefaultConfig
+	queues := scheduler.DefaultQueues(cfg)
 
 	// Start scheduler
 	sched, dbClient := schedulerWithSqlite(queues, cfg, t)
@@ -35,10 +83,9 @@ func TestSchedulerE2eSimpleDag(t *testing.T) {
 	}()
 
 	// Schedule new DAG run
-	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
-	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	scheduleNewDagRun(dbClient, queues, dr, t)
 
+	// Wait for DAG run completion or timeout.
 	waitForDagRunCompletion(dbClient, dr, 10*time.Millisecond, 3*time.Second, t)
 }
 
@@ -46,6 +93,7 @@ func waitForDagRunCompletion(
 	dbClient *db.Client, dr scheduler.DagRun, pollInterval, timeout time.Duration,
 	t *testing.T,
 ) {
+	t.Helper()
 	ctx := context.TODO()
 	ticker := time.NewTicker(pollInterval)
 	timeoutChan := time.After(timeout)
@@ -79,6 +127,7 @@ func scheduleNewDagRun(
 	dbClient *db.Client, queues scheduler.Queues, dr scheduler.DagRun,
 	t *testing.T,
 ) {
+	t.Helper()
 	ctx := context.Background()
 	_, iErr := dbClient.InsertDagRun(
 		ctx, string(dr.DagId), timeutils.ToString(dr.AtTime),
