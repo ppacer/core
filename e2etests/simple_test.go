@@ -61,10 +61,41 @@ func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
 	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
 }
 
+func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
+	dags := dag.Registry{}
+
+	// dag1
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_dag_1")
+	dags[dagId] = simple131DAG(dagId, &schedule)
+
+	// dag2
+	dagId2 := dag.Id("mock_LL_2")
+	const llSize = 10
+	dags[dagId2] = linkedListEmptyTasksDAG(dagId, llSize, &schedule)
+
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	drs := []scheduler.DagRun{
+		{DagId: dagId, AtTime: ts},
+		{DagId: dagId2, AtTime: ts},
+	}
+
+	testSchedulerE2eManyDagRuns(dags, drs, 3*time.Second, t)
+}
+
 // This test runs end-to-end test (scheduler and executor run in separate
 // goroutines communicating via HTTP) for single DAG run.
 func testSchedulerE2eSingleDagRun(
 	dags dag.Registry, dr scheduler.DagRun, timeout time.Duration, t *testing.T,
+) {
+	t.Helper()
+	drs := []scheduler.DagRun{dr}
+	testSchedulerE2eManyDagRuns(dags, drs, timeout, t)
+}
+
+func testSchedulerE2eManyDagRuns(
+	dags dag.Registry, drs []scheduler.DagRun, timeout time.Duration, t *testing.T,
 ) {
 	t.Helper()
 	cfg := scheduler.DefaultConfig
@@ -82,11 +113,16 @@ func testSchedulerE2eSingleDagRun(
 		executor.Start(dags)
 	}()
 
-	// Schedule new DAG run
-	scheduleNewDagRun(dbClient, queues, dr, t)
+	// Schedule new DAG runs
+	for _, dr := range drs {
+		scheduleNewDagRun(dbClient, queues, dr, t)
+	}
 
 	// Wait for DAG run completion or timeout.
-	waitForDagRunCompletion(dbClient, dr, 10*time.Millisecond, 3*time.Second, t)
+	const poll = 10 * time.Millisecond
+	for _, dr := range drs {
+		waitForDagRunCompletion(dbClient, dr, poll, timeout, t)
+	}
 }
 
 func waitForDagRunCompletion(
