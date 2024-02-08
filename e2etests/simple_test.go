@@ -125,6 +125,59 @@ func testSchedulerE2eManyDagRuns(
 	}
 }
 
+func TestSchedulerStopping(t *testing.T) {
+	cfg := scheduler.DefaultConfig
+	queues := scheduler.DefaultQueues(cfg)
+
+	const llSize = 1000
+	const dagId = "mock_dag"
+	dags := dag.Registry{}
+	dags[dagId] = linkedListEmptyTasksDAG(dagId, llSize, nil)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	// Start scheduler
+	sched, dbClient := schedulerWithSqlite(queues, cfg, t)
+	testServer := httptest.NewServer(sched.Start(dags))
+	defer testServer.Close()
+	defer db.CleanUpSqliteTmp(dbClient, t)
+
+	// Start executor
+	go func() {
+		executor := exec.New(testServer.URL, nil)
+		executor.Start(dags)
+	}()
+
+	// Schedule new DAG run
+	scheduleNewDagRun(dbClient, queues, dr, t)
+
+	// Check Scheduler status
+	clientCfg := scheduler.DefaultClientConfig
+	clientCfg.HttpClientTimeout = 1 * time.Second
+	schedClient := scheduler.NewClient(testServer.URL, nil, clientCfg)
+	state, cErr := schedClient.GetState()
+	if cErr != nil {
+		t.Errorf("Cannot get Scheduler state: %s", cErr.Error())
+	}
+	if state != scheduler.StateRunning {
+		t.Errorf("Expected Scheduler to be in state %s, got %s",
+			scheduler.StateRunning.String(), state.String())
+	}
+
+	time.Sleep(1 * time.Second)
+
+	// Stopping Scheduler
+	stopErr := schedClient.Stop()
+	if stopErr != nil {
+		t.Errorf("Error while stopping the Scheduler: %s", stopErr.Error())
+	}
+
+	_, cErr2 := schedClient.GetState()
+	if cErr2 == nil {
+		t.Error("Expected error while getting Scheduler state after it's been stopped, but got nil")
+	}
+}
+
 func waitForDagRunCompletion(
 	dbClient *db.Client, dr scheduler.DagRun, pollInterval, timeout time.Duration,
 	t *testing.T,

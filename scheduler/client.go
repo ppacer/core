@@ -20,8 +20,9 @@ import (
 
 const (
 	getTaskEndpoint          = "/dag/task/pop"
-	getStateEndpoint         = "/state"
 	upsertTaskStatusEndpoint = "/dag/task/update"
+	getStateEndpoint         = "/scheduler/state"
+	stopStateEndpoint        = "/scheduler/stop"
 )
 
 // Client provides API for interacting with Scheduler.
@@ -127,6 +128,10 @@ func (c *Client) GetState() (State, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error while making HTTP request: %w", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("got response with status %s (%d)", resp.Status,
+			resp.StatusCode)
+	}
 	defer resp.Body.Close()
 
 	body, rErr := io.ReadAll(resp.Body)
@@ -146,7 +151,14 @@ func (c *Client) GetState() (State, error) {
 
 // Stop stops the Scheduler.
 func (c *Client) Stop() error {
-	// TODO
+	resp, err := c.httpClient.Get(c.stopSchedulerUrl())
+	if err != nil {
+		return fmt.Errorf("error while making HTTP request: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("got unexpected status code: %s (%d)", resp.Status,
+			resp.StatusCode)
+	}
 	return nil
 }
 
@@ -156,6 +168,10 @@ func (c *Client) getTaskUrl() string {
 
 func (c *Client) getStateUrl() string {
 	return fmt.Sprintf("%s%s", c.schedulerUrl, getStateEndpoint)
+}
+
+func (c *Client) stopSchedulerUrl() string {
+	return fmt.Sprintf("%s%s", c.schedulerUrl, stopStateEndpoint)
 }
 
 func (c *Client) getUpdateTaskStatusUrl() string {

@@ -111,6 +111,7 @@ func (s *Scheduler) setState(newState State) {
 // Register HTTP server endpoints for the Scheduler.
 func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	mux.HandleFunc(getStateEndpoint, s.currentState)
+	mux.HandleFunc(stopStateEndpoint, s.stopHandler)
 	mux.HandleFunc(getTaskEndpoint, ts.popTask)
 	mux.HandleFunc(upsertTaskStatusEndpoint, ts.upsertTaskStatus)
 }
@@ -132,6 +133,14 @@ func (s *Scheduler) currentState(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(stateJson))
+}
+
+func (s *Scheduler) stopHandler(w http.ResponseWriter, _ *http.Request) {
+	go func() {
+		s.Lock()
+		s.setState(StateStopping)
+		s.Unlock()
+	}()
 }
 
 // HTTP handler for popping dag run task from the queue.
