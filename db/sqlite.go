@@ -22,6 +22,19 @@ import (
 // database file does not exist in given location, then empty SQLite database
 // with setup schema will be created.
 func NewSqliteClient(dbFilePath string) (*Client, error) {
+	return newSqliteClientForSchema(dbFilePath, setupSqliteSchema)
+}
+
+// Produces new Client for logs based on given connection string to SQLite
+// database. If database file does not exist in given location, then empty
+// SQLite database with setup schema will be created.
+func NewSqliteClientForLogs(dbFilePath string) (*Client, error) {
+	return newSqliteClientForSchema(dbFilePath, setupSqliteSchemaForLogs)
+}
+
+func newSqliteClientForSchema(
+	dbFilePath string, setupSchemaFunc func(*sql.DB) error,
+) (*Client, error) {
 	dbFilePathAbs, absErr := filepath.Abs(dbFilePath)
 	if absErr != nil {
 		slog.Error("Cannot get absolute path of database file", "dbFilePath",
@@ -43,7 +56,7 @@ func NewSqliteClient(dbFilePath string) (*Client, error) {
 			connString, dbErr)
 	}
 	if newDbCreated {
-		schemaErr := setupSqliteSchema(db)
+		schemaErr := setupSchemaFunc(db)
 		if schemaErr != nil {
 			db.Close()
 			return nil, fmt.Errorf("cannot setup SQLite schema for %s: %w",
@@ -57,7 +70,17 @@ func NewSqliteClient(dbFilePath string) (*Client, error) {
 // Produces new Client using SQLite database created as temp file. It's mainly
 // for testing and ad-hocs.
 func NewSqliteTmpClient() (*Client, error) {
-	tmpFile, err := os.CreateTemp("", "sqlite-")
+	return newSqliteTmpClientForSchema("sqlite-", setupSqliteSchema)
+}
+
+// Produces new Client for logs using SQLite database created as temp file.
+// It's mainly for testing and ad-hocs.
+func NewSqliteTmpClientForLogs() (*Client, error) {
+	return newSqliteTmpClientForSchema("sqlitelogs-", setupSqliteSchemaForLogs)
+}
+
+func newSqliteTmpClientForSchema(prefix string, setupSchemaFunc func(*sql.DB) error) (*Client, error) {
+	tmpFile, err := os.CreateTemp("", prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +94,7 @@ func NewSqliteTmpClient() (*Client, error) {
 		return nil, err
 	}
 
-	schemaErr := setupSqliteSchema(db)
+	schemaErr := setupSchemaFunc(db)
 	if schemaErr != nil {
 		db.Close()
 		os.Remove(tmpFilePath)
@@ -97,18 +120,28 @@ func setupSqliteSchema(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	return execSqlStatements(db, schemaStmts)
+}
 
-	for _, query := range schemaStmts {
+func setupSqliteSchemaForLogs(db *sql.DB) error {
+	schemaStmts, err := SchemaStatementsForLogs("sqlite")
+	if err != nil {
+		return err
+	}
+	return execSqlStatements(db, schemaStmts)
+}
+
+func execSqlStatements(db *sql.DB, stmts []string) error {
+	for _, query := range stmts {
 		query = strings.TrimSpace(query)
 		if query == "" {
 			continue
 		}
-		_, err = db.Exec(query)
+		_, err := db.Exec(query)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
