@@ -16,9 +16,18 @@ const LOG_PREFIX = "timeutils"
 // format is used to store timestamps in the database.
 const TimestampFormat = "2006-01-02T15:04:05.999999MST-07:00"
 
+// Date format for time.Time serialization and deserialization.
+const DateFormat = "2006-01-02"
+
 // ToString serialize give time.Time to string based on TimestampFormat format.
 func ToString(t time.Time) string {
 	return t.Format(TimestampFormat)
+}
+
+// ToDateUTCString move given time.Time to UTC location and serialize it to
+// date string based on DateFormat format.
+func ToDateUTCString(t time.Time) string {
+	return t.UTC().Format(DateFormat)
 }
 
 // FromString tries to recreate time.Time based on given string value according

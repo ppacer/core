@@ -35,6 +35,30 @@ func TestToStringBasic(t *testing.T) {
 	}
 }
 
+func TestToDateUTCStringBasic(t *testing.T) {
+	warsawTz := warsawTimeZone(t)
+	tss := []time.Time{
+		time.Date(2023, time.August, 22, 23, 0, 0, 0, time.UTC),
+		time.Date(2023, time.August, 23, 1, 0, 0, 0, warsawTz),
+		time.Date(2023, time.August, 23, 15, 10, 5, 123456000, warsawTz),
+		time.Date(2024, time.November, 11, 17, 8, 0, 0, time.UTC),
+	}
+	expected := []string{
+		"2023-08-22",
+		"2023-08-22",
+		"2023-08-23",
+		"2024-11-11",
+	}
+
+	for idx, ts := range tss {
+		s := ToDateUTCString(ts)
+		e := expected[idx]
+		if s != e {
+			t.Errorf("Expected ToDateUTCString(%v)=%s, got: %s", ts, e, s)
+		}
+	}
+}
+
 func TestFromStringSimple(t *testing.T) {
 	warsawTz := warsawTimeZone(t)
 	inputs := []string{
