@@ -4,7 +4,16 @@
 
 package dag
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
+
+// TODO
+type RunInfo struct {
+	DagId  Id
+	ExecTs time.Time
+}
 
 // RunStatus enumerates possible DAG run states.
 type RunStatus int

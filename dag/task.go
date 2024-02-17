@@ -5,6 +5,7 @@
 package dag
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -16,6 +17,12 @@ import (
 )
 
 const MAX_RECURSION = 10000
+
+type TaskContext struct {
+	context context.Context
+	logger  *slog.Logger
+	dagRun  RunInfo
+}
 
 // Task represents single step in DAG which is going to be scheduled and
 // executed via executors.
