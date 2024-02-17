@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS tasklogs (
 	ExecTs TEXT NOT NULL,   -- DAG run execution timestamp
 	TaskId TEXT NOT NULL,   -- Task ID
 	InsertTs TEXT NOT NULL, -- Row insertion timestamp
+	LogTs TEXT NOT NULL,    -- Timestamp from logger record (might have different format)
+	Level TEXT NOT NULL,    -- Severity level
 	Message TEXT NULL,      -- Log message
+	Attributes TEXT NULL,   -- Additional log record attributes (key=value)
 
 	PRIMARY KEY (Date DESC, DagId, ExecTs DESC, TaskId)
 );
