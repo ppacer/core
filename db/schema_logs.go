@@ -21,17 +21,15 @@ func sqliteCreateTaskLogsTable() string {
 	return `
 -- Table logs stores DAG run task logs.
 CREATE TABLE IF NOT EXISTS tasklogs (
-	Date TEXT NOT NULL,     -- DAG run date (just date, for indexing)
 	DagId TEXT NOT NULL,    -- DAG ID
 	ExecTs TEXT NOT NULL,   -- DAG run execution timestamp
 	TaskId TEXT NOT NULL,   -- Task ID
 	InsertTs TEXT NOT NULL, -- Row insertion timestamp
-	LogTs TEXT NOT NULL,    -- Timestamp from logger record (might have different format)
 	Level TEXT NOT NULL,    -- Severity level
 	Message TEXT NULL,      -- Log message
 	Attributes TEXT NULL,   -- Additional log record attributes (key=value)
 
-	PRIMARY KEY (Date DESC, DagId, ExecTs DESC, TaskId)
+	PRIMARY KEY (DagId ASC, ExecTs DESC, TaskId ASC, InsertTs ASC)
 );
 `
 }

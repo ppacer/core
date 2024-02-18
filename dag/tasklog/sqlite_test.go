@@ -19,7 +19,7 @@ func TestSQLiteLoggerSimple(t *testing.T) {
 	const taskId = "task_1"
 	l := NewSQLiteLogger(ri, taskId, c, nil)
 
-	l.Error("test message", "val1", 42, "name", "Damian")
+	l.Error("test message")
 
 	// t.Error("just to test manually what have been written into SQLite DB")
 }

@@ -43,10 +43,9 @@ func (s *sqliteLogWriter) Write(p []byte) (int, error) {
 		return 0, fmt.Errorf("cannot deserialize JSON from slog.JSONHandler: %w",
 			jErr)
 	}
-	ts, tErr := getKeyAndDelete(fields, timeFieldKey)
+	_, tErr := getKeyAndDelete(fields, timeFieldKey)
 	if tErr != nil {
 		slog.Error("cannot get key from slog.JSONHandler", "key", timeFieldKey)
-		return 0, tErr
 	}
 	lvl, lErr := getKeyAndDelete(fields, levelFieldKey)
 	if lErr != nil {
@@ -66,12 +65,10 @@ func (s *sqliteLogWriter) Write(p []byte) (int, error) {
 		return 0, fmt.Errorf("cannot serialize attributes to JSON: %w", jErr)
 	}
 	tlr := db.TaskLogRecord{
-		Date:       timeutils.ToDateUTCString(s.ri.ExecTs),
 		DagId:      string(s.ri.DagId),
 		ExecTs:     timeutils.ToString(s.ri.ExecTs),
 		TaskId:     s.taskId,
 		InsertTs:   timeutils.ToString(time.Now()),
-		LogTs:      ts,
 		Level:      lvl,
 		Message:    msg,
 		Attributes: string(fieldsJson),
