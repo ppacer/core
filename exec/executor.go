@@ -5,20 +5,25 @@
 package exec
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/tasklog"
+	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/scheduler"
+	"github.com/ppacer/core/timeutils"
 )
 
 type Executor struct {
 	schedClient *scheduler.Client
 	config      Config
+	logDbClient *db.Client
 }
 
 // Executor configuration.
@@ -37,7 +42,7 @@ func defaultConfig() Config {
 
 // New creates new Executor instance. When config is nil, then default
 // configuration values will be used.
-func New(schedAddr string, config *Config) *Executor {
+func New(schedAddr string, logDbClient *db.Client, config *Config) *Executor {
 	var cfg Config
 	if config != nil {
 		cfg = *config
@@ -49,6 +54,7 @@ func New(schedAddr string, config *Config) *Executor {
 	return &Executor{
 		schedClient: sc,
 		config:      cfg,
+		logDbClient: logDbClient,
 	}
 }
 
@@ -76,12 +82,13 @@ func (e *Executor) Start(dags dag.Registry) {
 				"taskId", tte.TaskId)
 			break
 		}
-		go executeTask(tte, task, e.schedClient)
+		go executeTask(tte, task, e.schedClient, e.logDbClient)
 	}
 }
 
 func executeTask(
 	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
+	logDbClient *db.Client,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -95,7 +102,23 @@ func executeTask(
 		slog.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskRunning.String(), "err", uErr.Error())
 	}
-	task.Execute()
+	execTs, parseErr := timeutils.FromString(tte.ExecTs)
+	if parseErr != nil {
+		slog.Error("Error while parsing ExecTs", "ExecTs", tte.ExecTs, "err",
+			parseErr.Error())
+		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
+		return
+	}
+
+	// Executing
+	ri := dag.RunInfo{DagId: dag.Id(tte.DagId), ExecTs: execTs}
+	taskContext := dag.TaskContext{
+		Context: context.TODO(),
+		Logger:  tasklog.NewSQLiteLogger(ri, tte.TaskId, logDbClient, nil),
+		DagRun:  ri,
+	}
+	task.Execute(taskContext)
+
 	slog.Info("Finished executing task", "taskToExec", tte)
 	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
 	if uErr != nil {

@@ -18,7 +18,11 @@ type EmptyTask struct {
 }
 
 func (et EmptyTask) Id() string { return et.TaskId }
-func (et EmptyTask) Execute()   { fmt.Println(et.TaskId); fmt.Println("crap") }
+
+func (et EmptyTask) Execute(_ TaskContext) {
+	fmt.Println(et.TaskId)
+	fmt.Println("crap")
+}
 
 func TestDagNew(t *testing.T) {
 	start := Node{Task: EmptyTask{"start"}}

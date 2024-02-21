@@ -102,14 +102,14 @@ func testSchedulerE2eManyDagRuns(
 	queues := scheduler.DefaultQueues(cfg)
 
 	// Start scheduler
-	sched, dbClient := schedulerWithSqlite(queues, cfg, t)
+	sched, dbClient, logsDbClient := schedulerWithSqlite(queues, cfg, t)
 	testServer := httptest.NewServer(sched.Start(dags))
 	defer testServer.Close()
 	defer db.CleanUpSqliteTmp(dbClient, t)
 
 	// Start executor
 	go func() {
-		executor := exec.New(testServer.URL, nil)
+		executor := exec.New(testServer.URL, logsDbClient, nil)
 		executor.Start(dags)
 	}()
 
@@ -176,11 +176,15 @@ func scheduleNewDagRun(
 
 func schedulerWithSqlite(
 	queues scheduler.Queues, config scheduler.Config, t *testing.T,
-) (*scheduler.Scheduler, *db.Client) {
+) (*scheduler.Scheduler, *db.Client, *db.Client) {
 	t.Helper()
 	dbClient, err := db.NewSqliteTmpClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return scheduler.New(dbClient, queues, config), dbClient
+	logsDbClient, lErr := db.NewSqliteTmpClientForLogs()
+	if lErr != nil {
+		t.Fatal(lErr)
+	}
+	return scheduler.New(dbClient, queues, config), dbClient, logsDbClient
 }

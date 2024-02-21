@@ -15,30 +15,30 @@ import (
 
 type constTask struct{}
 
-func (tt constTask) Id() string { return "ConstTask" }
-func (tt constTask) Execute()   { fmt.Println("Executing...") }
+func (tt constTask) Id() string            { return "ConstTask" }
+func (tt constTask) Execute(_ TaskContext) { fmt.Println("Executing...") }
 
 type emptyTask struct{}
 
-func (et emptyTask) Id() string { return "EmptyTask" }
-func (et emptyTask) Execute()   {}
+func (et emptyTask) Id() string            { return "EmptyTask" }
+func (et emptyTask) Execute(_ TaskContext) {}
 
 type aTask struct{}
 
-func (at aTask) Id() string { return "A" }
-func (at aTask) Execute()   { fmt.Println("A") }
+func (at aTask) Id() string            { return "A" }
+func (at aTask) Execute(_ TaskContext) { fmt.Println("A") }
 
 type bTask struct{}
 
-func (bt bTask) Id() string { return "B" }
-func (bt bTask) Execute()   { fmt.Println("B") }
+func (bt bTask) Id() string            { return "B" }
+func (bt bTask) Execute(_ TaskContext) { fmt.Println("B") }
 
 type nameTask struct {
 	Name string
 }
 
-func (nt nameTask) Id() string { return nt.Name }
-func (nt nameTask) Execute()   { fmt.Println(nt.Name) }
+func (nt nameTask) Id() string            { return nt.Name }
+func (nt nameTask) Execute(_ TaskContext) { fmt.Println(nt.Name) }
 
 //go:embed *.go
 var goSourceFiles embed.FS
@@ -385,8 +385,8 @@ func TestJointTasksExecSourcesBroad(t *testing.T) {
 // It's exactly the same as aTask to test hashing
 type aTaskCopy struct{}
 
-func (at aTaskCopy) Id() string { return "A" }
-func (at aTaskCopy) Execute()   { fmt.Println("A") }
+func (at aTaskCopy) Id() string            { return "A" }
+func (at aTaskCopy) Execute(_ TaskContext) { fmt.Println("A") }
 
 func TestNodeHashesForSimilarNodes(t *testing.T) {
 	n1 := Node{Task: aTask{}}
@@ -405,8 +405,8 @@ func TestNodeHashesForSimilarNodes(t *testing.T) {
 // implementation.
 type aTaskWithSpace struct{}
 
-func (at aTaskWithSpace) Id() string { return "A" }
-func (at aTaskWithSpace) Execute()   { fmt.Println("A ") }
+func (at aTaskWithSpace) Id() string            { return "A" }
+func (at aTaskWithSpace) Execute(_ TaskContext) { fmt.Println("A ") }
 
 func TestNodeAlmostTheSame(t *testing.T) {
 	n1 := Node{Task: aTask{}}
@@ -421,8 +421,8 @@ func TestNodeAlmostTheSame(t *testing.T) {
 
 type aTaskDifferentId struct{}
 
-func (at aTaskDifferentId) Id() string { return "Not A" }
-func (at aTaskDifferentId) Execute()   { fmt.Println("A ") }
+func (at aTaskDifferentId) Id() string            { return "Not A" }
+func (at aTaskDifferentId) Execute(_ TaskContext) { fmt.Println("A ") }
 
 func TestNodeTheSameExecute(t *testing.T) {
 	n1 := Node{Task: aTask{}}

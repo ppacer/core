@@ -542,7 +542,7 @@ type printTask struct {
 
 func (pt printTask) Id() string { return pt.Name }
 
-func (pt printTask) Execute() {
+func (pt printTask) Execute(_ dag.TaskContext) {
 	fmt.Println("Hello executor!")
 }
 
@@ -554,7 +554,7 @@ type waitTask struct {
 
 func (wt waitTask) Id() string { return wt.TaskId }
 
-func (wt waitTask) Execute() {
+func (wt waitTask) Execute(_ dag.TaskContext) {
 	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
 	slog.Info("Task is done", "task", wt.Id())

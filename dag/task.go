@@ -19,16 +19,17 @@ import (
 const MAX_RECURSION = 10000
 
 type TaskContext struct {
-	context context.Context
-	logger  *slog.Logger
-	dagRun  RunInfo
+	Context context.Context
+	Logger  *slog.Logger
+	DagRun  RunInfo
 }
 
 // Task represents single step in DAG which is going to be scheduled and
-// executed via executors.
+// executed via executors. TaskContext for Execute method is usually provided
+// by executors where tasks are being executed.
 type Task interface {
 	Id() string
-	Execute()
+	Execute(TaskContext)
 }
 
 // TaskStatus enumerates possible Task states within the DAG run.
