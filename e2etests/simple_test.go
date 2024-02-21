@@ -84,6 +84,52 @@ func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 	testSchedulerE2eManyDagRuns(dags, drs, 3*time.Second, t)
 }
 
+func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
+	cfg := scheduler.DefaultConfig
+	queues := scheduler.DefaultQueues(cfg)
+
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_dag_1")
+	dags[dagId] = simpleLoggingDAG(dagId, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	// Start scheduler
+	sched, dbClient, logsDbClient := schedulerWithSqlite(queues, cfg, t)
+	testServer := httptest.NewServer(sched.Start(dags))
+	defer testServer.Close()
+	defer db.CleanUpSqliteTmp(dbClient, t)
+	defer db.CleanUpSqliteTmp(logsDbClient, t)
+
+	// Start executor
+	go func() {
+		executor := exec.New(testServer.URL, logsDbClient, nil)
+		executor.Start(dags)
+	}()
+
+	// Schedule new DAG runs
+	scheduleNewDagRun(dbClient, queues, dr, t)
+
+	// Wait for DAG run completion or timeout.
+	const poll = 10 * time.Millisecond
+	waitForDagRunCompletion(dbClient, dr, poll, 5*time.Second, t)
+
+	// Test logs
+	ctx := context.Background()
+	tlrs, dbErr := logsDbClient.ReadDagRunLogs(
+		ctx, string(dagId), timeutils.ToString(ts),
+	)
+	if dbErr != nil {
+		t.Errorf("Error while reading logs from database: %s", dbErr.Error())
+	}
+	dagNodes := len(dags[dagId].Root.Flatten())
+	if len(tlrs) != dagNodes {
+		t.Errorf("Expected %d log records, got: %d", dagNodes, len(tlrs))
+	}
+}
+
 // This test runs end-to-end test (scheduler and executor run in separate
 // goroutines communicating via HTTP) for single DAG run.
 func testSchedulerE2eSingleDagRun(
@@ -106,6 +152,7 @@ func testSchedulerE2eManyDagRuns(
 	testServer := httptest.NewServer(sched.Start(dags))
 	defer testServer.Close()
 	defer db.CleanUpSqliteTmp(dbClient, t)
+	defer db.CleanUpSqliteTmp(logsDbClient, t)
 
 	// Start executor
 	go func() {
