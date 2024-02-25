@@ -29,7 +29,7 @@ type TaskContext struct {
 // by executors where tasks are being executed.
 type Task interface {
 	Id() string
-	Execute(TaskContext)
+	Execute(TaskContext) error
 }
 
 // TaskStatus enumerates possible Task states within the DAG run.

@@ -542,8 +542,9 @@ type printTask struct {
 
 func (pt printTask) Id() string { return pt.Name }
 
-func (pt printTask) Execute(_ dag.TaskContext) {
+func (pt printTask) Execute(_ dag.TaskContext) error {
 	fmt.Println("Hello executor!")
+	return nil
 }
 
 // WaitTask is a Task which just waits and logs.
@@ -554,8 +555,9 @@ type waitTask struct {
 
 func (wt waitTask) Id() string { return wt.TaskId }
 
-func (wt waitTask) Execute(_ dag.TaskContext) {
+func (wt waitTask) Execute(_ dag.TaskContext) error {
 	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
 	slog.Info("Task is done", "task", wt.Id())
+	return nil
 }

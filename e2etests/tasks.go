@@ -11,8 +11,8 @@ type emptyTask struct {
 	taskId string
 }
 
-func (et emptyTask) Id() string                { return et.taskId }
-func (et emptyTask) Execute(_ dag.TaskContext) {}
+func (et emptyTask) Id() string                      { return et.taskId }
+func (et emptyTask) Execute(_ dag.TaskContext) error { return nil }
 
 // Task with just waiting action.
 type waitTask struct {
@@ -20,8 +20,12 @@ type waitTask struct {
 	interval time.Duration
 }
 
-func (wt waitTask) Id() string                { return wt.taskId }
-func (wt waitTask) Execute(_ dag.TaskContext) { time.Sleep(wt.interval) }
+func (wt waitTask) Id() string { return wt.taskId }
+
+func (wt waitTask) Execute(_ dag.TaskContext) error {
+	time.Sleep(wt.interval)
+	return nil
+}
 
 // Task which logs.
 type logTask struct {
@@ -30,6 +34,7 @@ type logTask struct {
 
 func (lt logTask) Id() string { return lt.taskId }
 
-func (lt logTask) Execute(tc dag.TaskContext) {
+func (lt logTask) Execute(tc dag.TaskContext) error {
 	tc.Logger.Warn("Test log message", "taskId", lt.taskId, "dagrun", tc.DagRun)
+	return nil
 }

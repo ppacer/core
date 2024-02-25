@@ -22,8 +22,12 @@ type EmptyTask struct {
 	TaskId string
 }
 
-func (et EmptyTask) Id() string                { return et.TaskId }
-func (et EmptyTask) Execute(_ dag.TaskContext) { fmt.Println(et.TaskId) }
+func (et EmptyTask) Id() string { return et.TaskId }
+
+func (et EmptyTask) Execute(_ dag.TaskContext) error {
+	fmt.Println(et.TaskId)
+	return nil
+}
 
 func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point

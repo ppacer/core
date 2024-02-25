@@ -15,30 +15,49 @@ import (
 
 type constTask struct{}
 
-func (tt constTask) Id() string            { return "ConstTask" }
-func (tt constTask) Execute(_ TaskContext) { fmt.Println("Executing...") }
+func (tt constTask) Id() string { return "ConstTask" }
+
+func (tt constTask) Execute(_ TaskContext) error {
+	fmt.Println("Executing...")
+	return nil
+}
 
 type emptyTask struct{}
 
-func (et emptyTask) Id() string            { return "EmptyTask" }
-func (et emptyTask) Execute(_ TaskContext) {}
+func (et emptyTask) Id() string { return "EmptyTask" }
+
+func (et emptyTask) Execute(_ TaskContext) error {
+	return nil
+}
 
 type aTask struct{}
 
-func (at aTask) Id() string            { return "A" }
-func (at aTask) Execute(_ TaskContext) { fmt.Println("A") }
+func (at aTask) Id() string { return "A" }
+
+func (at aTask) Execute(_ TaskContext) error {
+	fmt.Println("A")
+	return nil
+}
 
 type bTask struct{}
 
-func (bt bTask) Id() string            { return "B" }
-func (bt bTask) Execute(_ TaskContext) { fmt.Println("B") }
+func (bt bTask) Id() string { return "B" }
+
+func (bt bTask) Execute(_ TaskContext) error {
+	fmt.Println("B")
+	return nil
+}
 
 type nameTask struct {
 	Name string
 }
 
-func (nt nameTask) Id() string            { return nt.Name }
-func (nt nameTask) Execute(_ TaskContext) { fmt.Println(nt.Name) }
+func (nt nameTask) Id() string { return nt.Name }
+
+func (nt nameTask) Execute(_ TaskContext) error {
+	fmt.Println(nt.Name)
+	return nil
+}
 
 //go:embed *.go
 var goSourceFiles embed.FS
@@ -52,6 +71,7 @@ func TestExecSourceEmpty(t *testing.T) {
 	etask := emptyTask{}
 	etaskSource := TaskExecuteSource(etask)
 	const expectedExecSource = `{
+	return nil
 }`
 	if etaskSource != expectedExecSource {
 		t.Errorf("Expected emptyTask.Execute source code to be [%s], but got: [%s]",
@@ -64,6 +84,7 @@ func TestExecSourceConst(t *testing.T) {
 	ctaskSource := TaskExecuteSource(ctask)
 	const expectedExecSource = `{
 	fmt.Println("Executing...")
+	return nil
 }`
 	if ctaskSource != expectedExecSource {
 		t.Errorf("Expected constTask.Execute source code to be [%s], but got: [%s]",
@@ -352,10 +373,13 @@ func TestJointTasksExecSources(t *testing.T) {
 	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
 	fmt.Println("Executing...")
+	return nil
 }ConstTask:{
 	fmt.Println("Executing...")
+	return nil
 }ConstTask:{
 	fmt.Println("Executing...")
+	return nil
 }`
 	if string(execSources) != expectedExecSources {
 		t.Errorf("Expected %s, but got %s", expectedExecSources,
@@ -368,13 +392,18 @@ func TestJointTasksExecSourcesBroad(t *testing.T) {
 	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
 	fmt.Println("Executing...")
+	return nil
 }A:{
 	fmt.Println("A")
+	return nil
 }B:{
 	fmt.Println("B")
+	return nil
 }ConstTask:{
 	fmt.Println("Executing...")
+	return nil
 }EmptyTask:{
+	return nil
 }`
 	if string(execSources) != expectedExecSources {
 		t.Errorf("Expected %s, but got %s", expectedExecSources,
@@ -385,8 +414,12 @@ func TestJointTasksExecSourcesBroad(t *testing.T) {
 // It's exactly the same as aTask to test hashing
 type aTaskCopy struct{}
 
-func (at aTaskCopy) Id() string            { return "A" }
-func (at aTaskCopy) Execute(_ TaskContext) { fmt.Println("A") }
+func (at aTaskCopy) Id() string { return "A" }
+
+func (at aTaskCopy) Execute(_ TaskContext) error {
+	fmt.Println("A")
+	return nil
+}
 
 func TestNodeHashesForSimilarNodes(t *testing.T) {
 	n1 := Node{Task: aTask{}}
@@ -405,8 +438,12 @@ func TestNodeHashesForSimilarNodes(t *testing.T) {
 // implementation.
 type aTaskWithSpace struct{}
 
-func (at aTaskWithSpace) Id() string            { return "A" }
-func (at aTaskWithSpace) Execute(_ TaskContext) { fmt.Println("A ") }
+func (at aTaskWithSpace) Id() string { return "A" }
+
+func (at aTaskWithSpace) Execute(_ TaskContext) error {
+	fmt.Println("A ")
+	return nil
+}
 
 func TestNodeAlmostTheSame(t *testing.T) {
 	n1 := Node{Task: aTask{}}
@@ -421,8 +458,12 @@ func TestNodeAlmostTheSame(t *testing.T) {
 
 type aTaskDifferentId struct{}
 
-func (at aTaskDifferentId) Id() string            { return "Not A" }
-func (at aTaskDifferentId) Execute(_ TaskContext) { fmt.Println("A ") }
+func (at aTaskDifferentId) Id() string { return "Not A" }
+
+func (at aTaskDifferentId) Execute(_ TaskContext) error {
+	fmt.Println("A ")
+	return nil
+}
 
 func TestNodeTheSameExecute(t *testing.T) {
 	n1 := Node{Task: aTask{}}

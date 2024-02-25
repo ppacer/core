@@ -19,9 +19,10 @@ type EmptyTask struct {
 
 func (et EmptyTask) Id() string { return et.TaskId }
 
-func (et EmptyTask) Execute(_ TaskContext) {
+func (et EmptyTask) Execute(_ TaskContext) error {
 	fmt.Println(et.TaskId)
 	fmt.Println("crap")
+	return nil
 }
 
 func TestDagNew(t *testing.T) {

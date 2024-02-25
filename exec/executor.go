@@ -117,7 +117,13 @@ func executeTask(
 		Logger:  tasklog.NewSQLiteLogger(ri, tte.TaskId, logDbClient, nil),
 		DagRun:  ri,
 	}
-	task.Execute(taskContext)
+	execErr := task.Execute(taskContext)
+	if execErr != nil {
+		slog.Error("Task finished with error", "tte", tte, "err",
+			execErr.Error())
+		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
+		return
+	}
 
 	slog.Info("Finished executing task", "taskToExec", tte)
 	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
