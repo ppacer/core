@@ -38,7 +38,7 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
 
 	startShouldBeSched, _ := ts.checkIfCanBeScheduled(
@@ -65,7 +65,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(&start).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
 
 	ts.scheduleSingleTask(dagrun, taskId)
@@ -119,7 +119,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
@@ -156,13 +156,12 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 //	 \     /
 //	   n23
 func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
-	t.Logf("Preparing scenario...")
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
@@ -175,11 +174,9 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	drtN23 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n23"}
 	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
 
-	t.Logf("Start ts.walkAndSchedule...")
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 
-	t.Logf("Manually mark n1 as success")
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
@@ -195,7 +192,6 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 			drtN3)
 	}
 
-	t.Logf("Manually mark n22 (just one of three scheduled tasks at the same time) as success")
 	uErr = ts.UpsertTaskStatus(ctx, drtN22, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN22,
@@ -214,7 +210,6 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 			drtN3)
 	}
 
-	t.Logf("Mark n21 and n23 (the rest of async tasks) as Success")
 	uErr = ts.UpsertTaskStatus(ctx, drtN21, dag.TaskSuccess)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN21,
@@ -260,7 +255,7 @@ func TestScheduleDagTasksSimple131(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 50*time.Millisecond, 100, t,
 	)
@@ -271,7 +266,7 @@ func TestScheduleDagTasksSimple131ShortQueue(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag_short_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 50*time.Millisecond, taskQueueSize, t,
 	)
@@ -284,7 +279,7 @@ func TestScheduleDagTasksSimple131ShortestQueue(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
 	d := dag.New("mock_dag_shortest_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 50*time.Millisecond, taskQueueSize, t,
 	)
@@ -297,7 +292,7 @@ func TestScheduleDagTasks131WithFailedTask(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskIdsToFail := map[string]struct{}{
 		"n23": {},
 	}
@@ -313,7 +308,7 @@ func TestScheduleDagTasks131WithFailedFirstTask(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskIdsToFail := map[string]struct{}{
 		"n1": {},
 	}
@@ -329,7 +324,7 @@ func TestScheduleDagTasks131WithFailedLastTask(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskIdsToFail := map[string]struct{}{
 		"n3": {},
 	}
@@ -355,7 +350,7 @@ func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodesLinkedList(25)).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 10*time.Millisecond, taskQueueSize, t,
 	)
@@ -369,7 +364,7 @@ func TestScheduleDagTasksLinkedListShortFailure(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(root).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskIdsToFail := map[string]struct{}{
 		"Start": {},
 	}
@@ -384,7 +379,7 @@ func TestScheduleDagTasksNoTasks(t *testing.T) {
 	d := dag.New("mock_dag_no_tasks").
 		AddSchedule(schedule).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 50*time.Millisecond, 10, t,
 	)
@@ -398,7 +393,7 @@ func TestScheduleDagTasksSingleTask(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(&theOnlyNode).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 50*time.Millisecond, 10, t,
 	)
@@ -412,7 +407,7 @@ func testScheduleDagTasksLinkedList(size int, t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodesLinkedList(size)).
 		Done()
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
 		d, dagrun, 10*time.Millisecond, size, t,
 	)
@@ -607,8 +602,8 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 		AddRoot(nodes131()).
 		Done()
 	taskNum := len(d.Flatten())
-	dagrun1 := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
-	dagrun2 := DagRun{DagId: d.Id, AtTime: schedule.Next(dagrun1.AtTime)}
+	dagrun1 := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
+	dagrun2 := DagRun{DagId: d.Id, AtTime: schedule.Next(dagrun1.AtTime, &dagrun1.AtTime)}
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
@@ -662,7 +657,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	ctx := context.Background()
 
 	areDoneBefore := ts.allTasksAreDone(dagrun, tasks, sharedState)
@@ -719,7 +714,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
-	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs)}
+	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	ctx := context.Background()
 
 	areDoneBefore := ts.allTasksAreDone(dagrun, tasks, sharedState)
@@ -985,15 +980,12 @@ func markSuccessAllTasks(
 			t.Errorf("Error while popping dag run task from the queue: %s",
 				popErr.Error())
 		}
-		t.Logf("Got %v from the TaskQueue. Simulating execution for %v",
-			drt, taskExecutionDuration)
 		time.Sleep(taskExecutionDuration) // executor work simulation
 		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
 		if uErr != nil {
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())
 		}
-		t.Logf("Status updated to Success for %v", drt)
 	}
 }
 
@@ -1023,8 +1015,6 @@ func markSuccessAllTasksExceptFew(
 			t.Errorf("Error while popping dag run task from the queue: %s",
 				popErr.Error())
 		}
-		t.Logf("Got %v from the TaskQueue. Simulating execution for %v",
-			drt, taskExecutionDuration)
 		time.Sleep(taskExecutionDuration) // executor work simulation
 		if _, shouldFail := taskIdsToFail[drt.TaskId]; shouldFail {
 			uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskFailed)
@@ -1032,7 +1022,6 @@ func markSuccessAllTasksExceptFew(
 				t.Errorf("Error while marking %v as Failed: %s",
 					drt, uErr.Error())
 			}
-			t.Logf("Status updated to Failed for %v", drt)
 			continue
 		}
 		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
@@ -1040,7 +1029,6 @@ func markSuccessAllTasksExceptFew(
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())
 		}
-		t.Logf("Status updated to Success for %v", drt)
 	}
 }
 

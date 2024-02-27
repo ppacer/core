@@ -10,12 +10,12 @@ import (
 )
 
 // Schedule represents process' schedule. StartTime says when schedule starts.
-// Next method for given time determines when the next schedule should happen.
-// String method should provide serialization to store schedule definition in
-// the database.
+// Next method for given time and possibly time of the latest run determines
+// when the next schedule should happen. String method should provide
+// serialization to store schedule definition in the database.
 type Schedule interface {
 	StartTime() time.Time
-	Next(time.Time) time.Time
+	Next(time.Time, *time.Time) time.Time
 	String() string
 }
 
@@ -25,26 +25,35 @@ type FixedSchedule struct {
 	Interval time.Duration
 }
 
+// StartTime returns Start.
 func (is FixedSchedule) StartTime() time.Time {
 	return is.Start
 }
 
-func (is FixedSchedule) Next(baseTime time.Time) time.Time {
-	if baseTime.Before(is.Start) {
+// Next determines next schedule time. Usually it's interval later then the
+// previous schedule point. When given currentTime is before Start, then Start
+// is returned as next schedule. In case when there was not previous schedule
+// yet and currentTime is after Start, then the next schedule would be the
+// first time obtained by adding Interval to Start which is after currentTime.
+func (is FixedSchedule) Next(currentTime time.Time, prevSchedule *time.Time) time.Time {
+	if currentTime.Before(is.Start) && prevSchedule == nil {
 		return is.Start
 	}
+	if prevSchedule != nil && currentTime.After(*prevSchedule) {
+		return (*prevSchedule).Add(is.Interval)
+	}
+	// The following might be very slow, but would be run at most one time per
+	// DAG.
 	ts := is.Start
 	for {
-		// TODO(dskrzypiec): This algorithm can and should be improved
-		// regarding performance. It's good enough for first sketch but should
-		// be done properly eventually.
-		if baseTime.Before(ts) {
+		if currentTime.Before(ts) {
 			return ts
 		}
 		ts = ts.Add(is.Interval)
 	}
 }
 
+// String returns serialized representation of the schedule.
 func (is FixedSchedule) String() string {
 	return fmt.Sprintf("FixedSchedule: %s", is.Interval)
 }

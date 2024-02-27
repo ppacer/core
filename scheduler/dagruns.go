@@ -171,7 +171,7 @@ func tryScheduleDag(
 		return uErr
 	}
 	// Update the next schedule for that DAG
-	newNextSched := (*d.Schedule).Next(schedule)
+	newNextSched := (*d.Schedule).Next(schedule, &schedule)
 	nextSchedules[d.Id] = &newNextSched
 	return nil
 }
@@ -229,12 +229,13 @@ func updateNextSchedules(
 				nextSchedules[dag.Id] = &startTime
 				continue
 			} else {
-				nextSched := sched.Next(currentTime)
+				nextSched := sched.Next(currentTime, nil)
 				nextSchedules[dag.Id] = &nextSched
 				continue
 			}
 		}
-		nextSched := sched.Next(timeutils.FromStringMust(latestDagRun.ExecTs))
+		prevSchedule := timeutils.FromStringMust(latestDagRun.ExecTs)
+		nextSched := sched.Next(currentTime, &prevSchedule)
 		nextSchedules[dag.Id] = &nextSched
 	}
 }
