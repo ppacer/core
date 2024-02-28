@@ -25,6 +25,34 @@ func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	return d.Done()
 }
 
+func simpleDAGWithErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+	n1 := dag.Node{Task: emptyTask{taskId: "start"}}
+	n2 := dag.Node{Task: errTask{taskId: "task1"}}
+	n3 := dag.Node{Task: emptyTask{taskId: "end"}}
+	n1.Next(&n2)
+	n2.Next(&n3)
+
+	d := dag.New(dagId).AddRoot(&n1)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
+func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+	n1 := dag.Node{Task: emptyTask{taskId: "start"}}
+	n2 := dag.Node{Task: runtimeErrTask{taskId: "task1"}}
+	n3 := dag.Node{Task: emptyTask{taskId: "end"}}
+	n1.Next(&n2)
+	n2.Next(&n3)
+
+	d := dag.New(dagId).AddRoot(&n1)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
 func simpleLoggingDAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	n1 := dag.Node{Task: logTask{taskId: "n1"}}
 	n21 := dag.Node{Task: logTask{taskId: "n21"}}

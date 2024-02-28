@@ -22,7 +22,7 @@ func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
-	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, true, t)
 }
 
 func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
@@ -32,7 +32,7 @@ func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
-	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, true, t)
 }
 
 func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
-	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, true, t)
 }
 
 func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
@@ -58,7 +58,31 @@ func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
-	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, t)
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, true, t)
+}
+
+func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_failing_dag")
+	dags[dagId] = simpleDAGWithErrTask(dagId, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, false, t)
+}
+
+func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	dagId := dag.Id("mock_failing_dag")
+	dags[dagId] = simpleDAGWithRuntimeErrTask(dagId, &schedule)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(dags, dr, 3*time.Second, false, t)
 }
 
 func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
@@ -81,7 +105,7 @@ func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 		{DagId: dagId2, AtTime: ts},
 	}
 
-	testSchedulerE2eManyDagRuns(dags, drs, 3*time.Second, t)
+	testSchedulerE2eManyDagRuns(dags, drs, 3*time.Second, true, t)
 }
 
 func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
@@ -114,7 +138,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Wait for DAG run completion or timeout.
 	const poll = 10 * time.Millisecond
-	waitForDagRunCompletion(dbClient, dr, poll, 5*time.Second, t)
+	waitForDagRunCompletion(dbClient, dr, poll, 5*time.Second, true, t)
 
 	// Test logs
 	ctx := context.Background()
@@ -133,15 +157,17 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 // This test runs end-to-end test (scheduler and executor run in separate
 // goroutines communicating via HTTP) for single DAG run.
 func testSchedulerE2eSingleDagRun(
-	dags dag.Registry, dr scheduler.DagRun, timeout time.Duration, t *testing.T,
+	dags dag.Registry, dr scheduler.DagRun, timeout time.Duration,
+	expectSuccess bool, t *testing.T,
 ) {
 	t.Helper()
 	drs := []scheduler.DagRun{dr}
-	testSchedulerE2eManyDagRuns(dags, drs, timeout, t)
+	testSchedulerE2eManyDagRuns(dags, drs, timeout, expectSuccess, t)
 }
 
 func testSchedulerE2eManyDagRuns(
-	dags dag.Registry, drs []scheduler.DagRun, timeout time.Duration, t *testing.T,
+	dags dag.Registry, drs []scheduler.DagRun, timeout time.Duration,
+	expectSuccess bool, t *testing.T,
 ) {
 	t.Helper()
 	cfg := scheduler.DefaultConfig
@@ -168,13 +194,13 @@ func testSchedulerE2eManyDagRuns(
 	// Wait for DAG run completion or timeout.
 	const poll = 10 * time.Millisecond
 	for _, dr := range drs {
-		waitForDagRunCompletion(dbClient, dr, poll, timeout, t)
+		waitForDagRunCompletion(dbClient, dr, poll, timeout, expectSuccess, t)
 	}
 }
 
 func waitForDagRunCompletion(
 	dbClient *db.Client, dr scheduler.DagRun, pollInterval, timeout time.Duration,
-	t *testing.T,
+	testFailWhenRunFails bool, t *testing.T,
 ) {
 	t.Helper()
 	ctx := context.TODO()
@@ -193,7 +219,9 @@ func waitForDagRunCompletion(
 					string(dr.DagId))
 			}
 			if drDb.Status == dag.RunFailed.String() {
-				t.Fatalf("DAG run %+v finished with status FAILED", dr)
+				if testFailWhenRunFails {
+					t.Fatalf("DAG run %+v finished with status FAILED", dr)
+				}
 				return
 			}
 			if drDb.Status == dag.RunSuccess.String() {

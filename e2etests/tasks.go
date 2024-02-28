@@ -1,6 +1,7 @@
 package e2etests
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -36,5 +37,30 @@ func (lt logTask) Id() string { return lt.taskId }
 
 func (lt logTask) Execute(tc dag.TaskContext) error {
 	tc.Logger.Warn("Test log message", "taskId", lt.taskId, "dagrun", tc.DagRun)
+	return nil
+}
+
+// Task which always return non-nil error.
+type errTask struct {
+	taskId string
+}
+
+func (et errTask) Id() string { return et.taskId }
+
+func (et errTask) Execute(tc dag.TaskContext) error {
+	return errors.New("task failed")
+}
+
+// Task which always panics with runtime exception
+type runtimeErrTask struct {
+	taskId string
+}
+
+func (ret runtimeErrTask) Id() string { return ret.taskId }
+
+func (ret runtimeErrTask) Execute(tc dag.TaskContext) error {
+	one := 1
+	zero := 1 - one
+	tc.Logger.Info("Test", "number", 42/zero)
 	return nil
 }
