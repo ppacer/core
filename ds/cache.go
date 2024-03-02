@@ -60,14 +60,18 @@ func (lc *LruCache[K, V]) Put(key K, value V) {
 	defer lc.lock.Unlock()
 	if element, found := lc.items[key]; found {
 		lc.queue.MoveToFront(element)
-		element.Value.(*lruCacheItem[K, V]).value = value
+		if item, ok := element.Value.(*lruCacheItem[K, V]); ok {
+			item.value = value
+		}
 		return
 	}
 	if lc.queue.Len() == lc.capacity {
 		oldest := lc.queue.Back()
 		if oldest != nil {
 			lc.queue.Remove(oldest)
-			delete(lc.items, oldest.Value.(*lruCacheItem[K, V]).key)
+			if item, ok := oldest.Value.(*lruCacheItem[K, V]); ok {
+				delete(lc.items, item.key)
+			}
 		}
 	}
 	item := &lruCacheItem[K, V]{key: key, value: value}
