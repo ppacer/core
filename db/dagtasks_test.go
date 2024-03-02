@@ -178,17 +178,16 @@ func BenchmarkDagTasksInsert(b *testing.B) {
 }
 
 func simpleDag(dagId string, innerTasks int) dag.Dag {
-	start := dag.Node{Task: WaitTask{TaskId: "start", Interval: 3 * time.Second}}
-	prev := &start
+	start := dag.NewNode(WaitTask{TaskId: "start", Interval: 3 * time.Second})
+	prev := start
 
 	for i := 0; i < innerTasks; i++ {
-		t := dag.Node{Task: PrintTask{Name: fmt.Sprintf("t%d", i)}}
-		prev.Next(&t)
-		prev = &t
+		t := dag.NewNode(PrintTask{Name: fmt.Sprintf("t%d", i)})
+		prev = prev.Next(t)
 	}
 
 	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
-	dag := dag.New(dag.Id(dagId)).AddSchedule(sched).AddRoot(&start).Done()
+	dag := dag.New(dag.Id(dagId)).AddSchedule(sched).AddRoot(start).Done()
 
 	return dag
 }

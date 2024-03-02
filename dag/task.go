@@ -114,15 +114,28 @@ type Node struct {
 	Children []*Node
 }
 
-// TODO(ds): docs
-func (dn *Node) Next(node *Node) {
-	if dn.Children == nil {
-		dn.Children = make([]*Node, 0, 10)
+// NewNode initialize Node with given task and returns the reference.
+func NewNode(task Task) *Node {
+	n := Node{
+		Task:     task,
+		Children: make([]*Node, 0),
 	}
-	dn.Children = append(dn.Children, node)
+	return &n
 }
 
-// TODO(ds): docs
+// Next adds given node as a child and returns it's reference. That means Next
+// can be chained (eg: n1.Next(n2).Next(n3)...).
+func (dn *Node) Next(node *Node) *Node {
+	if dn.Children == nil {
+		dn.Children = make([]*Node, 0)
+	}
+	dn.Children = append(dn.Children, node)
+	return node
+}
+
+// NextAsyncAndMerge adds given slice of nodes as children which then have one
+// shared child (mergeNode). That shared child reference is returned. That
+// situation can be visualized like this:
 //
 //	      an[0]
 //	    /       \
@@ -133,11 +146,11 @@ func (dn *Node) Next(node *Node) {
 //	   \  an[3]  /
 //	    \  ...  /
 //	      an[N]
-func (dn *Node) NextAsyncAndMerge(asyncNodes []*Node, mergeNode *Node) {
+func (dn *Node) NextAsyncAndMerge(asyncNodes []*Node, mergeNode *Node) *Node {
 	for _, an := range asyncNodes {
-		dn.Next(an)
-		an.Next(mergeNode)
+		dn.Next(an).Next(mergeNode)
 	}
+	return mergeNode
 }
 
 // Hash calculates SHA256 hash based on concatenated body sources of Execute

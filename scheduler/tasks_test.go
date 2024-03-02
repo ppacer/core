@@ -32,12 +32,12 @@ func (et EmptyTask) Execute(_ dag.TaskContext) error {
 func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
-	start := dag.Node{Task: EmptyTask{"start"}}
-	end := dag.Node{Task: EmptyTask{"end"}}
-	start.Next(&end)
+	start := dag.NewNode(EmptyTask{"start"})
+	end := dag.NewNode(EmptyTask{"end"})
+	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
-	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
+	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
 
@@ -59,12 +59,12 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 func TestScheduleSingleTaskSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
-	start := dag.Node{Task: EmptyTask{"start"}}
-	end := dag.Node{Task: EmptyTask{"end"}}
-	start.Next(&end)
+	start := dag.NewNode(EmptyTask{"start"})
+	end := dag.NewNode(EmptyTask{"end"})
+	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
-	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(&start).Done()
+	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
 
@@ -113,12 +113,12 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	// Prepare scenario
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
-	start := dag.Node{Task: EmptyTask{"start"}}
-	end := dag.Node{Task: EmptyTask{"end"}}
-	start.Next(&end)
+	start := dag.NewNode(EmptyTask{"start"})
+	end := dag.NewNode(EmptyTask{"end"})
+	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
-	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(&start).Done()
+	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -388,10 +388,10 @@ func TestScheduleDagTasksNoTasks(t *testing.T) {
 func TestScheduleDagTasksSingleTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
-	theOnlyNode := dag.Node{Task: EmptyTask{TaskId: "start"}}
+	theOnlyNode := dag.NewNode(EmptyTask{TaskId: "start"})
 	d := dag.New("mock_dag_single_task").
 		AddSchedule(schedule).
-		AddRoot(&theOnlyNode).
+		AddRoot(theOnlyNode).
 		Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
@@ -1130,23 +1130,22 @@ func readDagRunTaskInsertAndUpdateTs(
 //	 \     /
 //	   n23
 func nodes131() *dag.Node {
-	n1 := dag.Node{Task: EmptyTask{TaskId: "n1"}}
-	n21 := dag.Node{Task: EmptyTask{TaskId: "n21"}}
-	n22 := dag.Node{Task: EmptyTask{TaskId: "n22"}}
-	n23 := dag.Node{Task: EmptyTask{TaskId: "n23"}}
-	n3 := dag.Node{Task: EmptyTask{TaskId: "n3"}}
+	n1 := dag.NewNode(EmptyTask{TaskId: "n1"})
+	n21 := dag.NewNode(EmptyTask{TaskId: "n21"})
+	n22 := dag.NewNode(EmptyTask{TaskId: "n22"})
+	n23 := dag.NewNode(EmptyTask{TaskId: "n23"})
+	n3 := dag.NewNode(EmptyTask{TaskId: "n3"})
 
-	n1.NextAsyncAndMerge([]*dag.Node{&n21, &n22, &n23}, &n3)
-	return &n1
+	n1.NextAsyncAndMerge([]*dag.Node{n21, n22, n23}, n3)
+	return n1
 }
 
 func nodesLinkedList(length int) *dag.Node {
-	s := dag.Node{Task: EmptyTask{TaskId: "Start"}}
-	prev := &s
+	s := dag.NewNode(EmptyTask{TaskId: "Start"})
+	prev := s
 	for i := 0; i < length-1; i++ {
-		n := dag.Node{Task: EmptyTask{TaskId: fmt.Sprintf("step_%d", i)}}
-		prev.Next(&n)
-		prev = &n
+		n := dag.NewNode(EmptyTask{TaskId: fmt.Sprintf("step_%d", i)})
+		prev = prev.Next(n)
 	}
-	return &s
+	return s
 }

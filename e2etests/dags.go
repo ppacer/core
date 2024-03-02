@@ -8,15 +8,15 @@ import (
 )
 
 func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
-	n1 := dag.Node{Task: emptyTask{taskId: "n1"}}
-	n21 := dag.Node{Task: emptyTask{taskId: "n21"}}
-	n22 := dag.Node{Task: emptyTask{taskId: "n22"}}
-	n23 := dag.Node{Task: emptyTask{taskId: "n23"}}
-	n3 := dag.Node{Task: emptyTask{taskId: "n3"}}
-	n1.NextAsyncAndMerge([]*dag.Node{&n21, &n22, &n23}, &n3)
+	n1 := dag.NewNode(emptyTask{taskId: "n1"})
+	n21 := dag.NewNode(emptyTask{taskId: "n21"})
+	n22 := dag.NewNode(emptyTask{taskId: "n22"})
+	n23 := dag.NewNode(emptyTask{taskId: "n23"})
+	n3 := dag.NewNode(emptyTask{taskId: "n3"})
+	n1.NextAsyncAndMerge([]*dag.Node{n21, n22, n23}, n3)
 
 	d := dag.New(dagId)
-	d.AddRoot(&n1)
+	d.AddRoot(n1)
 	d.AddAttributes(dag.Attr{CatchUp: false})
 
 	if sched != nil {
@@ -26,13 +26,12 @@ func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 }
 
 func simpleDAGWithErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
-	n1 := dag.Node{Task: emptyTask{taskId: "start"}}
-	n2 := dag.Node{Task: errTask{taskId: "task1"}}
-	n3 := dag.Node{Task: emptyTask{taskId: "end"}}
-	n1.Next(&n2)
-	n2.Next(&n3)
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(errTask{taskId: "task1"})
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
 
-	d := dag.New(dagId).AddRoot(&n1)
+	d := dag.New(dagId).AddRoot(n1)
 	if sched != nil {
 		d.AddSchedule(*sched)
 	}
@@ -40,13 +39,12 @@ func simpleDAGWithErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 }
 
 func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
-	n1 := dag.Node{Task: emptyTask{taskId: "start"}}
-	n2 := dag.Node{Task: runtimeErrTask{taskId: "task1"}}
-	n3 := dag.Node{Task: emptyTask{taskId: "end"}}
-	n1.Next(&n2)
-	n2.Next(&n3)
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(runtimeErrTask{taskId: "task1"})
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
 
-	d := dag.New(dagId).AddRoot(&n1)
+	d := dag.New(dagId).AddRoot(n1)
 	if sched != nil {
 		d.AddSchedule(*sched)
 	}
@@ -54,14 +52,14 @@ func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 }
 
 func simpleLoggingDAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
-	n1 := dag.Node{Task: logTask{taskId: "n1"}}
-	n21 := dag.Node{Task: logTask{taskId: "n21"}}
-	n22 := dag.Node{Task: logTask{taskId: "n22"}}
-	n3 := dag.Node{Task: logTask{taskId: "n3"}}
-	n1.NextAsyncAndMerge([]*dag.Node{&n21, &n22}, &n3)
+	n1 := dag.NewNode(logTask{taskId: "n1"})
+	n21 := dag.NewNode(logTask{taskId: "n21"})
+	n22 := dag.NewNode(logTask{taskId: "n22"})
+	n3 := dag.NewNode(logTask{taskId: "n3"})
+	n1.NextAsyncAndMerge([]*dag.Node{n21, n22}, n3)
 
 	d := dag.New(dagId)
-	d.AddRoot(&n1)
+	d.AddRoot(n1)
 	d.AddAttributes(dag.Attr{CatchUp: false})
 
 	if sched != nil {
@@ -73,18 +71,15 @@ func simpleLoggingDAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 func linkedListEmptyTasksDAG(
 	dagId dag.Id, size int, sched *dag.Schedule,
 ) dag.Dag {
-	t0 := emptyTask{taskId: "task_0"}
-	s := dag.Node{Task: &t0}
-	prev := &s
+	s := dag.NewNode(emptyTask{taskId: "task_0"})
+	prev := s
 
 	for i := 1; i < size; i++ {
-		t := emptyTask{taskId: fmt.Sprintf("task_%d", i)}
-		n := dag.Node{Task: &t}
-		prev.Next(&n)
-		prev = &n
+		n := dag.NewNode(emptyTask{taskId: fmt.Sprintf("task_%d", i)})
+		prev = prev.Next(n)
 	}
 
-	d := dag.New(dagId).AddRoot(&s)
+	d := dag.New(dagId).AddRoot(s)
 	if sched != nil {
 		d.AddSchedule(*sched)
 	}
@@ -94,18 +89,16 @@ func linkedListEmptyTasksDAG(
 func linkedListWaitTasksDAG(
 	dagId dag.Id, size int, interval time.Duration, sched *dag.Schedule,
 ) dag.Dag {
-	t0 := waitTask{taskId: "task_0", interval: interval}
-	s := dag.Node{Task: &t0}
-	prev := &s
+	s := dag.NewNode(waitTask{taskId: "task_0", interval: interval})
+	prev := s
 
 	for i := 1; i < size; i++ {
 		t := waitTask{taskId: fmt.Sprintf("task_%d", i), interval: interval}
-		n := dag.Node{Task: &t}
-		prev.Next(&n)
-		prev = &n
+		n := dag.NewNode(t)
+		prev = prev.Next(n)
 	}
 
-	d := dag.New(dagId).AddRoot(&s)
+	d := dag.New(dagId).AddRoot(s)
 	if sched != nil {
 		d.AddSchedule(*sched)
 	}

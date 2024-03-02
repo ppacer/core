@@ -26,12 +26,12 @@ func (et EmptyTask) Execute(_ TaskContext) error {
 }
 
 func TestDagNew(t *testing.T) {
-	start := Node{Task: EmptyTask{"start"}}
-	end := Node{Task: EmptyTask{"end"}}
-	start.Next(&end)
+	start := NewNode(EmptyTask{"start"})
+	end := NewNode(EmptyTask{"end"})
+	start.Next(end)
 
 	sched := FixedSchedule{startTs, 5 * time.Second}
-	dag := New("mock_dag").AddSchedule(sched).AddRoot(&start).Done()
+	dag := New("mock_dag").AddSchedule(sched).AddRoot(start).Done()
 	fmt.Println(dag)
 
 	if dag.Id != "mock_dag" {
@@ -75,27 +75,24 @@ func TestDagIsValidSimpleLLTooLong(t *testing.T) {
 }
 
 func TestDagIsValidSimpleCyclic(t *testing.T) {
-	n1 := Node{Task: nameTask{Name: "n1"}}
-	n2 := Node{Task: nameTask{Name: "n2"}}
-	n3 := Node{Task: nameTask{Name: "n3"}}
-	n1.Next(&n2)
-	n2.Next(&n3)
-	n3.Next(&n1)
+	n1 := NewNode(nameTask{Name: "n1"})
+	n2 := NewNode(nameTask{Name: "n2"})
+	n3 := NewNode(nameTask{Name: "n3"})
+	n1.Next(n2).Next(n3).Next(n1)
 
-	d := New(Id("mock_dag")).AddRoot(&n1).Done()
+	d := New(Id("mock_dag")).AddRoot(n1).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (cylic), but is valid.")
 	}
 }
 
 func TestDagIsValidSimpleNonuniqueIds(t *testing.T) {
-	n1 := Node{Task: nameTask{Name: "n1"}}
-	n2 := Node{Task: nameTask{Name: "n2"}}
-	n3 := Node{Task: nameTask{Name: "n1"}}
-	n1.Next(&n2)
-	n2.Next(&n3)
+	n1 := NewNode(nameTask{Name: "n1"})
+	n2 := NewNode(nameTask{Name: "n2"})
+	n3 := NewNode(nameTask{Name: "n1"})
+	n1.Next(n2).Next(n3)
 
-	d := New(Id("mock_dag")).AddRoot(&n1).Done()
+	d := New(Id("mock_dag")).AddRoot(n1).Done()
 	if d.IsValid() {
 		t.Error("Expected dag to be invalid (have non unique task IDs), but is valid.")
 	}

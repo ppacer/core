@@ -123,12 +123,10 @@ func TestIsAcyclicOnBinaryTree(t *testing.T) {
 }
 
 func TestIsAcyclicOnCyclicSimple(t *testing.T) {
-	n1 := Node{Task: constTask{}}
-	n2 := Node{Task: constTask{}}
-	n3 := Node{Task: constTask{}}
-	n1.Next(&n2)
-	n2.Next(&n3)
-	n3.Next(&n1)
+	n1 := NewNode(constTask{})
+	n2 := NewNode(constTask{})
+	n3 := NewNode(constTask{})
+	n1.Next(n2).Next(n3).Next(n1)
 
 	if n1.isAcyclic() {
 		t.Error("Expected graph to be cylic, but isAcyclic says otherwise")
@@ -325,7 +323,7 @@ func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
 }
 
 func TestDepthSingleNode(t *testing.T) {
-	n := Node{Task: nameTask{Name: "Start"}}
+	n := NewNode(nameTask{Name: "Start"})
 	if n.depth() != 1 {
 		t.Errorf("Expected single node to have depth=1, got: %d", n.depth())
 	}
@@ -364,11 +362,10 @@ func TestDepthBranchoutAndJoin(t *testing.T) {
 }
 
 func TestJointTasksExecSources(t *testing.T) {
-	n1 := Node{Task: constTask{}}
-	n2 := Node{Task: constTask{}}
-	n3 := Node{Task: constTask{}}
-	n1.Next(&n2)
-	n2.Next(&n3)
+	n1 := NewNode(constTask{})
+	n2 := NewNode(constTask{})
+	n3 := NewNode(constTask{})
+	n1.Next(n2).Next(n3)
 
 	execSources := n1.joinTasksExecSources()
 	expectedExecSources := `ConstTask:{
@@ -422,8 +419,8 @@ func (at aTaskCopy) Execute(_ TaskContext) error {
 }
 
 func TestNodeHashesForSimilarNodes(t *testing.T) {
-	n1 := Node{Task: aTask{}}
-	n2 := Node{Task: aTaskCopy{}}
+	n1 := NewNode(aTask{})
+	n2 := NewNode(aTaskCopy{})
 	h1 := n1.Hash()
 	h2 := n2.Hash()
 
@@ -446,8 +443,8 @@ func (at aTaskWithSpace) Execute(_ TaskContext) error {
 }
 
 func TestNodeAlmostTheSame(t *testing.T) {
-	n1 := Node{Task: aTask{}}
-	n2 := Node{Task: aTaskWithSpace{}}
+	n1 := NewNode(aTask{})
+	n2 := NewNode(aTaskWithSpace{})
 	h1 := n1.Hash()
 	h2 := n2.Hash()
 
@@ -466,8 +463,8 @@ func (at aTaskDifferentId) Execute(_ TaskContext) error {
 }
 
 func TestNodeTheSameExecute(t *testing.T) {
-	n1 := Node{Task: aTask{}}
-	n2 := Node{Task: aTaskDifferentId{}}
+	n1 := NewNode(aTask{})
+	n2 := NewNode(aTaskDifferentId{})
 	h1 := n1.Hash()
 	h2 := n2.Hash()
 
@@ -563,32 +560,30 @@ func deep3Width3Graph() *Node {
 	//    \
 	//     \
 	//       n23
-	n1 := Node{Task: constTask{}}
-	n21 := Node{Task: aTask{}}
-	n22 := Node{Task: bTask{}}
-	n23 := Node{Task: constTask{}}
-	n3 := Node{Task: emptyTask{}}
-	n1.Next(&n21)
-	n1.Next(&n22)
-	n1.Next(&n23)
-	n21.Next(&n3)
+	n1 := NewNode(constTask{})
+	n21 := NewNode(aTask{})
+	n22 := NewNode(bTask{})
+	n23 := NewNode(constTask{})
+	n3 := NewNode(emptyTask{})
+	n1.Next(n21).Next(n3)
+	n1.Next(n22)
+	n1.Next(n23)
 
-	return &n1
+	return n1
 }
 
 func nameTaskNode(name string) *Node {
-	return &Node{Task: nameTask{Name: name}}
+	return NewNode(nameTask{Name: name})
 }
 
 func linkedList(length int) *Node {
-	s := Node{Task: nameTask{Name: "Start"}}
-	prev := &s
+	s := NewNode(nameTask{Name: "Start"})
+	prev := s
 	for i := 0; i < length-1; i++ {
-		n := Node{Task: nameTask{Name: fmt.Sprintf("step_%d", i)}}
-		prev.Next(&n)
-		prev = &n
+		n := NewNode(nameTask{Name: fmt.Sprintf("step_%d", i)})
+		prev = prev.Next(n)
 	}
-	return &s
+	return s
 }
 
 func binaryTree(depth int) *Node {
@@ -596,9 +591,9 @@ func binaryTree(depth int) *Node {
 }
 
 func balancedTree(depth int, childNum int) *Node {
-	r := Node{Task: nameTask{Name: "Node"}}
-	buildBalancedTree(&r, childNum, 1, depth)
-	return &r
+	r := NewNode(nameTask{Name: "Node"})
+	buildBalancedTree(r, childNum, 1, depth)
+	return r
 }
 
 func buildBalancedTree(node *Node, n int, id, maxId int) {
@@ -613,7 +608,7 @@ func buildBalancedTree(node *Node, n int, id, maxId int) {
 
 func addNChildren(node *Node, n int) {
 	for i := 0; i < n; i++ {
-		n := Node{Task: nameTask{Name: fmt.Sprintf("%s_%d", node.Task.Id(), i)}}
-		node.Next(&n)
+		n := NewNode(nameTask{Name: fmt.Sprintf("%s_%d", node.Task.Id(), i)})
+		node.Next(n)
 	}
 }

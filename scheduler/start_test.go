@@ -271,8 +271,8 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	}
 
 	// Update DAG tasks
-	additionalTask := dag.Node{Task: printTask{Name: "bonus_task"}}
-	d.Root.Next(&additionalTask)
+	additionalTask := dag.NewNode(printTask{Name: "bonus_task"})
+	d.Root.Next(additionalTask)
 
 	// Second sync - should not change anything
 	s2Err := syncDag(ctx, c, d)
@@ -509,28 +509,23 @@ func insertDagRunTask(
 }
 
 func verySimpleDag(dagId string) dag.Dag {
-	start := dag.Node{
-		Task: waitTask{
-			TaskId:   "start",
-			Interval: 3 * time.Second,
-		},
-	}
-	t := dag.Node{Task: printTask{Name: "t_1"}}
-	end := dag.Node{
-		Task: waitTask{
-			TaskId:   "end",
-			Interval: 1 * time.Second,
-		},
-	}
-	start.Next(&t)
-	t.Next(&end)
+	start := dag.NewNode(waitTask{
+		TaskId:   "start",
+		Interval: 3 * time.Second,
+	})
+	t := dag.NewNode(printTask{Name: "t_1"})
+	end := dag.NewNode(waitTask{
+		TaskId:   "end",
+		Interval: 1 * time.Second,
+	})
+	start.Next(t).Next(end)
 
 	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	sched := dag.FixedSchedule{Interval: 5 * time.Minute, Start: startTs}
 	attr := dag.Attr{Tags: []string{"test"}}
 	dag := dag.New(dag.Id(dagId)).
 		AddSchedule(&sched).
-		AddRoot(&start).
+		AddRoot(start).
 		AddAttributes(attr).
 		Done()
 	return dag
