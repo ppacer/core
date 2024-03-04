@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"time"
 
@@ -24,6 +25,7 @@ type Executor struct {
 	schedClient *scheduler.Client
 	config      Config
 	logDbClient *db.Client
+	logger      *slog.Logger
 }
 
 // Executor configuration.
@@ -42,12 +44,16 @@ func defaultConfig() Config {
 
 // New creates new Executor instance. When config is nil, then default
 // configuration values will be used.
-func New(schedAddr string, logDbClient *db.Client, config *Config) *Executor {
+func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *Config) *Executor {
 	var cfg Config
 	if config != nil {
 		cfg = *config
 	} else {
 		cfg = defaultConfig()
+	}
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelWarn}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
 	sc := scheduler.NewClient(schedAddr, httpClient, scheduler.DefaultClientConfig)
@@ -55,6 +61,7 @@ func New(schedAddr string, logDbClient *db.Client, config *Config) *Executor {
 		schedClient: sc,
 		config:      cfg,
 		logDbClient: logDbClient,
+		logger:      logger,
 	}
 }
 
@@ -67,44 +74,44 @@ func (e *Executor) Start(dags dag.Registry) {
 			continue
 		}
 		if err != nil {
-			slog.Error("GetTask error", "err", err)
+			e.logger.Error("GetTask error", "err", err)
 			break
 		}
-		slog.Info("Start executing task", "taskToExec", tte)
+		e.logger.Info("Start executing task", "taskToExec", tte)
 		d, dagExists := dags[dag.Id(tte.DagId)]
 		if !dagExists {
-			slog.Error("Could not get DAG from registry", "dagId", tte.DagId)
+			e.logger.Error("Could not get DAG from registry", "dagId", tte.DagId)
 			continue
 		}
 		task, tErr := d.GetTask(tte.TaskId)
 		if tErr != nil {
-			slog.Error("Could not get task from DAG", "dagId", tte.DagId,
+			e.logger.Error("Could not get task from DAG", "dagId", tte.DagId,
 				"taskId", tte.TaskId)
 			break
 		}
-		go executeTask(tte, task, e.schedClient, e.logDbClient)
+		go executeTask(tte, task, e.schedClient, e.logDbClient, e.logger)
 	}
 }
 
 func executeTask(
 	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
-	logDbClient *db.Client,
+	logDbClient *db.Client, logger *slog.Logger,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
 			schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
-			slog.Error("Recovered from panic:", "err", r, "stack",
+			logger.Error("Recovered from panic:", "err", r, "stack",
 				string(debug.Stack()))
 		}
 	}()
 	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskRunning)
 	if uErr != nil {
-		slog.Error("Error while updating status", "tte", tte, "status",
+		logger.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskRunning.String(), "err", uErr.Error())
 	}
 	execTs, parseErr := timeutils.FromString(tte.ExecTs)
 	if parseErr != nil {
-		slog.Error("Error while parsing ExecTs", "ExecTs", tte.ExecTs, "err",
+		logger.Error("Error while parsing ExecTs", "ExecTs", tte.ExecTs, "err",
 			parseErr.Error())
 		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
 		return
@@ -119,7 +126,7 @@ func executeTask(
 	}
 	execErr := task.Execute(taskContext)
 	if execErr != nil {
-		slog.Error("Task finished with error", "tte", tte, "err",
+		logger.Error("Task finished with error", "tte", tte, "err",
 			execErr.Error())
 		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
 		return
@@ -128,7 +135,7 @@ func executeTask(
 	slog.Info("Finished executing task", "taskToExec", tte)
 	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
 	if uErr != nil {
-		slog.Error("Error while updating status", "tte", tte, "status",
+		logger.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskSuccess.String(), "err", uErr.Error())
 	}
 }
