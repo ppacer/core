@@ -8,7 +8,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
 	"reflect"
 	"time"
 
@@ -37,13 +36,14 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
-	slog.Debug("Start syncing dag and dagtasks tables", "dagId", dagId)
+	c.logger.Debug("Start syncing dag and dagtasks tables", "dagId", dagId)
 	tx, _ := c.dbConn.Begin()
 
 	// Make IsCurrent=0 for outdated rows
 	uErr := c.outdateDagTasks(ctx, tx, dagId)
 	if uErr != nil {
-		slog.Error("Cannot outdate old dagtasks", "dagId", dagId, "err", uErr)
+		c.logger.Error("Cannot outdate old dagtasks", "dagId", dagId, "err",
+			uErr)
 		return uErr
 	}
 
@@ -52,7 +52,7 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 		if iErr != nil {
 			rollErr := tx.Rollback()
 			if rollErr != nil {
-				slog.Error("Error while rollbacking SQL transaction", "err",
+				c.logger.Error("Error while rollbacking SQL transaction", "err",
 					rollErr)
 			}
 			return errors.New("could not sync dag and dagtasks properly. SQL transaction was rollbacked")
@@ -61,11 +61,11 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 
 	cErr := tx.Commit()
 	if cErr != nil {
-		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err",
+		c.logger.Error("Could not commit SQL transaction", "dagId", dagId, "err",
 			cErr)
 		return cErr
 	}
-	slog.Debug("Finished syncing dag and dagtasks tables", "dagId", dagId,
+	c.logger.Debug("Finished syncing dag and dagtasks tables", "dagId", dagId,
 		"duration", time.Since(start))
 	return nil
 }
@@ -80,17 +80,17 @@ func (c *Client) insertSingleDagTask(
 	insertTs string,
 ) error {
 	start := time.Now()
-	slog.Debug("Start inserting new dag task", "dagId", dagId, "taskId",
+	c.logger.Debug("Start inserting new dag task", "dagId", dagId, "taskId",
 		task.Id(), "insertTs", insertTs)
 
 	// Insert dagtask row
 	iErr := c.insertDagTask(ctx, tx, dagId, task, insertTs)
 	if iErr != nil {
-		slog.Error("Cannot insert new dagtask", "dagId", dagId, "taskId",
+		c.logger.Error("Cannot insert new dagtask", "dagId", dagId, "taskId",
 			task.Id(), "err", iErr)
 		return iErr
 	}
-	slog.Debug("Finished inserting new DagTask", "dagId", dagId, "taskId",
+	c.logger.Debug("Finished inserting new DagTask", "dagId", dagId, "taskId",
 		task.Id(), "duration", time.Since(start))
 	return nil
 }
@@ -131,11 +131,12 @@ func (c *Client) outdateDagTasks(
 // dagtasks table.
 func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, error) {
 	start := time.Now()
-	slog.Debug("Start reading DagTasks", "dagId", dagId)
+	c.logger.Debug("Start reading DagTasks", "dagId", dagId)
 
 	rows, queryErr := c.dbConn.QueryContext(ctx, c.readDagTasksQuery(), dagId)
 	if queryErr != nil {
-		slog.Error("Failed querying DagTasks", "dagId", dagId, "err", queryErr)
+		c.logger.Error("Failed querying DagTasks", "dagId", dagId, "err",
+			queryErr)
 		return nil, queryErr
 	}
 	defer rows.Close()
@@ -144,7 +145,7 @@ func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, err
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
-			slog.Warn("Context done while processing DagTask rows", "dagId",
+			c.logger.Warn("Context done while processing DagTask rows", "dagId",
 				dagId, "err", ctx.Err())
 			return nil, ctx.Err()
 		default:
@@ -156,7 +157,7 @@ func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, err
 		scanErr := rows.Scan(&fetchedDagId, &fetchedTaskId, &isCurrentInt,
 			&insertTs, &version, &typeName, &bodyHash, &bodySource)
 		if scanErr != nil {
-			slog.Error("Failed scanning a DagTask record", "dagId", dagId,
+			c.logger.Error("Failed scanning a DagTask record", "dagId", dagId,
 				"err", scanErr)
 			return nil, scanErr
 		}
@@ -174,11 +175,11 @@ func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, err
 	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
-		slog.Error("Failed interating over DagTask rows", "dagId", dagId, "err",
-			rowsErr)
+		c.logger.Error("Failed interating over DagTask rows", "dagId", dagId,
+			"err", rowsErr)
 		return nil, rowsErr
 	}
-	slog.Debug("Finished reading DagTasks", "dagId", dagId, "duration",
+	c.logger.Debug("Finished reading DagTasks", "dagId", dagId, "duration",
 		time.Since(start))
 	return tasks, nil
 }
@@ -187,7 +188,7 @@ func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, err
 // DAG ID and task ID.
 func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask, error) {
 	start := time.Now()
-	slog.Debug("Start reading DagTask", "dagId", dagId, "taskId", taskId)
+	c.logger.Debug("Start reading DagTask", "dagId", dagId, "taskId", taskId)
 
 	row := c.dbConn.QueryRowContext(ctx, c.readDagTaskQuery(), dagId, taskId)
 	var dId, tId, typeName, insertTs, version, bodyHash, bodySource string
@@ -199,8 +200,8 @@ func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask
 	}
 
 	if scanErr != nil {
-		slog.Error("Failed scanning DagTask record", "dagId", dagId, "taskId",
-			taskId)
+		c.logger.Error("Failed scanning DagTask record", "dagId", dagId,
+			"taskId", taskId)
 		return DagTask{}, scanErr
 	}
 
@@ -213,7 +214,7 @@ func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask
 		TaskBodyHash:   bodyHash,
 		TaskBodySource: bodySource,
 	}
-	slog.Debug("Finished reading DagTask", "dagId", dagId, "taskId", taskId,
+	c.logger.Debug("Finished reading DagTask", "dagId", dagId, "taskId", taskId,
 		"duration", time.Since(start))
 	return dagtask, nil
 }

@@ -18,6 +18,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -38,6 +39,7 @@ type DB interface {
 // Clinet represents the main database client.
 type Client struct {
 	dbConn DB
+	logger *slog.Logger
 }
 
 // Produces new Client using in-memory SQLite database with schema created
@@ -61,7 +63,9 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 		}
 	}
 	sqliteDB := SqliteDB{dbConn: db}
-	return &Client{&sqliteDB}, nil
+	opts := slog.HandlerOptions{Level: slog.LevelInfo}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	return &Client{&sqliteDB, logger}, nil
 }
 
 // CleanUpSqliteTmp deletes SQLite database source file if all tests in the

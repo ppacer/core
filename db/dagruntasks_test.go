@@ -191,7 +191,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 }
 
 func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -211,7 +211,7 @@ func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
 }
 
 func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -258,7 +258,7 @@ func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
 }
 
 func TestRunningTasksNumEmpty(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestRunningTasksNumEmpty(t *testing.T) {
 }
 
 func TestRunningTasksNumAllFinished(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestRunningTasksNumAllFinished(t *testing.T) {
 }
 
 func TestRunningTasksNumWithRunningTasks(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestRunningTasksNumWithRunningTasks(t *testing.T) {
 }
 
 func TestRunningTasksNumWithUpdate(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

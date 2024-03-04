@@ -12,7 +12,7 @@ import (
 )
 
 func TestSQLiteLoggerSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClientForLogs()
+	c, err := db.NewSqliteTmpClientForLogs(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestSQLiteLoggerSimple(t *testing.T) {
 }
 
 func TestSQLiteLoggerAttributes(t *testing.T) {
-	c, err := db.NewSqliteTmpClientForLogs()
+	c, err := db.NewSqliteTmpClientForLogs(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestSQLiteLoggerLevelError(t *testing.T) {
 }
 
 func testSQLiteLoggerLevel(t *testing.T, lvl slog.Level, expectedRows int) {
-	c, err := db.NewSqliteTmpClientForLogs()
+	c, err := db.NewSqliteTmpClientForLogs(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

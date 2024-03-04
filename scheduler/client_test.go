@@ -311,7 +311,7 @@ func readDagRunTaskFromDb(
 // Initialize Scheduler for tests.
 func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler {
 	t.Helper()
-	dbClient, err := db.NewSqliteTmpClient()
+	dbClient, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,24 +21,22 @@ import (
 // Produces new Client based on given connection string to SQLite database. If
 // database file does not exist in given location, then empty SQLite database
 // with setup schema will be created.
-func NewSqliteClient(dbFilePath string) (*Client, error) {
-	return newSqliteClientForSchema(dbFilePath, setupSqliteSchema)
+func NewSqliteClient(dbFilePath string, logger *slog.Logger) (*Client, error) {
+	return newSqliteClientForSchema(dbFilePath, logger, setupSqliteSchema)
 }
 
 // Produces new Client for logs based on given connection string to SQLite
 // database. If database file does not exist in given location, then empty
 // SQLite database with setup schema will be created.
-func NewSqliteClientForLogs(dbFilePath string) (*Client, error) {
-	return newSqliteClientForSchema(dbFilePath, setupSqliteSchemaForLogs)
+func NewSqliteClientForLogs(dbFilePath string, logger *slog.Logger) (*Client, error) {
+	return newSqliteClientForSchema(dbFilePath, logger, setupSqliteSchemaForLogs)
 }
 
 func newSqliteClientForSchema(
-	dbFilePath string, setupSchemaFunc func(*sql.DB) error,
+	dbFilePath string, logger *slog.Logger, setupSchemaFunc func(*sql.DB) error,
 ) (*Client, error) {
 	dbFilePathAbs, absErr := filepath.Abs(dbFilePath)
 	if absErr != nil {
-		slog.Error("Cannot get absolute path of database file", "dbFilePath",
-			dbFilePath)
 		return nil, fmt.Errorf("cannot get absolute path of database file %s: %w",
 			dbFilePath, absErr)
 	}
@@ -50,8 +48,6 @@ func newSqliteClientForSchema(
 	connString := sqliteConnString(dbFilePathAbs)
 	db, dbErr := sql.Open("sqlite", connString)
 	if dbErr != nil {
-		slog.Error("Could not connect to SQLite", "connString", connString,
-			"err", dbErr)
 		return nil, fmt.Errorf("cannot connect to SQLite DB (%s): %w",
 			connString, dbErr)
 	}
@@ -63,23 +59,29 @@ func newSqliteClientForSchema(
 				connString, schemaErr)
 		}
 	}
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelWarn}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: dbFilePathAbs}
-	return &Client{&sqliteDB}, nil
+	return &Client{&sqliteDB, logger}, nil
 }
 
 // Produces new Client using SQLite database created as temp file. It's mainly
 // for testing and ad-hocs.
-func NewSqliteTmpClient() (*Client, error) {
-	return newSqliteTmpClientForSchema("sqlite-", setupSqliteSchema)
+func NewSqliteTmpClient(logger *slog.Logger) (*Client, error) {
+	return newSqliteTmpClientForSchema("sqlite-", logger, setupSqliteSchema)
 }
 
 // Produces new Client for logs using SQLite database created as temp file.
 // It's mainly for testing and ad-hocs.
-func NewSqliteTmpClientForLogs() (*Client, error) {
-	return newSqliteTmpClientForSchema("sqlitelogs-", setupSqliteSchemaForLogs)
+func NewSqliteTmpClientForLogs(logger *slog.Logger) (*Client, error) {
+	return newSqliteTmpClientForSchema("sqlitelogs-", logger, setupSqliteSchemaForLogs)
 }
 
-func newSqliteTmpClientForSchema(prefix string, setupSchemaFunc func(*sql.DB) error) (*Client, error) {
+func newSqliteTmpClientForSchema(
+	prefix string, logger *slog.Logger, setupSchemaFunc func(*sql.DB) error,
+) (*Client, error) {
 	tmpFile, err := os.CreateTemp("", prefix)
 	if err != nil {
 		return nil, err
@@ -101,8 +103,12 @@ func newSqliteTmpClientForSchema(prefix string, setupSchemaFunc func(*sql.DB) er
 		return nil, fmt.Errorf("cannot setup SQLite schema: %w", schemaErr)
 	}
 
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelWarn}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: tmpFilePath}
-	return &Client{&sqliteDB}, nil
+	return &Client{&sqliteDB, logger}, nil
 }
 
 func sqliteConnString(dbFilePath string) string {

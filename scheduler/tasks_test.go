@@ -1076,7 +1076,7 @@ func listenOnSchedulerErrors(errChan chan taskSchedulerError, t *testing.T) {
 
 // Initialize default TaskScheduler with in-memory DB client for testing.
 func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

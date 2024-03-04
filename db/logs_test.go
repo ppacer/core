@@ -10,7 +10,7 @@ import (
 )
 
 func TestInsertTaskLogSimple(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs()
+	c, err := NewSqliteTmpClientForLogs(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestInsertTaskLogSimple(t *testing.T) {
 }
 
 func BenchmarkInsertTaskLog(b *testing.B) {
-	c, err := NewSqliteTmpClientForLogs()
+	c, err := NewSqliteTmpClientForLogs(nil)
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"time"
 )
 
@@ -26,7 +25,7 @@ func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 		tlr.Message, tlr.Attributes,
 	)
 	if iErr != nil {
-		slog.Error("Cannot insert new tasklog row", "TaskLogRecord", tlr,
+		c.logger.Error("Cannot insert new tasklog row", "TaskLogRecord", tlr,
 			"err", iErr)
 	}
 	rowsAffected, raErr := res.RowsAffected()
@@ -45,14 +44,14 @@ func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunLogsQuery(), dagId, execTs)
 	if rErr != nil {
-		slog.Error("Error while querying DAG run logs", "dagId", dagId, "execTs",
-			execTs, "err", rErr.Error())
+		c.logger.Error("Error while querying DAG run logs", "dagId", dagId,
+			"execTs", execTs, "err", rErr.Error())
 		return nil, rErr
 	}
 	defer rows.Close()
 	logs, err := c.readTaskLogs(rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
-		slog.Error("Error while processing SQL rows from tasklogs", "dagId",
+		c.logger.Error("Error while processing SQL rows from tasklogs", "dagId",
 			dagId, "execTs", execTs, "err", rowsErr)
 		return nil, rowsErr
 	}
@@ -65,14 +64,14 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunTaskLogsQuery(),
 		dagId, execTs, taskId)
 	if rErr != nil {
-		slog.Error("Error while querying DAG run task logs", "dagId", dagId,
+		c.logger.Error("Error while querying DAG run task logs", "dagId", dagId,
 			"execTs", execTs, "taskId", taskId, "err", rErr.Error())
 		return nil, rErr
 	}
 	defer rows.Close()
 	logs, err := c.readTaskLogs(rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
-		slog.Error("Error while processing SQL rows from tasklogs", "dagId",
+		c.logger.Error("Error while processing SQL rows from tasklogs", "dagId",
 			dagId, "execTs", execTs, "taskId", taskId, "err", rowsErr)
 		return nil, rowsErr
 	}
@@ -83,14 +82,14 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 // table. Given rows should be close by the parent function.
 func (c *Client) readTaskLogs(rows *sql.Rows) ([]TaskLogRecord, error) {
 	start := time.Now()
-	slog.Debug("Start reading tasklogs records")
+	c.logger.Debug("Start reading tasklogs records")
 	tlrs := make([]TaskLogRecord, 0, 10)
 	var dagId, execTs, taskId, insertTs, lvl, msg, attr string
 
 	for rows.Next() {
 		scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &lvl, &msg, &attr)
 		if scanErr != nil {
-			slog.Error("Cannot parse tasklogs record", "err", scanErr.Error())
+			c.logger.Error("Cannot parse tasklogs record", "err", scanErr.Error())
 			continue
 		}
 		tlr := TaskLogRecord{
@@ -105,7 +104,7 @@ func (c *Client) readTaskLogs(rows *sql.Rows) ([]TaskLogRecord, error) {
 		tlrs = append(tlrs, tlr)
 	}
 
-	slog.Debug("Finished reading tasklogs records", "duration",
+	c.logger.Debug("Finished reading tasklogs records", "duration",
 		time.Since(start))
 	return tlrs, nil
 }

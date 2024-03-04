@@ -496,7 +496,7 @@ func TestDagRunsNotFinishedSimple(t *testing.T) {
 }
 
 func TestDagRunsNotFinishedForTerminalStates(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestDagRunsNotFinishedForTerminalStates(t *testing.T) {
 }
 
 func TestDagRunsNotFinishedForRunningStates(t *testing.T) {
-	c, err := NewSqliteTmpClient()
+	c, err := NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

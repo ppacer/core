@@ -253,11 +253,11 @@ func schedulerWithSqlite(
 	queues scheduler.Queues, config scheduler.Config, t *testing.T,
 ) (*scheduler.Scheduler, *db.Client, *db.Client) {
 	t.Helper()
-	dbClient, err := db.NewSqliteTmpClient()
+	dbClient, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	logsDbClient, lErr := db.NewSqliteTmpClientForLogs()
+	logsDbClient, lErr := db.NewSqliteTmpClientForLogs(nil)
 	if lErr != nil {
 		t.Fatal(lErr)
 	}

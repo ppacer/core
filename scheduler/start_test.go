@@ -18,7 +18,7 @@ import (
 )
 
 func TestSyncOneDagNoChanges(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 }
 
 func TestSyncOneDagTimeout(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestSyncOneDagTimeout(t *testing.T) {
 }
 
 func TestSyncOneDagChangingAttr(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 }
 
 func TestSyncOneDagChangingSchedule(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 }
 
 func TestSyncOneDagChangingTasks(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +407,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheSmall(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

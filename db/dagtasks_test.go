@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"os"
 	"testing"
@@ -229,8 +228,6 @@ type WaitTask struct {
 func (wt WaitTask) Id() string { return wt.TaskId }
 
 func (wt WaitTask) Execute(_ dag.TaskContext) error {
-	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
-	slog.Info("Task is done", "task", wt.Id())
 	return nil
 }

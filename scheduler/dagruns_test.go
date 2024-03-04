@@ -18,7 +18,7 @@ import (
 )
 
 func TestNextScheduleForDagRunsSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
 }
 
 func TestTryScheduleDagSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +447,7 @@ func TestTryScheduleDagSimple(t *testing.T) {
 }
 
 func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 }
 
 func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
-	c, err := db.NewSqliteTmpClient()
+	c, err := db.NewSqliteTmpClient(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

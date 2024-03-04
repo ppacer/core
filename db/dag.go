@@ -8,7 +8,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log/slog"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -35,8 +34,8 @@ func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 	d, err := c.readDagTx(ctx, tx, dagId)
 	cErr := tx.Commit()
 	if cErr != nil {
-		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err",
-			cErr)
+		c.logger.Error("Could not commit SQL transaction", "dagId", dagId,
+			"err", cErr)
 		return Dag{}, cErr
 	}
 	return d, err
@@ -50,7 +49,7 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(time.Now())
 	dagId := string(d.Id)
-	slog.Debug("Start upserting dag in dags table...", "dagId", dagId,
+	c.logger.Debug("Start upserting dag in dags table...", "dagId", dagId,
 		"insertTs", insertTs)
 	tx, _ := c.dbConn.Begin()
 
@@ -62,12 +61,12 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 		iErr := c.insertDag(ctx, tx, dag, insertTs)
 		cErr := tx.Commit()
 		if cErr != nil {
-			slog.Error("Could not commit SQL transaction", "dagId", dagId,
+			c.logger.Error("Could not commit SQL transaction", "dagId", dagId,
 				"err", cErr)
 			tx.Rollback()
 			return cErr
 		}
-		slog.Debug("Inserted new DAG into dags table", "dagId", dagId,
+		c.logger.Debug("Inserted new DAG into dags table", "dagId", dagId,
 			"duration", time.Since(start))
 		return iErr
 	}
@@ -77,12 +76,12 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 
 	cErr := tx.Commit()
 	if cErr != nil {
-		slog.Error("Could not commit SQL transaction", "dagId", dagId, "err",
+		c.logger.Error("Could not commit SQL transaction", "dagId", dagId, "err",
 			cErr)
 		tx.Rollback()
 		return cErr
 	}
-	slog.Debug("Updating DAG row in dags table", "dagId", dagId, "duration",
+	c.logger.Debug("Updating DAG row in dags table", "dagId", dagId, "duration",
 		time.Since(start))
 	return uErr
 }
@@ -90,7 +89,7 @@ func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 // readDag reads a row from dags table within SQL transaction.
 func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, error) {
 	start := time.Now()
-	slog.Debug("Start reading dag from dags table", "dagId", dagId)
+	c.logger.Debug("Start reading dag from dags table", "dagId", dagId)
 
 	row := tx.QueryRowContext(ctx, c.readDagQuery(), dagId)
 	var dId, createTs, createVersion, hashMeta, hashTasks, attr string
@@ -102,7 +101,8 @@ func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, 
 		return Dag{}, scanErr
 	}
 	if scanErr != nil {
-		slog.Error("Failed scanning dag record", "dagId", dagId, "err", scanErr)
+		c.logger.Error("Failed scanning dag record", "dagId", dagId, "err",
+			scanErr)
 		return Dag{}, scanErr
 	}
 	dag := Dag{
@@ -117,8 +117,8 @@ func (c *Client) readDagTx(ctx context.Context, tx *sql.Tx, dagId string) (Dag, 
 		HashTasks:           hashTasks,
 		Attributes:          attr,
 	}
-	slog.Debug("Finished reading dag from dags table", "dagId", dagId, "duration",
-		time.Since(start))
+	c.logger.Debug("Finished reading dag from dags table", "dagId", dagId,
+		"duration", time.Since(start))
 	return dag, nil
 }
 
