@@ -104,15 +104,11 @@ func parseSinglePackage(dirPath string, fs embed.FS) (PackageASTs, error) {
 		}
 		data, readErr := fs.ReadFile(embedPathJoin(dirPath, entry.Name()))
 		if readErr != nil {
-			slog.Error("Could not read context of file", "dir", dirPath, "file",
-				entry.Name(), "err", readErr)
 			return PackageASTs{}, readErr
 		}
 		astFile, parseErr := parser.ParseFile(fset, entry.Name(), data,
 			parser.AllErrors|parser.ParseComments)
 		if parseErr != nil {
-			slog.Error("Error while parsing file", "dir", dirPath, "file",
-				entry.Name())
 			return PackageASTs{}, parseErr
 		}
 		fileToASTs[entry.Name()] = astFile

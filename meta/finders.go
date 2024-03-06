@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"log/slog"
+	"reflect"
 )
 
 var ErrMethodNotFound = errors.New("method not found in ASTs")
@@ -64,4 +65,18 @@ func findMethodInAST(astFile *ast.File, typeName, methodName string) *ast.FuncDe
 		}
 	}
 	return nil
+}
+
+// TypeName returns string with type name of given object. For pointers (*T)
+// underlying type name is returned.
+func TypeName(t any) string {
+	var typeName string
+	tType := reflect.TypeOf(t)
+
+	if tType.Kind() == reflect.Ptr {
+		typeName = tType.Elem().Name()
+	} else {
+		typeName = tType.Name()
+	}
+	return typeName
 }

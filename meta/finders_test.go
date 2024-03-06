@@ -102,3 +102,43 @@ func TestFindMethodBodySourceNotExist(t *testing.T) {
 		t.Errorf("Expected ErrMethodNotFound error, but got %v error", err)
 	}
 }
+
+type Task interface {
+	Execute() error
+}
+type MyTask struct{}
+
+func (mt *MyTask) Execute() error {
+	return nil
+}
+
+func TestTypeNames(t *testing.T) {
+	x := 42
+	type MyInt int
+	mi42 := MyInt(42)
+	var a any = MyInt(42)
+
+	mt := MyTask{}
+	var task Task = &mt
+
+	data := []struct {
+		obj              any
+		expectedTypeName string
+	}{
+		{42, "int"},
+		{&x, "int"},
+		{"test", "string"},
+		{MyInt(42), "MyInt"},
+		{&mi42, "MyInt"},
+		{a, "MyInt"},
+		{task, "MyTask"},
+	}
+
+	for _, d := range data {
+		tn := TypeName(d.obj)
+		if tn != d.expectedTypeName {
+			t.Errorf("For obj %+v expected type name %s, got %s", d.obj,
+				d.expectedTypeName, tn)
+		}
+	}
+}

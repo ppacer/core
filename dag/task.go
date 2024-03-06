@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 
 	"github.com/ppacer/core/meta"
@@ -88,7 +87,7 @@ func ParseTaskStatus(s string) (TaskStatus, error) {
 // would be returned. Though it should be the case only when whole new package
 // is not added to the embedding (src/embed.go).
 func TaskExecuteSource(t Task) string {
-	tTypeName := reflect.TypeOf(t).Name()
+	tTypeName := meta.TypeName(t)
 	_, execMethodSource, err := meta.MethodBodySource(
 		meta.PackagesASTsMap, tTypeName, "Execute",
 	)
