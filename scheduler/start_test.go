@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d)
+	s1Err := syncDag(ctx, c, d, simpleLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -56,7 +57,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d)
+	s2Err := syncDag(ctx, c, d, simpleLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -112,7 +113,7 @@ func TestSyncOneDagTimeout(t *testing.T) {
 	defer cancel()
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
-	sErr := syncDag(ctx, c, d)
+	sErr := syncDag(ctx, c, d, simpleLogger())
 	if sErr == nil {
 		t.Error("Expected syncDag error due to context timeout, but got nil")
 	}
@@ -133,7 +134,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d)
+	s1Err := syncDag(ctx, c, d, simpleLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -152,7 +153,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	d.Attr.Tags = []string{"test", "test2"}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d)
+	s2Err := syncDag(ctx, c, d, simpleLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -192,7 +193,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 	// First sync
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
-	s1Err := syncDag(ctx, c, d)
+	s1Err := syncDag(ctx, c, d, simpleLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -213,7 +214,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 	d.Schedule = &newSched
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d)
+	s2Err := syncDag(ctx, c, d, simpleLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -255,7 +256,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d)
+	s1Err := syncDag(ctx, c, d, simpleLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -275,7 +276,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	d.Root.Next(additionalTask)
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d)
+	s2Err := syncDag(ctx, c, d, simpleLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -337,7 +338,7 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 
 	const size = 10
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -375,7 +376,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 	const size = 10
 	const expected = 3
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -434,7 +435,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 	}
 
 	drtCache := ds.NewLruCache[DagRunTask, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -551,8 +552,14 @@ type waitTask struct {
 func (wt waitTask) Id() string { return wt.TaskId }
 
 func (wt waitTask) Execute(_ dag.TaskContext) error {
-	slog.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
+	l := simpleLogger()
+	l.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
-	slog.Info("Task is done", "task", wt.Id())
+	l.Info("Task is done", "task", wt.Id())
 	return nil
+}
+
+func simpleLogger() *slog.Logger {
+	opts := slog.HandlerOptions{Level: slog.LevelInfo}
+	return slog.New(slog.NewTextHandler(os.Stdout, &opts))
 }

@@ -56,7 +56,8 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
-	sc := scheduler.NewClient(schedAddr, httpClient, scheduler.DefaultClientConfig)
+	scfg := scheduler.DefaultClientConfig
+	sc := scheduler.NewClient(schedAddr, httpClient, logger, scfg)
 	return &Executor{
 		schedClient: sc,
 		config:      cfg,
@@ -132,7 +133,7 @@ func executeTask(
 		return
 	}
 
-	slog.Info("Finished executing task", "taskToExec", tte)
+	logger.Info("Finished executing task", "taskToExec", tte)
 	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
 	if uErr != nil {
 		logger.Error("Error while updating status", "tte", tte, "status",

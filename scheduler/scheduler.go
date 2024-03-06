@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -22,12 +23,13 @@ import (
 
 // Scheduler is the title object of this package, it connects all other
 // components together. There should be single instance of a scheduler in
-// single project - currently model of 1 scheduler and N executors are
+// single project - currently model of 1 scheduler and N executors is
 // supported.
 type Scheduler struct {
 	dbClient *db.Client
 	config   Config
 	queues   Queues
+	logger   *slog.Logger
 
 	sync.Mutex
 	state State
@@ -37,12 +39,18 @@ type Scheduler struct {
 // queues for asynchronous communication and configuration. Database clients
 // are by default available in db package (e.g. db.NewSqliteClient). Default
 // configuration is set in DefaultConfig and default fixed-size buffer queues
-// in DefaultQueues.
-func New(dbClient *db.Client, queues Queues, config Config) *Scheduler {
+// in DefaultQueues. In case when nil is provided as logger, then slog.Logger
+// is instantiated with TextHandler and INFO severity level.
+func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger) *Scheduler {
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelInfo}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	}
 	return &Scheduler{
 		dbClient: dbClient,
 		config:   config,
 		queues:   queues,
+		logger:   logger,
 		state:    StateStarted,
 	}
 }
@@ -57,15 +65,16 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 
 	// Syncing queues with the database in case of program restarts.
 	s.setState(StateSynchronizing)
-	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.config)
-	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.config)
+	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.logger, s.config)
+	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.logger, s.config)
 	if cacheSyncErr != nil {
-		slog.Error("Cannot sync DAG run task cache", "err", cacheSyncErr)
+		s.logger.Error("Cannot sync DAG run task cache", "err", cacheSyncErr)
 		// There is no need to retry, it's just a cache.
 	}
 
 	dagRunWatcher := NewDagRunWatcher(
-		s.queues.DagRuns, s.dbClient, s.getState, s.config.DagRunWatcherConfig,
+		s.queues.DagRuns, s.dbClient, s.logger, s.getState,
+		s.config.DagRunWatcherConfig,
 	)
 
 	taskScheduler := TaskScheduler{
@@ -74,6 +83,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 		TaskQueue:          s.queues.DagRunTasks,
 		TaskCache:          taskCache,
 		Config:             s.config.TaskSchedulerConfig,
+		Logger:             s.logger,
 		SchedulerStateFunc: s.getState,
 	}
 
@@ -208,7 +218,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	slog.Debug("Updated task status", "dagruntask", drt, "status", status,
+	ts.Logger.Debug("Updated task status", "dagruntask", drt, "status", status,
 		"duration", time.Since(start))
 }
 

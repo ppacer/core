@@ -7,6 +7,7 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -31,15 +32,24 @@ type DagRun struct {
 type DagRunWatcher struct {
 	queue              ds.Queue[DagRun]
 	dbClient           *db.Client
+	logger             *slog.Logger
 	schedulerStateFunc GetStateFunc
 	config             DagRunWatcherConfig
 }
 
-// NewDagRunWatcher creates new instance of DagRunWatcher.
-func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, stateFunc GetStateFunc, config DagRunWatcherConfig) *DagRunWatcher {
+// NewDagRunWatcher creates new instance of DagRunWatcher. Argument stateFunc
+// is usually passed by the main Scheduler, to give access to its state. In
+// case when nil is provided as logger, then slog.Logger is instantiated with
+// TextHandler and INFO severity level.
+func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, logger *slog.Logger, stateFunc GetStateFunc, config DagRunWatcherConfig) *DagRunWatcher {
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelInfo}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	}
 	return &DagRunWatcher{
 		queue:              queue,
 		dbClient:           dbClient,
+		logger:             logger,
 		schedulerStateFunc: stateFunc,
 		config:             config,
 	}
@@ -57,49 +67,46 @@ func (drw *DagRunWatcher) Watch(dags dag.Registry) {
 	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
 	defer cancel()
 	nextSchedules := make(map[dag.Id]*time.Time)
-	updateNextSchedules(ctx, dags, time.Now(), drw.dbClient, nextSchedules)
+	drw.updateNextSchedules(ctx, dags, time.Now(), nextSchedules)
 	for {
 		if drw.schedulerStateFunc() == StateStopping {
-			slog.Warn("Scheduler is stopping. DagRunWatcher will not schedule other runs.")
+			drw.logger.Warn("Scheduler is stopping. DagRunWatcher will not schedule other runs.")
 			return
 		}
 		now := time.Now()
-		trySchedule(dags, drw.queue, nextSchedules, now, drw.dbClient, drw.config)
+		drw.trySchedule(dags, nextSchedules, now)
 		time.Sleep(drw.config.WatchInterval)
 	}
 }
 
-func trySchedule(
+func (drw *DagRunWatcher) trySchedule(
 	dags dag.Registry,
-	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
 	currentTime time.Time,
-	dbClient *db.Client,
-	config DagRunWatcherConfig,
 ) {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, config.DatabaseContextTimeout)
+	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
 	defer cancel()
 
 	// Make sure we have next schedules for every dag in dags
 	if len(dags) != len(nextSchedules) {
-		slog.Warn("Seems like number of next schedules does not match number "+
+		drw.logger.Warn("Seems like number of next schedules does not match number "+
 			"of dags. Will try refresh next schedules.", "dags", len(dags),
 			"nextSchedules", len(nextSchedules))
-		updateNextSchedules(ctx, dags, currentTime, dbClient, nextSchedules)
+		drw.updateNextSchedules(ctx, dags, currentTime, nextSchedules)
 	}
 
 	for _, d := range dags {
 		// Check if there is space on the queue to schedule a new dag run
-		for queue.Capacity() <= 0 {
-			slog.Warn("The dag run queue is full. Will try in moment", "moment",
-				config.QueueIsFullInterval)
-			time.Sleep(config.QueueIsFullInterval)
+		for drw.queue.Capacity() <= 0 {
+			drw.logger.Warn("The dag run queue is full. Will try in moment", "moment",
+				drw.config.QueueIsFullInterval)
+			time.Sleep(drw.config.QueueIsFullInterval)
 		}
 
-		tsdErr := tryScheduleDag(ctx, d, currentTime, queue, nextSchedules, dbClient)
+		tsdErr := drw.tryScheduleDag(ctx, d, currentTime, nextSchedules)
 		if tsdErr != nil {
-			slog.Error("Error while trying to schedule new dag run", "dagId",
+			drw.logger.Error("Error while trying to schedule new dag run", "dagId",
 				string(d.Id), "err", tsdErr)
 			// We don't need to handle those errors in here. Function
 			// tryScheduleDag will be retried in another iteration and that
@@ -113,60 +120,58 @@ func trySchedule(
 // database dagruns table. When scheduling new dag run fails in any of steps,
 // then non-nil error is returned. If DAG run is successfully scheduled, this
 // function updates nextSchedules for given dag ID.
-func tryScheduleDag(
+func (drw *DagRunWatcher) tryScheduleDag(
 	ctx context.Context,
 	d dag.Dag,
 	currentTime time.Time,
-	queue ds.Queue[DagRun],
 	nextSchedules map[dag.Id]*time.Time,
-	dbClient *db.Client,
 ) error {
 	shouldBe, schedule := shouldBeSheduled(d, nextSchedules, currentTime)
 	if !shouldBe {
 		return nil
 	}
-	slog.Info("About to try scheduling new dag run", "dagId", string(d.Id),
+	drw.logger.Info("About to try scheduling new dag run", "dagId", string(d.Id),
 		"execTs", schedule)
 
 	execTs := timeutils.ToString(schedule)
 	newDagRun := DagRun{DagId: d.Id, AtTime: schedule}
-	alreadyScheduled, dreErr := dbClient.DagRunAlreadyScheduled(ctx, string(d.Id), execTs)
+	alreadyScheduled, dreErr := drw.dbClient.DagRunAlreadyScheduled(ctx, string(d.Id), execTs)
 	if dreErr != nil {
 		return dreErr
 	}
 	if alreadyScheduled {
-		alreadyInQueue := queue.Contains(newDagRun)
+		alreadyInQueue := drw.queue.Contains(newDagRun)
 		if !alreadyInQueue {
 			// When dag run is already in the database but it's not on the
 			// queue (perhaps due to scheduler restart).
-			ds.PutContext(ctx, queue, newDagRun)
+			ds.PutContext(ctx, drw.queue, newDagRun)
 		}
 		return nil
 	}
-	runId, iErr := dbClient.InsertDagRun(ctx, string(d.Id), execTs)
+	runId, iErr := drw.dbClient.InsertDagRun(ctx, string(d.Id), execTs)
 	if iErr != nil {
 		return iErr
 	}
-	uErr := dbClient.UpdateDagRunStatus(
+	uErr := drw.dbClient.UpdateDagRunStatus(
 		ctx, runId, dag.RunReadyToSchedule.String(),
 	)
 	if uErr != nil {
-		slog.Warn("Cannot update dag run status to READY_TO_SCHEDULE", "dagId",
-			string(d.Id), "execTs", schedule, "err", uErr)
+		drw.logger.Warn("Cannot update dag run status to READY_TO_SCHEDULE",
+			"dagId", string(d.Id), "execTs", schedule, "err", uErr)
 		// We don't need to block the process because of this error. In worst
 		// case we can omit having this status.
 	}
-	qErr := queue.Put(newDagRun)
+	qErr := drw.queue.Put(newDagRun)
 	if qErr != nil {
 		// We don't remove entry from dagruns table, based on this it would be
 		// put on the queue in the next iteration.
-		slog.Error("Cannot put dag run on the queue", "dagId", string(d.Id),
+		drw.logger.Error("Cannot put dag run on the queue", "dagId", string(d.Id),
 			"execTs", schedule, "err", qErr)
 		return qErr
 	}
-	uErr = dbClient.UpdateDagRunStatus(ctx, runId, dag.RunScheduled.String())
+	uErr = drw.dbClient.UpdateDagRunStatus(ctx, runId, dag.RunScheduled.String())
 	if uErr != nil {
-		slog.Warn("Cannot update dag run status to SCHEDULED", "dagId",
+		drw.logger.Warn("Cannot update dag run status to SCHEDULED", "dagId",
 			string(d.Id), "execTs", schedule, "err", uErr)
 		return uErr
 	}
@@ -202,16 +207,15 @@ func shouldBeSheduled(
 // NextScheduleForDagRuns determines next schedules for all DAGs given in dags
 // and current time. It reads latest dag runs from the database. If DAG has no
 // schedule this DAG is still in output map but with nil next schedule time.
-func updateNextSchedules(
+func (drw *DagRunWatcher) updateNextSchedules(
 	ctx context.Context,
 	dags dag.Registry,
 	currentTime time.Time,
-	dbClient *db.Client,
 	nextSchedules map[dag.Id]*time.Time,
 ) {
-	latestDagRuns, err := dbClient.ReadLatestDagRuns(ctx)
+	latestDagRuns, err := drw.dbClient.ReadLatestDagRuns(ctx)
 	if err != nil {
-		slog.Error("Failed to load latest dag runs to create a cache. Cache is empty")
+		drw.logger.Error("Failed to load latest dag runs to create a cache. Cache is empty")
 	}
 
 	for _, dag := range dags {

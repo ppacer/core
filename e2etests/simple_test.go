@@ -261,5 +261,5 @@ func schedulerWithSqlite(
 	if lErr != nil {
 		t.Fatal(lErr)
 	}
-	return scheduler.New(dbClient, queues, config), dbClient, logsDbClient
+	return scheduler.New(dbClient, queues, config, nil), dbClient, logsDbClient
 }

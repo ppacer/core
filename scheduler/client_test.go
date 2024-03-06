@@ -26,7 +26,7 @@ func TestClientGetTaskEmptyDb(t *testing.T) {
 	defer testServer.Close()
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	_, err := schedClient.GetTask()
 	if err == nil {
 		t.Error("Expected non-nil error for GetTask on empty database")
@@ -45,7 +45,7 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	drt := DagRunTask{dag.Id("mock_dag"), time.Now(), "task1"}
 	putErr := queues.DagRunTasks.Put(drt)
@@ -86,7 +86,7 @@ func TestClientGetTaskMockMany(t *testing.T) {
 	testServer := httptest.NewServer(scheduler.Start(dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	dagId := dag.Id("mock_dag")
 	data := []DagRunTask{
@@ -129,7 +129,7 @@ func TestClientUpsertTaskEmptyDb(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	tte := models.TaskToExec{
 		DagId:  "mock_dag",
 		ExecTs: timeutils.ToString(time.Now()),
@@ -153,7 +153,7 @@ func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
 	testServer := httptest.NewServer(scheduler.Start(dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	ctx := context.Background()
 	const dagId = "mock_dag"
@@ -202,7 +202,7 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 	testServer := httptest.NewServer(scheduler.Start(dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	const dagId = "mock_dag"
 	execTs := time.Now()
@@ -249,7 +249,7 @@ func TestClientGetStateSimple(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 
-	schedClient := NewClient(testServer.URL, nil, DefaultClientConfig)
+	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	schedState, err := schedClient.GetState()
 	if err != nil {
 		t.Errorf("Error when getting scheduler state: %s", err.Error())
@@ -315,5 +315,5 @@ func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(dbClient, queues, config)
+	return New(dbClient, queues, config, nil)
 }

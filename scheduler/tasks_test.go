@@ -1089,6 +1089,7 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 		TaskQueue:   &taskQueue,
 		TaskCache:   taskCache,
 		Config:      DefaultTaskSchedulerConfig,
+		Logger:      simpleLogger(),
 		SchedulerStateFunc: func() State {
 			return StateRunning
 		},

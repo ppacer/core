@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -28,16 +29,23 @@ const (
 type Client struct {
 	httpClient   *http.Client
 	schedulerUrl string
+	logger       *slog.Logger
 }
 
-// NewClient instantiate new Client.
-func NewClient(url string, httpClient *http.Client, config ClientConfig) *Client {
+// NewClient instantiate new Client. In case when HTTP client or logger are
+// nil, those would be initialized with default parameters.
+func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config ClientConfig) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: config.HttpClientTimeout}
+	}
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelInfo}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	return &Client{
 		httpClient:   httpClient,
 		schedulerUrl: url,
+		logger:       logger,
 	}
 }
 
@@ -48,13 +56,13 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 	resp, err := c.httpClient.Get(c.getTaskUrl())
 	if err != nil {
-		slog.Error("GetTask failed", "err", err)
+		c.logger.Error("GetTask failed", "err", err)
 		return taskToExec, err
 	}
 
 	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
-		slog.Error("Could not read GetTask response body", "err", rErr)
+		c.logger.Error("Could not read GetTask response body", "err", rErr)
 		return taskToExec, rErr
 	}
 
@@ -63,7 +71,7 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		slog.Error("Got status code != 200 on GetTask response", "statuscode",
+		c.logger.Error("Got status code != 200 on GetTask response", "statuscode",
 			resp.StatusCode, "body", string(body))
 		return taskToExec, fmt.Errorf("got %d status code in GetTask response",
 			resp.StatusCode)
@@ -71,12 +79,12 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 	jErr := json.Unmarshal(body, &taskToExec)
 	if jErr != nil {
-		slog.Error("Unmarshal into APIResponse failed", "body", string(body),
+		c.logger.Error("Unmarshal into APIResponse failed", "body", string(body),
 			"err", jErr)
 		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram models.TaskToExec: %s",
 			jErr.Error())
 	}
-	slog.Debug("GetTask finished", "duration", time.Since(startTs))
+	c.logger.Debug("GetTask finished", "duration", time.Since(startTs))
 	return taskToExec, nil
 }
 
@@ -85,7 +93,7 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus) error {
 	start := time.Now()
 	statusStr := status.String()
-	slog.Debug("Start updating task status", "taskToExec", tte, "status",
+	c.logger.Debug("Start updating task status", "taskToExec", tte, "status",
 		statusStr)
 	drts := models.DagRunTaskStatus{
 		DagId:  tte.DagId,
@@ -116,7 +124,7 @@ func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus) 
 		return fmt.Errorf("error with status %s for POST %s: %s",
 			resp.Status, upsertTaskStatusEndpoint, string(body))
 	}
-	slog.Debug("Updated task status", "taskToExec", tte, "status", status,
+	c.logger.Debug("Updated task status", "taskToExec", tte, "status", status,
 		"duration", time.Since(start))
 	return nil
 }
@@ -131,7 +139,7 @@ func (c *Client) GetState() (State, error) {
 
 	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
-		slog.Error("Could not read GetTask response body", "err", rErr)
+		c.logger.Error("Could not read GetTask response body", "err", rErr)
 		return 0, rErr
 	}
 
