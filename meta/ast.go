@@ -9,39 +9,21 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"log/slog"
 	"strings"
 )
 
 // Packages ASTs map built on embedded Go source files. It's built on init.
-var PackagesASTsMap map[string]PackageASTs
+var PackagesASTsMap map[string]PackageASTs = map[string]PackageASTs{}
 
-func init() {
-	PackagesASTsMap = map[string]PackageASTs{}
-	/*
-		// TODO(dskrzypiec): This feature is not in use for now. It needs to be
-		// rearranged a bit, in order to be more suitable for using scheduler
-		// as Go package and not like a project or module.
-
-		astMap, err := ParsePackagesASTs(src.GoSourceFiles)
-		if err != nil {
-			msg := "Could not parse packages ASTs map on embedded files"
-			slog.Warn(msg, "err", err)
-		}
-		PackagesASTsMap = astMap
-		slog.Info("meta.PackagesASTsMap is set", "packages", len(astMap))
-	*/
-}
-
+// ParseASTs parses ASTs for packages and its Go files based on given FS.
+// Parsed object is assigned to PackagesASTsMap. It's enough to call this
+// function just once at the program start.
 func ParseASTs(fs embed.FS) error {
 	astMap, err := ParsePackagesASTs(fs)
 	if err != nil {
-		msg := "Could not parse packages ASTs map on embedded files"
-		slog.Warn(msg, "err", err)
 		return err
 	}
 	PackagesASTsMap = astMap
-	slog.Info("meta.PackagesASTsMap is set", "packages", len(astMap))
 	return nil
 }
 
