@@ -25,6 +25,12 @@ func NewSqliteClient(dbFilePath string, logger *slog.Logger) (*Client, error) {
 	return newSqliteClientForSchema(dbFilePath, logger, setupSqliteSchema)
 }
 
+// Produces new Client based on SQLite in-memory database. It's not persisted
+// anywhere else. Useful usually for tests and small examples.
+func NewSqliteInMemoryClient(logger *slog.Logger) (*Client, error) {
+	return newSqliteInMemoryClientForSchema(logger, setupSqliteSchema)
+}
+
 // Produces new Client for logs based on given connection string to SQLite
 // database. If database file does not exist in given location, then empty
 // SQLite database with setup schema will be created.
@@ -64,6 +70,28 @@ func newSqliteClientForSchema(
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: dbFilePathAbs}
+	return &Client{&sqliteDB, logger}, nil
+}
+
+func newSqliteInMemoryClientForSchema(
+	logger *slog.Logger, setupSchemaFunc func(*sql.DB) error,
+) (*Client, error) {
+	db, dbErr := sql.Open("sqlite", ":memory:")
+	if dbErr != nil {
+		return nil, fmt.Errorf("cannot connect to SQLite DB (in-memory): %w",
+			dbErr)
+	}
+	schemaErr := setupSchemaFunc(db)
+	if schemaErr != nil {
+		db.Close()
+		return nil, fmt.Errorf("cannot setup SQLite schema for in-memory: %w",
+			schemaErr)
+	}
+	if logger == nil {
+		opts := slog.HandlerOptions{Level: slog.LevelWarn}
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	}
+	sqliteDB := SqliteDB{dbConn: db, dbFilePath: ":memory:"}
 	return &Client{&sqliteDB, logger}, nil
 }
 

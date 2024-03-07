@@ -16,7 +16,7 @@ import (
 )
 
 func TestInsertDagRunTaskSimple(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +52,7 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 }
 
 func TestReadDagRunTasksFromEmpty(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -68,7 +68,7 @@ func TestReadDagRunTasksFromEmpty(t *testing.T) {
 
 func TestReadDagRunTasks(t *testing.T) {
 	const N = 100
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -102,7 +102,7 @@ func TestReadDagRunTasks(t *testing.T) {
 }
 
 func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -114,7 +114,7 @@ func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
 }
 
 func TestReadDagRunTaskSingle(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -140,7 +140,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 }
 
 func TestReadDagRunTaskUpdate(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}

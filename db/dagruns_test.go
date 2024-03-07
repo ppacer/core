@@ -14,7 +14,7 @@ import (
 )
 
 func TestInsertDagRunSimple(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -49,7 +49,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 }
 
 func TestInsertAndReadDagRunsAll(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -95,7 +95,7 @@ func TestInsertAndReadDagRunsAll(t *testing.T) {
 }
 
 func TestInsertAndReadDagRunsTop3(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -142,7 +142,7 @@ func TestInsertAndReadDagRunsTop3(t *testing.T) {
 }
 
 func TestInsertAndReadDagRunsTop1000(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -194,7 +194,7 @@ func TestInsertAndReadDagRunsTimeout(t *testing.T) {
 		t.Skip("This test behaves differently on Windows, than on Linux and MacOS")
 		return
 	}
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -226,7 +226,7 @@ func TestInsertAndReadDagRunsTimeout(t *testing.T) {
 }
 
 func TestReadLatestDagRunsSimple(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -283,7 +283,7 @@ func TestReadLatestDagRunsSimple(t *testing.T) {
 }
 
 func TestDagRunUpdateStatus(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -334,7 +334,7 @@ func TestDagRunUpdateStatus(t *testing.T) {
 }
 
 func TestDagRunUpdateStatusByExecTs(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -385,7 +385,7 @@ func TestDagRunUpdateStatusByExecTs(t *testing.T) {
 }
 
 func TestDagRunUpdateStatusNoRun(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -399,7 +399,7 @@ func TestDagRunUpdateStatusNoRun(t *testing.T) {
 }
 
 func TestDagRunUpdateStatusByExecTsNoRun(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -413,7 +413,7 @@ func TestDagRunUpdateStatusByExecTsNoRun(t *testing.T) {
 }
 
 func TestDagRunExistsOnEmpty(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -431,7 +431,7 @@ func TestDagRunExistsOnEmpty(t *testing.T) {
 }
 
 func TestDagRunExistsSimple(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -461,7 +461,7 @@ func TestDagRunExistsSimple(t *testing.T) {
 }
 
 func TestDagRunsNotFinishedSimple(t *testing.T) {
-	c, err := NewInMemoryClient(sqlSchemaPath)
+	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
 		t.Error(err)
 	}
