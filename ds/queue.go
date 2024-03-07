@@ -8,7 +8,6 @@ package ds
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"sync"
 )
 
@@ -37,8 +36,6 @@ func PutContext[T comparable](ctx context.Context, q Queue[T], item T) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Warn("Context is done before item could be put onto the queue",
-				"item", item)
 			return
 		default:
 		}

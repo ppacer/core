@@ -5,7 +5,6 @@
 package timeutils
 
 import (
-	"log/slog"
 	"math/rand"
 	"time"
 )
@@ -43,8 +42,7 @@ func FromString(s string) (time.Time, error) {
 func FromStringMust(s string) time.Time {
 	t, err := FromString(s)
 	if err != nil {
-		slog.Error("Cannot deserialize to time.Time", "timestamp", s, "format",
-			TimestampFormat)
+		// TODO(dskrzypiec): should we panic in this case?
 		return time.Time{}
 	}
 	return t

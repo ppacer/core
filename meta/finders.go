@@ -9,7 +9,6 @@ import (
 	"errors"
 	"go/ast"
 	"go/printer"
-	"log/slog"
 	"reflect"
 )
 
@@ -22,7 +21,7 @@ func MethodBodySource(
 	astMap map[string]PackageASTs, typeName, methodName string,
 ) (*ast.BlockStmt, string, error) {
 	for pkg := range astMap {
-		for fileName, astFile := range astMap[pkg].FileToASTs {
+		for _, astFile := range astMap[pkg].FileToASTs {
 			funcDecl := findMethodInAST(astFile, typeName, methodName)
 			if funcDecl == nil {
 				continue
@@ -30,8 +29,6 @@ func MethodBodySource(
 			var buf bytes.Buffer
 			err := printer.Fprint(&buf, astMap[pkg].Fset, funcDecl.Body)
 			if err != nil {
-				slog.Error("Error while printing source code", "type", typeName,
-					"methodName", methodName, "fileName", fileName)
 				return nil, "", err
 			}
 			return funcDecl.Body, buf.String(), nil

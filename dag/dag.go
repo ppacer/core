@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/ppacer/core/timeutils"
 )
@@ -170,8 +169,7 @@ func (d *Dag) TaskParents() map[string][]string {
 func (d *Dag) HashDagMeta() string {
 	attrJson, jErr := json.Marshal(d.Attr)
 	if jErr != nil {
-		slog.Error("Cannot serialize DAG attributes", "attr", d.Attr, "err",
-			jErr)
+		// very unlikely
 		return "CANNOT SERIALIZE DAG ATTRIBUTES"
 	}
 	sched := ""
