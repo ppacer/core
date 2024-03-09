@@ -130,6 +130,12 @@ func (dn *Node) Next(node *Node) *Node {
 	return node
 }
 
+// NextTask wraps given task into a Node and calls regular Next method. It
+// exists mainly for shorter notation.
+func (dn *Node) NextTask(task Task) *Node {
+	return dn.Next(NewNode(task))
+}
+
 // NextAsyncAndMerge adds given slice of nodes as children which then have one
 // shared child (mergeNode). That shared child reference is returned. That
 // situation can be visualized like this:

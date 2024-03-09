@@ -361,6 +361,43 @@ func TestDepthBranchoutAndJoin(t *testing.T) {
 	}
 }
 
+func TestNextTaskLinkedList(t *testing.T) {
+	const N = 100
+	l1 := linkedList(N)
+
+	// Should be the same as l1, but constructed using NextTask method
+	l2 := NewNode(nameTask{Name: "Start"})
+	prev := l2
+	for i := 0; i < N-1; i++ {
+		prev = prev.NextTask(nameTask{Name: fmt.Sprintf("step_%d", i)})
+	}
+
+	l1Hash := l1.Hash()
+	l2Hash := l2.Hash()
+
+	if l1Hash != l2Hash {
+		t.Errorf("Expected same hashes for l1 and l2, got: %s and %s",
+			l1Hash, l2Hash)
+	}
+}
+
+func TestNextTask33Graph(t *testing.T) {
+	g1 := deep3Width3Graph()
+
+	g2 := NewNode(constTask{})
+	g2.NextTask(aTask{}).NextTask(emptyTask{})
+	g2.NextTask(bTask{})
+	g2.NextTask(constTask{})
+
+	g1Hash := g1.Hash()
+	g2Hash := g2.Hash()
+
+	if g1Hash != g2Hash {
+		t.Errorf("Expected the same hashes for g1 and g2, got: %s and %s",
+			g1Hash, g2Hash)
+	}
+}
+
 func TestJointTasksExecSources(t *testing.T) {
 	n1 := NewNode(constTask{})
 	n2 := NewNode(constTask{})
