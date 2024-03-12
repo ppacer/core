@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -53,6 +54,29 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger)
 		logger:   logger,
 		state:    StateStarted,
 	}
+}
+
+// DefaultStarted creates default Scheduler using default configuration and
+// SQLite databases, starts that scheduler and returns HTTP server with
+// Scheduler endpoints. It's mainly to reduce boilerplate in simple examples
+// and tests.
+func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
+	logger := slog.Default()
+	dbClient, dbErr := db.NewSqliteClient(dbFile, logger)
+	if dbErr != nil {
+		logger.Error("Cannot create Scheduler database client", "err",
+			dbErr.Error())
+		log.Panic(dbErr)
+	}
+
+	config := DefaultConfig
+	sched := New(dbClient, DefaultQueues(config), config, logger)
+	schedulerHttpHandler := sched.Start(dags)
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: schedulerHttpHandler,
+	}
+	return server
 }
 
 // Start starts Scheduler. It synchronize internal queues with the database,
