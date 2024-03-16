@@ -189,7 +189,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 			Start:    start,
 		}
 		d := emptyDag(fmt.Sprintf("d_%d", i), &sched, attr)
-		dags[d.Id] = d
+		dags.Add(d)
 	}
 
 	currentTime := time.Date(2008, time.October, 5, 12, 0, 0, 0, time.UTC)

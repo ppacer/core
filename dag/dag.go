@@ -29,6 +29,7 @@ import (
 )
 
 var ErrTaskNotFoundInDag = errors.New("task was not found in the DAG")
+var ErrDagAlreadyInRegistry = errors.New("given DAG ID is already in the Registry")
 
 // Dag represents a single process that can be scheduled by ppacer. It contains
 // metadata of the process like identifiers, its schedule and a pointer to
@@ -63,6 +64,16 @@ type Attr struct {
 
 // Registry for DAGs.
 type Registry map[Id]Dag
+
+// Add adds given DAG to registry. If there is already a DAG in registry with
+// the same identifier as given DAG, then ErrDagAlreadyInRegistry is returned.
+func (r Registry) Add(d Dag) error {
+	if _, exists := r[d.Id]; exists {
+		return ErrDagAlreadyInRegistry
+	}
+	r[d.Id] = d
+	return nil
+}
 
 // New creates new Dag instance for given DAG identifier.
 func New(id Id) *Dag {

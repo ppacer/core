@@ -146,7 +146,6 @@ func TestDagTaskParentsSimple(t *testing.T) {
 				finishPar[idx])
 		}
 	}
-
 }
 
 func TestDagTaskParentsEmpty(t *testing.T) {
@@ -208,5 +207,69 @@ func TestDagGetTaskInvalidId(t *testing.T) {
 	}
 	if err != ErrTaskNotFoundInDag {
 		t.Errorf("Expected non-nill ErrTaskNotFoundInDag, but got: %v", err)
+	}
+}
+
+func TestRegistryAddUnique(t *testing.T) {
+	r := make(Registry)
+	sched := FixedSchedule{Start: time.Now(), Interval: 1 * time.Second}
+	dags := []Dag{
+		New(Id("dag1")).Done(),
+		New(Id("dag2")).AddAttributes(Attr{}).Done(),
+		New(Id("dag3")).AddSchedule(&sched).Done(),
+	}
+
+	for _, d := range dags {
+		addErr := r.Add(d)
+		if addErr != nil {
+			t.Errorf("Unexpected error while adding DAG %+v: %s",
+				d, addErr.Error())
+		}
+	}
+
+	for _, d := range dags {
+		if _, exist := r[d.Id]; !exist {
+			t.Errorf("Expected DAG %s to exist in registry, but it does not",
+				string(d.Id))
+		}
+	}
+}
+
+func TestRegistryAddDuplicate(t *testing.T) {
+	r := make(Registry)
+	sched := FixedSchedule{Start: time.Now(), Interval: 1 * time.Second}
+	dags := []Dag{
+		New(Id("dag1")).Done(),
+		New(Id("dag2")).AddAttributes(Attr{}).Done(),
+		New(Id("dag3")).AddSchedule(&sched).Done(),
+	}
+
+	duplicates := []Dag{
+		New(Id("dag3")).Done(),
+		New(Id("dag1")).Done(),
+		New(Id("dag2")).Done(),
+	}
+
+	for _, d := range dags {
+		addErr := r.Add(d)
+		if addErr != nil {
+			t.Errorf("Unexpected error while adding DAG %+v: %s",
+				d, addErr.Error())
+		}
+	}
+
+	for _, d := range duplicates {
+		addErr := r.Add(d)
+		if addErr == nil {
+			t.Errorf("Expected non-nil error for duplicated DAG ID, but got nil for DAG %s",
+				string(d.Id))
+		}
+	}
+
+	for _, d := range dags {
+		if _, exist := r[d.Id]; !exist {
+			t.Errorf("Expected DAG %s to exist in registry, but it does not",
+				string(d.Id))
+		}
 	}
 }
