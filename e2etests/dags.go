@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 )
 
-func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "n1"})
 	n21 := dag.NewNode(emptyTask{taskId: "n21"})
 	n22 := dag.NewNode(emptyTask{taskId: "n22"})
@@ -30,7 +31,7 @@ func simple131DAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	return d.Done()
 }
 
-func simpleDAGWithErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+func simpleDAGWithErrTask(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "start"})
 	n2 := dag.NewNode(errTask{taskId: "task1"})
 	n3 := dag.NewNode(emptyTask{taskId: "end"})
@@ -43,7 +44,7 @@ func simpleDAGWithErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	return d.Done()
 }
 
-func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "start"})
 	n2 := dag.NewNode(runtimeErrTask{taskId: "task1"})
 	n3 := dag.NewNode(emptyTask{taskId: "end"})
@@ -56,7 +57,7 @@ func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 	return d.Done()
 }
 
-func simpleLoggingDAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
+func simpleLoggingDAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(logTask{taskId: "n1"})
 	n21 := dag.NewNode(logTask{taskId: "n21"})
 	n22 := dag.NewNode(logTask{taskId: "n22"})
@@ -74,7 +75,7 @@ func simpleLoggingDAG(dagId dag.Id, sched *dag.Schedule) dag.Dag {
 }
 
 func linkedListEmptyTasksDAG(
-	dagId dag.Id, size int, sched *dag.Schedule,
+	dagId dag.Id, size int, sched *schedule.Schedule,
 ) dag.Dag {
 	s := dag.NewNode(emptyTask{taskId: "task_0"})
 	prev := s
@@ -92,7 +93,7 @@ func linkedListEmptyTasksDAG(
 }
 
 func linkedListWaitTasksDAG(
-	dagId dag.Id, size int, interval time.Duration, sched *dag.Schedule,
+	dagId dag.Id, size int, interval time.Duration, sched *schedule.Schedule,
 ) dag.Dag {
 	s := dag.NewNode(waitTask{taskId: "task_0", interval: interval})
 	prev := s

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -44,7 +45,7 @@ var ErrDagAlreadyInRegistry = errors.New("given DAG ID is already in the Registr
 //	  Done()
 type Dag struct {
 	Id       Id
-	Schedule *Schedule
+	Schedule *schedule.Schedule
 	Attr     Attr
 	Root     *Node
 }
@@ -89,7 +90,7 @@ func (d *Dag) AddRoot(node *Node) *Dag {
 }
 
 // AddSchedule adds Dag schedule.
-func (d *Dag) AddSchedule(sched Schedule) *Dag {
+func (d *Dag) AddSchedule(sched schedule.Schedule) *Dag {
 	d.Schedule = &sched
 	return d
 }

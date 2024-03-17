@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/timeutils"
@@ -36,7 +37,7 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
@@ -63,7 +64,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
@@ -117,7 +118,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
@@ -159,7 +160,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
@@ -253,7 +254,7 @@ func testTaskCacheQueueTableSize(ts *TaskScheduler, expectedCount int, t *testin
 
 func TestScheduleDagTasksSimple131(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
@@ -264,7 +265,7 @@ func TestScheduleDagTasksSimple131(t *testing.T) {
 func TestScheduleDagTasksSimple131ShortQueue(t *testing.T) {
 	const taskQueueSize = 3
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_short_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
@@ -277,7 +278,7 @@ func TestScheduleDagTasksSimple131ShortQueue(t *testing.T) {
 func TestScheduleDagTasksSimple131ShortestQueue(t *testing.T) {
 	const taskQueueSize = 1
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_shortest_queue").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
@@ -287,7 +288,7 @@ func TestScheduleDagTasksSimple131ShortestQueue(t *testing.T) {
 
 func TestScheduleDagTasks131WithFailedTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_fail_n23").
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
@@ -303,7 +304,7 @@ func TestScheduleDagTasks131WithFailedTask(t *testing.T) {
 
 func TestScheduleDagTasks131WithFailedFirstTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_fail_n1").
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
@@ -319,7 +320,7 @@ func TestScheduleDagTasks131WithFailedFirstTask(t *testing.T) {
 
 func TestScheduleDagTasks131WithFailedLastTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_fail_n3").
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
@@ -344,7 +345,7 @@ func TestScheduleDagTasksLinkedListLong(t *testing.T) {
 func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
 	const taskQueueSize = 2
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.
 		New(dag.Id("mock_dag_ll_short_queue")).
 		AddSchedule(schedule).
@@ -358,7 +359,7 @@ func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
 
 func TestScheduleDagTasksLinkedListShortFailure(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	root := nodesLinkedList(2)
 	d := dag.New("mock_dag_ll_short_fail").
 		AddSchedule(schedule).
@@ -375,7 +376,7 @@ func TestScheduleDagTasksLinkedListShortFailure(t *testing.T) {
 
 func TestScheduleDagTasksNoTasks(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_no_tasks").
 		AddSchedule(schedule).
 		Done()
@@ -387,7 +388,7 @@ func TestScheduleDagTasksNoTasks(t *testing.T) {
 
 func TestScheduleDagTasksSingleTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	theOnlyNode := dag.NewNode(EmptyTask{TaskId: "start"})
 	d := dag.New("mock_dag_single_task").
 		AddSchedule(schedule).
@@ -401,7 +402,7 @@ func TestScheduleDagTasksSingleTask(t *testing.T) {
 
 func testScheduleDagTasksLinkedList(size int, t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.
 		New(dag.Id(fmt.Sprintf("mock_dag_ll_%d", size))).
 		AddSchedule(schedule).
@@ -503,7 +504,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 func linkedListDagSchedule1Min(id string, size int) dag.Dag {
 	root := nodesLinkedList(size)
 	start := time.Date(2024, time.January, 16, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Start: start, Interval: 1 * time.Minute}
+	sched := schedule.NewFixed(start, 1*time.Minute)
 
 	d := dag.New(dag.Id(id)).
 		AddSchedule(sched).
@@ -596,7 +597,7 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_131_two").
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
@@ -653,7 +654,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
@@ -710,7 +711,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	schedule := dag.FixedSchedule{Start: startTs, Interval: 30 * time.Second}
+	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())

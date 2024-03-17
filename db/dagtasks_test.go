@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/meta"
 	"github.com/ppacer/core/timeutils"
 )
@@ -138,7 +139,7 @@ func TestInsertEmptyDagTasks(t *testing.T) {
 
 	// DAG with no tasks
 	ctx := context.Background()
-	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
+	sched := schedule.NewFixed(startTs, 1*time.Hour)
 	d := dag.New(dag.Id("test")).AddSchedule(sched).Done()
 
 	iErr := c.InsertDagTasks(ctx, d)
@@ -185,7 +186,7 @@ func simpleDag(dagId string, innerTasks int) dag.Dag {
 		prev = prev.Next(t)
 	}
 
-	sched := dag.FixedSchedule{Start: startTs, Interval: 1 * time.Hour}
+	sched := schedule.NewFixed(startTs, 1*time.Hour)
 	dag := dag.New(dag.Id(dagId)).AddSchedule(sched).AddRoot(start).Done()
 
 	return dag

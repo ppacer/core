@@ -2,17 +2,32 @@
 // Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
-package dag
+package schedule
 
 import (
 	"testing"
 	"time"
 )
 
-func TestFixedScheduleSimple(t *testing.T) {
+func TestNewFixed(t *testing.T) {
+	now := time.Now()
+	interval := 1 * time.Millisecond
+	fs := NewFixed(now, interval)
+
+	if !fs.start.Equal(now) {
+		t.Errorf("Expected schedule start to be %+v, but got: %+v",
+			now, fs.start)
+	}
+	if fs.interval != interval {
+		t.Errorf("Expected schedule start to be %+v, but got: %+v",
+			interval, fs.interval)
+	}
+}
+
+func TestFixedSimple(t *testing.T) {
 	start := timeForFixDay(8, 0, 0)
 	ts := timeForFixDay(12, 0, 0)
-	fs := FixedSchedule{Start: start, Interval: 10 * time.Minute}
+	fs := NewFixed(start, 10*time.Minute)
 	next1 := fs.Next(ts, nil)
 	expNext1 := timeForFixDay(12, 10, 0)
 	if next1 != expNext1 {
@@ -32,9 +47,9 @@ func TestFixedScheduleSimple(t *testing.T) {
 	}
 }
 
-func TestFixedScheduleWithPrevSched(t *testing.T) {
+func TestFixedWithPrevSched(t *testing.T) {
 	start := timeForFixDay(8, 0, 0)
-	fs := FixedSchedule{Start: start, Interval: 10 * time.Minute}
+	fs := NewFixed(start, 10*time.Minute)
 
 	data := []struct {
 		prevSched    time.Time
@@ -72,10 +87,10 @@ func TestFixedScheduleWithPrevSched(t *testing.T) {
 	}
 }
 
-func TestFixedScheduleBeforeStart(t *testing.T) {
+func TestFixedBeforeStart(t *testing.T) {
 	start := timeForFixDay(8, 0, 0)
 	beforeStart := timeForFixDay(2, 0, 0)
-	fs := FixedSchedule{Start: start, Interval: 10 * time.Minute}
+	fs := NewFixed(start, 10*time.Minute)
 	next := fs.Next(beforeStart, nil)
 	if next != start {
 		t.Errorf("Next timestamp for input before Start should return start, got: %v",
@@ -83,9 +98,9 @@ func TestFixedScheduleBeforeStart(t *testing.T) {
 	}
 }
 
-func TestFixedScheduleManyIterations(t *testing.T) {
+func TestFixedManyIterations(t *testing.T) {
 	start := timeForFixDay(8, 0, 0)
-	fs := FixedSchedule{Start: start, Interval: 1 * time.Millisecond}
+	fs := NewFixed(start, 1*time.Millisecond)
 	curr := start
 
 	for i := 0; i < 1000; i++ {
@@ -98,31 +113,25 @@ func TestFixedScheduleManyIterations(t *testing.T) {
 	}
 }
 
-func BenchmarkFixedScheduleShort(b *testing.B) {
-	fs := FixedSchedule{
-		Start:    time.Date(2021, time.January, 12, 10, 0, 0, 0, time.UTC),
-		Interval: 10 * time.Minute,
-	}
+func BenchmarkFixedShort(b *testing.B) {
+	start := time.Date(2021, time.January, 12, 10, 0, 0, 0, time.UTC)
+	fs := NewFixed(start, 10*time.Minute)
 	for i := 0; i < b.N; i++ {
 		fs.Next(time.Now(), nil)
 	}
 }
 
-func BenchmarkFixedScheduleLong(b *testing.B) {
-	fs := FixedSchedule{
-		Start:    time.Date(1970, time.January, 12, 10, 0, 0, 0, time.UTC),
-		Interval: 10 * time.Minute,
-	}
+func BenchmarkFixedLong(b *testing.B) {
+	start := time.Date(1970, time.January, 12, 10, 0, 0, 0, time.UTC)
+	fs := NewFixed(start, 10*time.Minute)
 	for i := 0; i < b.N; i++ {
 		fs.Next(time.Now(), nil)
 	}
 }
 
-func BenchmarkFixedScheduleLongWithPrevSched(b *testing.B) {
-	fs := FixedSchedule{
-		Start:    time.Date(1970, time.January, 12, 10, 0, 0, 0, time.UTC),
-		Interval: 10 * time.Minute,
-	}
+func BenchmarkFixedLongWithPrevSched(b *testing.B) {
+	start := time.Date(1970, time.January, 12, 10, 0, 0, 0, time.UTC)
+	fs := NewFixed(start, 10*time.Minute)
 	prevSched := time.Date(2024, time.February, 14, 14, 20, 0, 0, time.UTC)
 	for i := 0; i < b.N; i++ {
 		fs.Next(time.Now(), &prevSched)

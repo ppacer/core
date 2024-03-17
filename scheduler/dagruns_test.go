@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/timeutils"
@@ -27,7 +28,7 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	ctx := context.Background()
 
 	startTs := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: startTs}
+	sched := schedule.NewFixed(startTs, 1*time.Hour)
 	attr := dag.Attr{}
 	d := emptyDag(dagId, &sched, attr)
 	queue := ds.NewSimpleQueue[DagRun](10)
@@ -73,7 +74,7 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 	ctx := context.Background()
 
 	startTs := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: startTs}
+	sched := schedule.NewFixed(startTs, 1*time.Hour)
 	attr := dag.Attr{CatchUp: true}
 	d := emptyDag(dagId, &sched, attr)
 	queue := ds.NewSimpleQueue[DagRun](10)
@@ -118,9 +119,9 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 	attr := dag.Attr{}
 
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
-	sched2 := dag.FixedSchedule{Interval: 5 * time.Hour, Start: start}
-	sched3 := dag.FixedSchedule{Interval: 10 * time.Minute, Start: start}
+	sched1 := schedule.NewFixed(start, 1*time.Hour)
+	sched2 := schedule.NewFixed(start, 5*time.Hour)
+	sched3 := schedule.NewFixed(start, 10*time.Minute)
 
 	d1 := emptyDag("dag1", &sched1, attr)
 	d2 := emptyDag("dag2", &sched2, attr)
@@ -184,10 +185,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	for i := 0; i < dagNumber; i++ {
 		start := timeutils.RandomUtcTime(2010)
 		h := rand.Intn(1000)
-		sched := dag.FixedSchedule{
-			Interval: time.Duration(h) * time.Hour,
-			Start:    start,
-		}
+		sched := schedule.NewFixed(start, time.Duration(h)*time.Hour)
 		d := emptyDag(fmt.Sprintf("d_%d", i), &sched, attr)
 		dags.Add(d)
 	}
@@ -248,7 +246,7 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 func TestShouldBeScheduledSimple(t *testing.T) {
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched1 := schedule.NewFixed(start, 1*time.Hour)
 
 	d1 := emptyDag("dag1", &sched1, attr)
 	d2 := dag.New(dag.Id("dag4")).Done()
@@ -303,7 +301,7 @@ func TestShouldBeScheduledSimple(t *testing.T) {
 func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched1 := schedule.NewFixed(start, 1*time.Hour)
 
 	d1 := emptyDag("dag1", &sched1, attr)
 	d1ns := start
@@ -339,7 +337,7 @@ func TestShouldBeScheduledExactlyOnScheduleTime(t *testing.T) {
 func TestShouldBeScheduledUnexpectedDelay(t *testing.T) {
 	const dagId = "mock_dag"
 	startTs := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: startTs}
+	sched := schedule.NewFixed(startTs, 1*time.Hour)
 	attr := dag.Attr{}
 	d := emptyDag(dagId, &sched, attr)
 
@@ -366,7 +364,7 @@ func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
 	const N = 25
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched1 := schedule.NewFixed(start, 1*time.Hour)
 	d1 := emptyDag("dag1", &sched1, attr)
 
 	for i := 0; i < N; i++ {
@@ -386,7 +384,7 @@ func TestTryScheduleDagSimple(t *testing.T) {
 
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched1 := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched1 := schedule.NewFixed(start, 1*time.Hour)
 
 	d1 := emptyDag("dag1", &sched1, attr)
 
@@ -468,7 +466,7 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 	ctx := context.Background()
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched := schedule.NewFixed(start, 1*time.Hour)
 	d := emptyDag("sample_dag", &sched, attr)
 
 	t1 := time.Date(2024, time.January, 7, 8, 0, 0, 0, time.UTC)
@@ -524,7 +522,7 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	ctx := context.Background()
 	attr := dag.Attr{}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 1 * time.Hour, Start: start}
+	sched := schedule.NewFixed(start, 1*time.Hour)
 	d := emptyDag("sample_dag", &sched, attr)
 
 	// we simulate empty nextSchedules after the scheduler restart (actually we
@@ -598,6 +596,6 @@ func checkNextSchedule(
 	}
 }
 
-func emptyDag(dagId string, sched dag.Schedule, attr dag.Attr) dag.Dag {
+func emptyDag(dagId string, sched schedule.Schedule, attr dag.Attr) dag.Dag {
 	return dag.New(dag.Id(dagId)).AddSchedule(sched).AddAttributes(attr).Done()
 }

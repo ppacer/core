@@ -9,6 +9,8 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/ppacer/core/dag/schedule"
 )
 
 var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
@@ -30,7 +32,7 @@ func TestDagNew(t *testing.T) {
 	end := NewNode(EmptyTask{"end"})
 	start.Next(end)
 
-	sched := FixedSchedule{startTs, 5 * time.Second}
+	sched := schedule.NewFixed(startTs, 5*time.Second)
 	dag := New("mock_dag").AddSchedule(sched).AddRoot(start).Done()
 	fmt.Println(dag)
 
@@ -212,7 +214,7 @@ func TestDagGetTaskInvalidId(t *testing.T) {
 
 func TestRegistryAddUnique(t *testing.T) {
 	r := make(Registry)
-	sched := FixedSchedule{Start: time.Now(), Interval: 1 * time.Second}
+	sched := schedule.NewFixed(time.Now(), 1*time.Second)
 	dags := []Dag{
 		New(Id("dag1")).Done(),
 		New(Id("dag2")).AddAttributes(Attr{}).Done(),
@@ -237,7 +239,7 @@ func TestRegistryAddUnique(t *testing.T) {
 
 func TestRegistryAddDuplicate(t *testing.T) {
 	r := make(Registry)
-	sched := FixedSchedule{Start: time.Now(), Interval: 1 * time.Second}
+	sched := schedule.NewFixed(time.Now(), 1*time.Second)
 	dags := []Dag{
 		New(Id("dag1")).Done(),
 		New(Id("dag2")).AddAttributes(Attr{}).Done(),

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/exec"
 	"github.com/ppacer/core/scheduler"
@@ -20,7 +21,7 @@ import (
 func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_dag_1")
 	dags.Add(simple131DAG(dagId, &schedule))
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
@@ -42,7 +43,7 @@ func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
 func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_LL_1")
 	const llSize = 10
 	dags.Add(linkedListEmptyTasksDAG(dagId, llSize, &schedule))
@@ -55,7 +56,7 @@ func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
 func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_LL_wait_1")
 	const llSize = 10
 	dags.Add(linkedListWaitTasksDAG(dagId, llSize, 1*time.Millisecond, &schedule))
@@ -68,7 +69,7 @@ func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
 func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_failing_dag")
 	dags.Add(simpleDAGWithErrTask(dagId, &schedule))
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
@@ -80,7 +81,7 @@ func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_failing_dag")
 	dags.Add(simpleDAGWithRuntimeErrTask(dagId, &schedule))
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
@@ -94,7 +95,7 @@ func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 
 	// dag1
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_dag_1")
 	dags.Add(simple131DAG(dagId, &schedule))
 
@@ -118,7 +119,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule dag.Schedule = dag.FixedSchedule{Start: startTs, Interval: time.Hour}
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_dag_1")
 	dags.Add(simpleLoggingDAG(dagId, &schedule))
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)

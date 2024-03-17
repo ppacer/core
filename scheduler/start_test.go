@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/timeutils"
@@ -207,10 +208,10 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 
 	// Update DAG schedule
 	currentSched := *d.Schedule
-	var newSched dag.Schedule = dag.FixedSchedule{
-		Interval: 4 * time.Hour,
-		Start:    currentSched.StartTime(),
-	}
+	var newSched schedule.Schedule = schedule.NewFixed(
+		currentSched.StartTime(),
+		4*time.Hour,
+	)
 	d.Schedule = &newSched
 
 	// Second sync - should not change anything
@@ -522,7 +523,7 @@ func verySimpleDag(dagId string) dag.Dag {
 	start.Next(t).Next(end)
 
 	startTs := time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
-	sched := dag.FixedSchedule{Interval: 5 * time.Minute, Start: startTs}
+	sched := schedule.NewFixed(startTs, 5*time.Minute)
 	attr := dag.Attr{Tags: []string{"test"}}
 	dag := dag.New(dag.Id(dagId)).
 		AddSchedule(&sched).
