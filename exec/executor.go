@@ -7,6 +7,7 @@ package exec
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -65,6 +66,20 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 		logDbClient: logDbClient,
 		logger:      logger,
 	}
+}
+
+// NewDefault creates new Executor using SQLite for task logs and default
+// configuration for Executor. It's mainly to reduce boilerplate in simple
+// examples and tests.
+func NewDefault(schedulerUrl, taskLogsDbFile string) *Executor {
+	logger := slog.Default()
+	logsDbClient, logsDbErr := db.NewSqliteClientForLogs(taskLogsDbFile, logger)
+	if logsDbErr != nil {
+		logger.Error("Cannot create SQLite database for task logs", "err",
+			logsDbErr.Error())
+		log.Panic(logsDbErr)
+	}
+	return New(schedulerUrl, logsDbClient, nil, nil)
 }
 
 // Start starts executor. TODO...
