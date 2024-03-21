@@ -424,7 +424,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	t0 := (*d.Schedule).StartTime()
+	t0 := (*d.Schedule).Start()
 	t0Str := timeutils.ToString(t0)
 
 	// Insert DAG run

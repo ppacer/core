@@ -188,7 +188,7 @@ func (d *Dag) HashDagMeta() string {
 	startTsStr := ""
 	if d.Schedule != nil {
 		sched = (*d.Schedule).String()
-		startTsStr = timeutils.ToString((*d.Schedule).StartTime())
+		startTsStr = timeutils.ToString((*d.Schedule).Start())
 	}
 
 	hasher := sha256.New()

@@ -209,7 +209,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 	// Update DAG schedule
 	currentSched := *d.Schedule
 	var newSched schedule.Schedule = schedule.NewFixed(
-		currentSched.StartTime(),
+		currentSched.Start(),
 		4*time.Hour,
 	)
 	d.Schedule = &newSched

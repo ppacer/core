@@ -225,7 +225,7 @@ func (drw *DagRunWatcher) updateNextSchedules(
 			continue
 		}
 		sched := *dag.Schedule
-		startTime := sched.StartTime()
+		startTime := sched.Start()
 		latestDagRun, exists := latestDagRuns[string(dag.Id)]
 		if !exists {
 			// The first run

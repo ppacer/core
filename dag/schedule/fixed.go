@@ -20,8 +20,8 @@ func NewFixed(startTs time.Time, interval time.Duration) Fixed {
 	}
 }
 
-// StartTime returns Start.
-func (is Fixed) StartTime() time.Time {
+// Start returns schedule start time.
+func (is Fixed) Start() time.Time {
 	return is.start
 }
 

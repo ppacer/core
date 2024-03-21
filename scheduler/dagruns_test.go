@@ -205,7 +205,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 			t.Errorf("Expected DAG %s to exist in nextSchedulesMap, but it does not",
 				string(d.Id))
 		}
-		expectedNextSched := (*d.Schedule).StartTime()
+		expectedNextSched := (*d.Schedule).Start()
 		if nextSched.Compare(expectedNextSched) != 0 {
 			t.Errorf("Expected next schedule for DAG %s for the current time %v to be %v, but got %v",
 				string(d.Id), currentTime, expectedNextSched, nextSched)

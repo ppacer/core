@@ -7,12 +7,12 @@ package schedule
 
 import "time"
 
-// Schedule represents process' schedule. StartTime says when schedule starts.
+// Schedule represents process' schedule. Start says when schedule starts.
 // Next method for given time and possibly time of the latest run determines
 // when the next schedule should happen. String method should provide
 // serialization to store schedule definition in the database.
 type Schedule interface {
-	StartTime() time.Time
+	Start() time.Time
 	Next(time.Time, *time.Time) time.Time
 	String() string
 }

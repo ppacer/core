@@ -194,7 +194,7 @@ func dagStartAndScheduleStrings(d dag.Dag) (*string, *string) {
 	if d.Schedule != nil {
 		schedStr := (*d.Schedule).String()
 		sched = &schedStr
-		startStr := timeutils.ToString((*d.Schedule).StartTime())
+		startStr := timeutils.ToString((*d.Schedule).Start())
 		dagStart = &startStr
 	}
 	return dagStart, sched
