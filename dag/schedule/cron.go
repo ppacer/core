@@ -1,3 +1,7 @@
+// Copyright 2023 The ppacer Authors.
+// Licensed under the Apache License, Version 2.0.
+// See LICENSE file in the project root for full license information.
+
 package schedule
 
 import (
@@ -8,14 +12,18 @@ import (
 	"time"
 )
 
-// Cron represents clasic cron schedule expression. It implemets Schedule
+// Cron represents classic cron schedule expression. It implements Schedule
 // interface.
 //
-// Usually cron schedule can be created like this:
+// Usually cron schedule can be initialized using provided fluent API. For
+// example if you want set '5,45 10 * * 1" cron schedule, you can write:
 //
 //	cronSched := NewCron().AtMinutes(5, 45).AtHour(10).OnWeekday(time.Monday)
-//	cronSched.String() == "5,45 10 * * 1"
+//
+// By default schedule starts at the Unix epoch start (1970-01-01). It can be
+// changed using Starts method.
 type Cron struct {
+	start      time.Time
 	minute     []int
 	hour       []int
 	dayOfMonth []int
@@ -23,20 +31,31 @@ type Cron struct {
 	dayOfWeek  []int
 }
 
-// NewCron initialize new default Cron which is "* * * * *".
+// NewCron initialize new default Cron which is "* * * * *" and starts at
+// 1970-01-01.
 func NewCron() *Cron {
-	return &Cron{}
+	return &Cron{start: time.Unix(0, 0)}
+}
+
+// Starts set Cron start time.
+func (c *Cron) Starts(start time.Time) *Cron {
+	c.start = start
+	return c
 }
 
 // Start for cron schedule returns always 1970-01-01.
 func (c *Cron) Start() time.Time { return time.Unix(0, 0) }
 
-// Next computes the next execution time after the current time.
+// Next computes the next time according to set cron schedule, after given
+// currentTime. In case when curretTime is precisely on cron schedule (eg,
+// 2024-04-02 12:00:00 for "0 12 * * *" cron), then next cron schedule is
+// returned (2024-04-03 12:00:00 for mentioned example).
 func (c *Cron) Next(currentTime time.Time, _ *time.Time) time.Time {
 	next := zeroSecondsAndSubs(currentTime)
 	next = c.setMinutes(next)
 	next = c.setHours(next)
 	next = c.setDayOfMonth(next)
+	// TODO: include months and weekdays.
 	return next
 }
 
@@ -51,13 +70,15 @@ func (c *Cron) String() string {
 	return strings.Join(parts[:], " ")
 }
 
-// Sets minute part in cron schedule.
+// Sets minute part in cron schedule. Given input should be from interval
+// [0,59].
 func (c *Cron) AtMinute(m int) *Cron {
 	c.minute = []int{m % 60}
 	return c
 }
 
-// Sets minute part in cron schedule.
+// Sets minute part in cron schedule. Each input should be from interval [0,
+// 59].
 func (c *Cron) AtMinutes(minutes ...int) *Cron {
 	m := make([]int, len(minutes))
 	for idx, minute := range minutes {
@@ -68,13 +89,14 @@ func (c *Cron) AtMinutes(minutes ...int) *Cron {
 	return c
 }
 
-// Sets hour part in cron schedule.
+// Sets hour part in cron schedule. Given input should be from interval [0,
+// 23].
 func (c *Cron) AtHour(h int) *Cron {
 	c.hour = []int{h % 24}
 	return c
 }
 
-// Sets hour part in cron schedule.
+// Sets hour part in cron schedule. Each input should be from interval [0, 23].
 func (c *Cron) AtHours(hours ...int) *Cron {
 	h := make([]int, len(hours))
 	for idx, hour := range hours {
@@ -102,13 +124,15 @@ func (c *Cron) OnWeekdays(days ...time.Weekday) *Cron {
 	return c
 }
 
-// Sets day of month part in cron schedule.
+// Sets day of month part in cron schedule. Given input should be from interval
+// [1, 31].
 func (c *Cron) OnMonthDay(monthDay int) *Cron {
 	c.dayOfMonth = []int{monthDay % 32}
 	return c
 }
 
-// Sets day of month part in cron schedule.
+// Sets day of month part in cron schedule. Each input should be from interval
+// [1, 31].
 func (c *Cron) OnMonthDays(monthDays ...int) *Cron {
 	mdInts := make([]int, len(monthDays))
 	for idx, day := range monthDays {
