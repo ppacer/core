@@ -55,7 +55,8 @@ func (c *Cron) Next(currentTime time.Time, _ *time.Time) time.Time {
 	next = c.setMinutes(next)
 	next = c.setHours(next)
 	next = c.setDayOfMonth(next)
-	// TODO: include months and weekdays.
+	next = c.setMonth(next)
+	// TODO: include weekdays (this needs to go in hand with day of month).
 	return next
 }
 
@@ -121,6 +122,23 @@ func (c *Cron) OnWeekdays(days ...time.Weekday) *Cron {
 	}
 	sort.Ints(dInts)
 	c.dayOfWeek = dInts
+	return c
+}
+
+// Sets month part in cron schedule.
+func (c *Cron) InMonth(m time.Month) *Cron {
+	c.month = []int{int(m)}
+	return c
+}
+
+// Sets month part in cron schedule.
+func (c *Cron) InMonths(months ...time.Month) *Cron {
+	mInts := make([]int, len(months))
+	for idx, month := range months {
+		mInts[idx] = int(month)
+	}
+	sort.Ints(mInts)
+	c.month = mInts
 	return c
 }
 
@@ -218,6 +236,22 @@ func (c *Cron) setDayOfMonth(t time.Time) time.Time {
 	return setDay(c.setHourAndMinuteForNewDay(t), c.dayOfMonth[0])
 }
 
+func (c *Cron) setMonth(t time.Time) time.Time {
+	monthSet, nextMonth := findNextInt(c.month, int(t.Month()), true)
+	if !monthSet {
+		return t
+	}
+	if nextMonth == int(t.Month()) {
+		return t
+	}
+	if nextMonth > 0 {
+		return c.setHourMinuteAndDayForNewMonth(t, nextMonth)
+	}
+	// the next month is in the next year
+	t = incrementYear(t)
+	return c.setHourMinuteAndDayForNewMonth(t, c.month[0])
+}
+
 func (c *Cron) setHourAndMinuteForNewDay(t time.Time) time.Time {
 	if len(c.hour) == 0 {
 		t = setHour(t, 0)
@@ -232,6 +266,39 @@ func (c *Cron) setHourAndMinuteForNewDay(t time.Time) time.Time {
 	return t
 }
 
+func (c *Cron) setHourMinuteAndDayForNewMonth(t time.Time, month int) time.Time {
+	t = c.setHourAndMinuteForNewDay(t)
+	if len(c.dayOfMonth) == 0 {
+		t = setDay(t, 1)
+	} else {
+		t = setDay(t, c.dayOfMonth[0])
+	}
+	const maxAttempts = 5
+
+	year := t.Year()
+	day := t.Day()
+	for i := 0; i < maxAttempts; i++ {
+		candidate := fmt.Sprintf("%d-%02d-%02d", year, month, day)
+		newDate, err := time.Parse("2006-01-02", candidate)
+		if err == nil && newDate.Day() == day {
+			newTime := time.Date(
+				newDate.Year(), newDate.Month(), newDate.Day(), t.Hour(),
+				t.Minute(), t.Second(), t.Nanosecond(), t.Location(),
+			)
+			// We need to check hour and minute for the new date and time,
+			// because it might be shifted in some cases (like day light saving
+			// changes).
+			if t.Hour() == newTime.Hour() && t.Minute() == newTime.Minute() {
+				return newTime
+			}
+		}
+		// New date is invalid for the current month (eg 30th for February), we
+		// new to move to the next year.
+		year++
+	}
+	return time.Time{} // shouldn't ever happen
+}
+
 // Helper function to increment the month and reset day, hour, and minute.
 func incrementMonth(t time.Time) time.Time {
 	newMonth := t.Month() + 1
@@ -241,6 +308,10 @@ func incrementMonth(t time.Time) time.Time {
 		newYear++
 	}
 	return time.Date(newYear, newMonth, 1, 0, 0, 0, 0, t.Location())
+}
+
+func incrementYear(t time.Time) time.Time {
+	return time.Date(t.Year()+1, time.January, 1, 0, 0, 0, 0, t.Location())
 }
 
 func zeroSecondsAndSubs(t time.Time) time.Time {
@@ -265,7 +336,7 @@ func findNextInt(sorted []int, current int, include bool) (bool, int) {
 }
 
 func setDay(t time.Time, day int) time.Time {
-	const maxAttempts = 13
+	const maxAttempts = 60
 	year := t.Year()
 	month := t.Month()
 
