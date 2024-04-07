@@ -632,6 +632,153 @@ func TestCronMinuteHourDayMonth(t *testing.T) {
 	}
 }
 
+// * * d m *
+func TestCronDayMonth(t *testing.T) {
+	data := []struct {
+		cronDay          int
+		cronMonth        time.Month
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		{7, time.September, timeUtc(2024, 1, 1, 11, 0), timeUtc(2024, 9, 7, 0, 0)},
+		{7, time.September, timeUtc(2024, 9, 1, 11, 0), timeUtc(2024, 9, 7, 0, 0)},
+		{7, time.September, timeUtc(2024, 9, 7, 0, 0), timeUtc(2024, 9, 7, 0, 1)},
+		{7, time.September, timeUtc(2024, 9, 7, 0, 59), timeUtc(2024, 9, 7, 1, 0)},
+		{7, time.September, timeUtc(2024, 9, 7, 11, 59), timeUtc(2024, 9, 7, 12, 0)},
+		{7, time.September, timeUtc(2024, 9, 7, 20, 14), timeUtc(2024, 9, 7, 20, 15)},
+		{7, time.September, timeUtc(2024, 9, 7, 23, 59), timeUtc(2025, 9, 7, 0, 0)},
+		{29, time.February, timeUtc(2024, 2, 1, 10, 11), timeUtc(2024, 2, 29, 0, 0)},
+		{29, time.February, timeUtc(2024, 2, 28, 22, 11), timeUtc(2024, 2, 29, 0, 0)},
+		{29, time.February, timeUtc(2024, 2, 29, 0, 11), timeUtc(2024, 2, 29, 0, 12)},
+		{29, time.February, timeUtc(2024, 2, 29, 23, 11), timeUtc(2024, 2, 29, 23, 12)},
+		{29, time.February, timeUtc(2024, 2, 29, 23, 59), timeUtc(2028, 2, 29, 0, 0)},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().
+			OnMonthDay(d.cronDay).
+			InMonth(d.cronMonth)
+		next := cronSched.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
+				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+		}
+	}
+}
+
+// * * d m,n *
+func TestCronDayMonths(t *testing.T) {
+	months := []time.Month{time.February, time.November}
+	data := []struct {
+		cronDay          int
+		cronMonths       []time.Month
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		{29, months, timeUtc(2024, 1, 1, 11, 0), timeUtc(2024, 2, 29, 0, 0)},
+		{29, months, timeUtc(2024, 1, 31, 23, 0), timeUtc(2024, 2, 29, 0, 0)},
+		{29, months, timeUtc(2024, 2, 15, 12, 13), timeUtc(2024, 2, 29, 0, 0)},
+		{29, months, timeUtc(2024, 2, 28, 23, 59), timeUtc(2024, 2, 29, 0, 0)},
+		{29, months, timeUtc(2024, 2, 29, 0, 0), timeUtc(2024, 2, 29, 0, 1)},
+		{29, months, timeUtc(2024, 2, 29, 3, 37), timeUtc(2024, 2, 29, 3, 38)},
+		{29, months, timeUtc(2024, 2, 29, 23, 59), timeUtc(2024, 11, 29, 0, 0)},
+		{29, months, timeUtc(2024, 9, 19, 9, 59), timeUtc(2024, 11, 29, 0, 0)},
+		{29, months, timeUtc(2024, 11, 19, 9, 59), timeUtc(2024, 11, 29, 0, 0)},
+		{29, months, timeUtc(2024, 11, 28, 23, 30), timeUtc(2024, 11, 29, 0, 0)},
+		{29, months, timeUtc(2024, 11, 29, 0, 0), timeUtc(2024, 11, 29, 0, 1)},
+		{29, months, timeUtc(2024, 11, 29, 1, 1), timeUtc(2024, 11, 29, 1, 2)},
+		{29, months, timeUtc(2024, 11, 29, 12, 59), timeUtc(2024, 11, 29, 13, 0)},
+		{29, months, timeUtc(2024, 11, 29, 23, 59), timeUtc(2028, 2, 29, 0, 0)},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().
+			OnMonthDay(d.cronDay).
+			InMonths(d.cronMonths...)
+		next := cronSched.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
+				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+		}
+	}
+}
+
+// m * d m *
+func TestCronMinuteDayMonth(t *testing.T) {
+	data := []struct {
+		cronMinute       int
+		cronDay          int
+		cronMonth        time.Month
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		{59, 1, time.August, timeUtc(2024, 1, 1, 11, 0), timeUtc(2024, 8, 1, 0, 59)},
+		{59, 1, time.August, timeUtc(2024, 1, 31, 23, 59), timeUtc(2024, 8, 1, 0, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 0, 0), timeUtc(2024, 8, 1, 0, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 0, 59), timeUtc(2024, 8, 1, 1, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 1, 0), timeUtc(2024, 8, 1, 1, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 22, 30), timeUtc(2024, 8, 1, 22, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 22, 59), timeUtc(2024, 8, 1, 23, 59)},
+		{59, 1, time.August, timeUtc(2024, 8, 1, 23, 59), timeUtc(2025, 8, 1, 0, 59)},
+		{59, 1, time.August, timeUtc(2024, 12, 1, 12, 0), timeUtc(2025, 8, 1, 0, 59)},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().
+			AtMinute(d.cronMinute).
+			OnMonthDay(d.cronDay).
+			InMonth(d.cronMonth)
+		next := cronSched.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
+				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+		}
+	}
+}
+
+// m * d m,n *
+func TestCronMinuteDayMonths(t *testing.T) {
+	months := []time.Month{time.March, time.July}
+	data := []struct {
+		cronMinute       int
+		cronDay          int
+		cronMonths       []time.Month
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		{44, 31, months, timeUtc(2024, 1, 1, 11, 0), timeUtc(2024, 3, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 2, 20, 10, 0), timeUtc(2024, 3, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 3, 25, 19, 0), timeUtc(2024, 3, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 3, 30, 23, 59), timeUtc(2024, 3, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 0, 0), timeUtc(2024, 3, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 0, 44), timeUtc(2024, 3, 31, 1, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 1, 0), timeUtc(2024, 3, 31, 1, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 1, 44), timeUtc(2024, 3, 31, 2, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 23, 0), timeUtc(2024, 3, 31, 23, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 23, 44), timeUtc(2024, 7, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 3, 31, 23, 59), timeUtc(2024, 7, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 4, 10, 10, 10), timeUtc(2024, 7, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 7, 1, 0, 0), timeUtc(2024, 7, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 7, 31, 0, 0), timeUtc(2024, 7, 31, 0, 44)},
+		{44, 31, months, timeUtc(2024, 7, 31, 0, 44), timeUtc(2024, 7, 31, 1, 44)},
+		{44, 31, months, timeUtc(2024, 7, 31, 3, 24), timeUtc(2024, 7, 31, 3, 44)},
+		{44, 31, months, timeUtc(2024, 7, 31, 23, 24), timeUtc(2024, 7, 31, 23, 44)},
+		{44, 31, months, timeUtc(2024, 7, 31, 23, 50), timeUtc(2025, 3, 31, 0, 44)},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().
+			AtMinute(d.cronMinute).
+			OnMonthDay(d.cronDay).
+			InMonths(d.cronMonths...)
+		next := cronSched.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
+				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+		}
+	}
+}
+
 func TestCronPartToString(t *testing.T) {
 	data := []struct {
 		input    []int
