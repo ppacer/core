@@ -43,8 +43,8 @@ func (c *Cron) Starts(start time.Time) *Cron {
 	return c
 }
 
-// Start for cron schedule returns always 1970-01-01.
-func (c *Cron) Start() time.Time { return time.Unix(0, 0) }
+// Start returns Cron schedule start time.
+func (c *Cron) Start() time.Time { return c.start }
 
 // Next computes the next time according to set cron schedule, after given
 // currentTime. In case when curretTime is precisely on cron schedule (eg,
