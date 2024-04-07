@@ -779,6 +779,43 @@ func TestCronMinuteDayMonths(t *testing.T) {
 	}
 }
 
+// * * * * w
+func TestCronWeekday(t *testing.T) {
+	data := []struct {
+		cronWeekday      time.Weekday
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		// 2024-04-21 - Sunday
+		{time.Sunday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 21, 11, 1)},
+		{time.Monday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 22, 0, 0)},
+		{time.Tuesday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 23, 0, 0)},
+		{time.Wednesday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 24, 0, 0)},
+		{time.Thursday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 25, 0, 0)},
+		{time.Friday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 26, 0, 0)},
+		{time.Saturday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 4, 27, 0, 0)},
+		{time.Sunday, timeUtc(2024, 4, 21, 23, 59), timeUtc(2024, 4, 28, 0, 0)},
+		{time.Tuesday, timeUtc(2024, 5, 1, 14, 40), timeUtc(2024, 5, 7, 0, 0)},
+
+		// 2024-04-28 - Sunday
+		{time.Thursday, timeUtc(2024, 4, 28, 23, 45), timeUtc(2024, 5, 2, 0, 0)},
+		{time.Thursday, timeUtc(2024, 5, 2, 23, 45), timeUtc(2024, 5, 2, 23, 46)},
+
+		// 2024-01-01 - Monday
+		{time.Monday, timeUtc(2023, 12, 28, 23, 45), timeUtc(2024, 1, 1, 0, 0)},
+		{time.Saturday, timeUtc(2023, 12, 31, 23, 45), timeUtc(2024, 1, 6, 0, 0)},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().OnWeekday(d.cronWeekday)
+		next := cronSched.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
+				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+		}
+	}
+}
+
 func TestCronPartToString(t *testing.T) {
 	data := []struct {
 		input    []int
@@ -794,6 +831,31 @@ func TestCronPartToString(t *testing.T) {
 		if res != d.expected {
 			t.Errorf("For input %+v expected %s, but got: %s", d.input,
 				d.expected, res)
+		}
+	}
+}
+
+func TestNextDomIncludingWeekdays(t *testing.T) {
+	data := []struct {
+		cronDom         int
+		cronWeekday     time.Weekday
+		nextDom         int
+		currentTime     time.Time
+		expectedNextDom int
+	}{
+		{30, time.Wednesday, 30, timeUtc(2024, 4, 28, 12, 0), 30},
+		{30, time.Tuesday, 30, timeUtc(2024, 4, 28, 12, 0), 30},
+		{30, time.Monday, 30, timeUtc(2024, 4, 28, 12, 0), 29},
+		{18, time.Monday, -1, timeUtc(2024, 4, 30, 12, 0), 6},
+		{24, time.Saturday, 24, timeUtc(2024, 4, 22, 12, 0), 24},
+	}
+
+	for _, d := range data {
+		cronSched := NewCron().OnWeekday(d.cronWeekday).OnMonthDay(d.cronDom)
+		nextDom := cronSched.nextDomIncludingWeekdays(d.currentTime, d.nextDom)
+		if d.expectedNextDom != nextDom {
+			t.Errorf("For cron %s and time %+v expected next DOM %d, got %d",
+				cronSched.String(), d.currentTime, d.expectedNextDom, nextDom)
 		}
 	}
 }
