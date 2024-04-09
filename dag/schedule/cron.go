@@ -235,11 +235,10 @@ func (c *Cron) setDayOfMonth(t time.Time) time.Time {
 	if !domSet && weekdaySet {
 		return c.setDayWeekday(t, nextWeekday)
 	}
-	nextDomWeekdays := c.nextDomIncludingWeekdays(t, nextDom)
-	if nextDom > 0 {
-		return setDay(c.setHourAndMinuteForNewDay(t), nextDomWeekdays)
+	nextDomWeekdays, nextDomInNextMonth := c.nextDomIncludingWeekdays(t, nextDom)
+	if nextDomInNextMonth {
+		t = incrementMonth(t)
 	}
-	t = incrementMonth(t)
 	return setDay(c.setHourAndMinuteForNewDay(t), nextDomWeekdays)
 }
 
@@ -310,16 +309,18 @@ func (c *Cron) setHourMinuteAndDayForNewMonth(t time.Time, month int) time.Time 
 // determines next day of month to be set for given time including possible
 // weekdays set in cron. It should be next closest weekday or next closest day
 // of month.
-func (c *Cron) nextDomIncludingWeekdays(t time.Time, nextDom int) int {
+func (c *Cron) nextDomIncludingWeekdays(t time.Time, nextDom int) (int, bool) {
+	nextDomInNextMonth := false
 	nextDomDate := time.Date(t.Year(), t.Month(), nextDom, 0, 0, 0, 0, t.Location())
 	if nextDom == -1 {
 		nextDom = c.dayOfMonth[0]
+		nextDomInNextMonth = true
 		tNextMonth := incrementMonth(t)
 		nextDomDate = time.Date(tNextMonth.Year(), tNextMonth.Month(), nextDom,
 			0, 0, 0, 0, t.Location())
 	}
 	if len(c.dayOfWeek) == 0 {
-		return nextDom
+		return nextDom, nextDomInNextMonth
 	}
 	// there's at least one weekday set in cron. We need to find
 	_, nextWeekday := findNextInt(c.dayOfWeek, int(t.Weekday()), false)
@@ -330,9 +331,9 @@ func (c *Cron) nextDomIncludingWeekdays(t time.Time, nextDom int) int {
 	nextDomDateWeekday := t.AddDate(0, 0, daysToNextWeekday)
 
 	if nextDomDateWeekday.Before(nextDomDate) {
-		return nextDomDateWeekday.Day()
+		return nextDomDateWeekday.Day(), nextDomDateWeekday.Month() > t.Month()
 	}
-	return nextDomDate.Day()
+	return nextDomDate.Day(), nextDomInNextMonth
 }
 
 func (c *Cron) setDayWeekday(t time.Time, nextWeekday int) time.Time {
