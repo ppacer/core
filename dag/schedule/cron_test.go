@@ -697,8 +697,7 @@ func TestCronDayMonths(t *testing.T) {
 			InMonths(d.cronMonths...)
 		next := cronSched.Next(d.currentTime, nil)
 		if !d.expectedNextTime.Equal(next) {
-			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v",
-				cronSched.String(), d.currentTime, d.expectedNextTime, next)
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v", cronSched.String(), d.currentTime, d.expectedNextTime, next)
 		}
 	}
 }
@@ -969,12 +968,29 @@ func TestCronHourDayMonthWeekday(t *testing.T) {
 		currentTime      time.Time
 		expectedNextTime time.Time
 	}{
-		// TODO: the following test case is failing, we need to patch cron for
-		// weekdays and months where the next schedule is more than one month
-		// in the future.
-
-		//{21, 13, time.July, time.Friday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 7, 5, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 4, 21, 11, 0), timeUtc(2024, 7, 5, 21, 0)},
 		{21, 13, time.July, time.Friday, timeUtc(2024, 6, 30, 11, 0), timeUtc(2024, 7, 5, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 1, 23, 0), timeUtc(2024, 7, 5, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 5, 20, 42), timeUtc(2024, 7, 5, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 5, 21, 0), timeUtc(2024, 7, 5, 21, 1)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 5, 21, 59), timeUtc(2024, 7, 12, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 7, 7, 7), timeUtc(2024, 7, 12, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 12, 7, 7), timeUtc(2024, 7, 12, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 12, 21, 16), timeUtc(2024, 7, 12, 21, 17)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 12, 21, 59), timeUtc(2024, 7, 13, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 13, 21, 0), timeUtc(2024, 7, 13, 21, 1)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 13, 21, 33), timeUtc(2024, 7, 13, 21, 34)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 13, 21, 59), timeUtc(2024, 7, 19, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 15, 15, 59), timeUtc(2024, 7, 19, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 19, 3, 14), timeUtc(2024, 7, 19, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 19, 21, 50), timeUtc(2024, 7, 19, 21, 51)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 19, 21, 59), timeUtc(2024, 7, 26, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 19, 23, 59), timeUtc(2024, 7, 26, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 22, 12, 0), timeUtc(2024, 7, 26, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 26, 12, 0), timeUtc(2024, 7, 26, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 26, 21, 0), timeUtc(2024, 7, 26, 21, 1)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 7, 26, 21, 59), timeUtc(2025, 7, 4, 21, 0)},
+		{21, 13, time.July, time.Friday, timeUtc(2024, 12, 31, 22, 13), timeUtc(2025, 7, 4, 21, 0)},
 	}
 
 	for _, d := range data {
@@ -1006,31 +1022,6 @@ func TestCronPartToString(t *testing.T) {
 		if res != d.expected {
 			t.Errorf("For input %+v expected %s, but got: %s", d.input,
 				d.expected, res)
-		}
-	}
-}
-
-func TestNextDomIncludingWeekdays(t *testing.T) {
-	data := []struct {
-		cronDom         int
-		cronWeekday     time.Weekday
-		nextDom         int
-		currentTime     time.Time
-		expectedNextDom int
-	}{
-		{30, time.Wednesday, 30, timeUtc(2024, 4, 28, 12, 0), 30},
-		{30, time.Tuesday, 30, timeUtc(2024, 4, 28, 12, 0), 30},
-		{30, time.Monday, 30, timeUtc(2024, 4, 28, 12, 0), 29},
-		{18, time.Monday, -1, timeUtc(2024, 4, 30, 12, 0), 6},
-		{24, time.Saturday, 24, timeUtc(2024, 4, 22, 12, 0), 24},
-	}
-
-	for _, d := range data {
-		cronSched := NewCron().OnWeekday(d.cronWeekday).OnMonthDay(d.cronDom)
-		nextDom, _ := cronSched.nextDomIncludingWeekdays(d.currentTime, d.nextDom)
-		if d.expectedNextDom != nextDom {
-			t.Errorf("For cron %s and time %+v expected next DOM %d, got %d",
-				cronSched.String(), d.currentTime, d.expectedNextDom, nextDom)
 		}
 	}
 }
