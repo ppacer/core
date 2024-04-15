@@ -1007,6 +1007,42 @@ func TestCronHourDayMonthWeekday(t *testing.T) {
 	}
 }
 
+// m h d m w
+func TestCronMinuteHourDayMonthWeekday(t *testing.T) {
+	c1 := NewCron().
+		AtMinute(38).
+		AtHour(7).
+		OnMonthDay(19).
+		InMonth(time.May).
+		OnWeekday(time.Wednesday)
+	data := []struct {
+		cron             *Cron
+		currentTime      time.Time
+		expectedNextTime time.Time
+	}{
+		{c1, timeUtc(2024, 2, 25, 11, 11), timeUtc(2024, 5, 1, 7, 38)},
+		{c1, timeUtc(2024, 1, 1, 11, 0), timeUtc(2024, 5, 1, 7, 38)},
+		{c1, timeUtc(2024, 5, 1, 5, 15), timeUtc(2024, 5, 1, 7, 38)},
+		{c1, timeUtc(2024, 5, 1, 7, 38), timeUtc(2024, 5, 8, 7, 38)},
+		{c1, timeUtc(2024, 5, 5, 7, 38), timeUtc(2024, 5, 8, 7, 38)},
+		{c1, timeUtc(2024, 5, 8, 7, 38), timeUtc(2024, 5, 15, 7, 38)},
+		{c1, timeUtc(2024, 5, 15, 10, 10), timeUtc(2024, 5, 19, 7, 38)},
+		{c1, timeUtc(2024, 9, 10, 11, 12), timeUtc(2025, 5, 7, 7, 38)},
+		{c1, timeUtc(2024, 12, 31, 23, 59), timeUtc(2025, 5, 7, 7, 38)},
+		{c1, timeUtc(2025, 2, 20, 22, 10), timeUtc(2025, 5, 7, 7, 38)},
+		{c1, timeUtc(2025, 3, 1, 0, 0), timeUtc(2025, 5, 7, 7, 38)},
+	}
+
+	for _, d := range data {
+		next := d.cron.Next(d.currentTime, nil)
+		if !d.expectedNextTime.Equal(next) {
+			t.Errorf("For cron %s and time %+v expected next %+v, but got %+v (%s)",
+				d.cron.String(), d.currentTime, d.expectedNextTime, next,
+				next.Weekday().String())
+		}
+	}
+}
+
 func TestCronPartToString(t *testing.T) {
 	data := []struct {
 		input    []int

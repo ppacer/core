@@ -223,18 +223,22 @@ func (c *Cron) setDayOfMonth(t time.Time) time.Time {
 	domSet, nextDom := findNextInt(c.dayOfMonth, t.Day(), true)
 	weekdaySet, nextWeekday := findNextInt(c.dayOfWeek, int(t.Weekday()), true)
 	monthSet, nextMonth := findNextInt(c.month, int(t.Month()), true)
+
 	if !domSet && !weekdaySet {
 		// regular * case which is handled in setHours
 		return t
 	}
-	if domSet && nextDom == t.Day() {
-		return t
-	}
-	if weekdaySet && nextWeekday == int(t.Weekday()) {
-		return t
-	}
-	if !domSet && weekdaySet {
-		return c.setDayWeekday(t, nextWeekday)
+
+	if !monthSet || (monthSet && nextMonth == int(t.Month())) {
+		if domSet && nextDom == t.Day() {
+			return t
+		}
+		if weekdaySet && nextWeekday == int(t.Weekday()) {
+			return t
+		}
+		if !domSet && weekdaySet {
+			return c.setDayWeekday(t, nextWeekday)
+		}
 	}
 	if weekdaySet && monthSet && nextMonth != int(t.Month()) {
 		// case when dom or weekday and month is set in cron - jump to the
@@ -244,6 +248,7 @@ func (c *Cron) setDayOfMonth(t time.Time) time.Time {
 		} else {
 			t = monthStart(t, t.Year()+1, c.month[0])
 		}
+		nextDom = c.dayOfMonth[0]
 	}
 	return c.nextDomTimeIncludingWeekdays(t, nextDom)
 }
