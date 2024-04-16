@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -1043,6 +1044,129 @@ func TestCronMinuteHourDayMonthWeekday(t *testing.T) {
 	}
 }
 
+func TestCronDefaultRandom(t *testing.T) {
+	const N = 100
+	cron := NewCron()
+	cronStr := cron.String()
+	for i := 0; i < N; i++ {
+		t1 := randomTimeUtc()
+		next := cron.Next(t1, nil)
+		sub := int(next.Sub(t1).Minutes())
+		if sub > 1 {
+			t.Errorf("Got cron[%s].Next(%v)=%v. Expected 1 minute diff, got: %d",
+				cronStr, t, next, sub)
+		}
+	}
+}
+
+func TestCronEOYRandom(t *testing.T) {
+	const N = 100
+	cron := NewCron().
+		AtMinute(59).
+		AtHour(23).
+		OnMonthDay(31).
+		InMonth(time.December)
+	cronStr := cron.String()
+
+	for i := 0; i < N; i++ {
+		t1 := randomTimeUtc()
+		next := cron.Next(t1, nil)
+		expected := time.Date(t1.Year(), time.December, 31, 23, 59, 0, 0, t1.Location())
+		if !expected.Equal(next) {
+			t.Errorf("Expected next schedule for %s and %v in %v, got: %v",
+				cronStr, t1, expected, next)
+		}
+	}
+}
+
+func TestCronYearStartRandom(t *testing.T) {
+	const N = 100
+	cron := NewCron().
+		AtMinute(0).
+		AtHour(0).
+		OnMonthDay(1).
+		InMonth(time.January)
+	cronStr := cron.String()
+
+	for i := 0; i < N; i++ {
+		t1 := randomTimeUtc()
+		next := cron.Next(t1, nil)
+		expected := time.Date(t1.Year()+1, time.January, 1, 0, 0, 0, 0, t1.Location())
+		if !expected.Equal(next) {
+			t.Errorf("Expected next schedule for %s and %v in %v, got: %v",
+				cronStr, t1, expected, next)
+		}
+	}
+}
+
+func TestCronDomWeekdayAtHourRandom(t *testing.T) {
+	const N = 100
+	cron := NewCron().
+		AtMinute(0).
+		AtHour(11).
+		OnMonthDay(13).
+		OnWeekday(time.Friday)
+	cronStr := cron.String()
+
+	for i := 0; i < N; i++ {
+		t1 := randomTimeUtc()
+		next := cron.Next(t1, nil)
+		if next.Weekday() != time.Friday && next.Day() != 13 {
+			t.Errorf("For %s and %v expected Friday or 13th, got: %s %d",
+				cronStr, t1, next.Weekday().String(), next.Day())
+		}
+		if next.Hour() != 11 {
+			t.Errorf("For %s and %v expected hour 11:00, got: %v",
+				cronStr, t1, next)
+		}
+	}
+}
+
+func BenchmarkCronNextDefault(b *testing.B) {
+	cron := NewCron()
+	now := time.Now()
+	for i := 0; i < b.N; i++ {
+		cron.Next(now, nil)
+	}
+}
+
+func BenchmarkCronNextMinutesHoursNewDay(b *testing.B) {
+	cron := NewCron().AtMinute(10).AtHour(8)
+	t1 := timeUtc(2024, 4, 3, 22, 13)
+	for i := 0; i < b.N; i++ {
+		cron.Next(t1, nil)
+	}
+}
+
+func BenchmarkCronNextDomMonthAndWeekday(b *testing.B) {
+	cron := NewCron().OnMonthDay(17).InMonth(time.April).OnWeekday(time.Sunday)
+	t1 := timeUtc(2024, 2, 3, 22, 13)
+	for i := 0; i < b.N; i++ {
+		cron.Next(t1, nil)
+	}
+}
+
+func BenchmarkCronNextAllPartsSet(b *testing.B) {
+	cron := NewCron().
+		AtMinute(38).
+		AtHour(7).
+		OnMonthDay(19).
+		InMonth(time.May).
+		OnWeekday(time.Wednesday)
+	t1 := timeUtc(2024, 6, 29, 22, 13)
+	for i := 0; i < b.N; i++ {
+		cron.Next(t1, nil)
+	}
+}
+
+func BenchmarkCronNextFeb29In2024Apr(b *testing.B) {
+	cron := NewCron().OnMonthDay(29).InMonth(time.February)
+	t1 := timeUtc(2024, 4, 3, 22, 13) // next schedule in 2028-02-29
+	for i := 0; i < b.N; i++ {
+		cron.Next(t1, nil)
+	}
+}
+
 func TestCronPartToString(t *testing.T) {
 	data := []struct {
 		input    []int
@@ -1064,6 +1188,12 @@ func TestCronPartToString(t *testing.T) {
 
 func timeUtc(year, month, day, hour, minute int) time.Time {
 	return time.Date(year, time.Month(month), day, hour, minute, 0, 0, time.UTC)
+}
+
+func randomTimeUtc() time.Time {
+	start := time.Unix(0, 0)
+	randSeconds := rand.Intn(1000000000)
+	return start.Add(time.Duration(randSeconds) * time.Second)
 }
 
 func warsaw(t *testing.T) *time.Location {
