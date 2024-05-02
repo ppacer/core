@@ -29,4 +29,4 @@ jobs:
 
     - name: Benchmarks
       run: |
-        go test -bench=. -benchmem ./ds
+        go test -bench=. -benchmem ./ds ./dag/schedule

@@ -90,6 +90,9 @@ func TestCronMinuteNext(t *testing.T) {
 
 // n,m * * * *
 func TestCronMinutesNext(t *testing.T) {
+	warsawTz := warsaw(t)
+	beforeDlsWarsaw := time.Date(2024, time.March, 31, 1, 59, 0, 0, warsawTz)
+
 	data := []struct {
 		cronMinutes      []int
 		currentTime      time.Time
@@ -107,6 +110,8 @@ func TestCronMinutesNext(t *testing.T) {
 		{[]int{22, 44}, timeUtc(2024, 3, 31, 23, 55), timeUtc(2024, 4, 1, 0, 22)},
 		{[]int{22, 44}, timeUtc(2024, 12, 31, 23, 40), timeUtc(2024, 12, 31, 23, 44)},
 		{[]int{22, 44}, timeUtc(2024, 12, 31, 23, 58), timeUtc(2025, 1, 1, 0, 22)},
+
+		{[]int{22, 44}, beforeDlsWarsaw, time.Date(2024, time.March, 31, 3, 22, 0, 0, warsawTz)},
 	}
 
 	for _, d := range data {
@@ -201,6 +206,9 @@ func TestCronEveryMinuteHoursNext(t *testing.T) {
 
 // m h * * *
 func TestCronMinuteHourNext(t *testing.T) {
+	warsawTz := warsaw(t)
+	beforeDlsWarsaw := time.Date(2024, time.March, 31, 1, 59, 0, 0, warsawTz)
+
 	data := []struct {
 		cronMinute       int
 		cronHour         int
@@ -220,6 +228,8 @@ func TestCronMinuteHourNext(t *testing.T) {
 		{0, 0, timeUtc(2024, 3, 24, 0, 0), timeUtc(2024, 3, 25, 0, 0)},
 		{0, 0, timeUtc(2024, 3, 24, 23, 59), timeUtc(2024, 3, 25, 0, 0)},
 		{0, 0, timeUtc(2024, 12, 31, 1, 1), timeUtc(2025, 1, 1, 0, 0)},
+
+		{15, 2, beforeDlsWarsaw, time.Date(2024, time.April, 1, 2, 15, 0, 0, warsawTz)},
 	}
 
 	for _, d := range data {
