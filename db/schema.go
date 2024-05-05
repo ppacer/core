@@ -8,6 +8,14 @@ import (
 	"fmt"
 )
 
+// TableNames is a list of ppacer database table names.
+var TableNames []string = []string{
+	"dags",
+	"dagtasks",
+	"dagruns",
+	"dagruntasks",
+}
+
 // SchemaStatements returns a list of SQL statements that setups new instance
 // of scheduler internal database. It can differ a little bit between SQL
 // databases, so exact list of statements are prepared based on given database

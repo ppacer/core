@@ -9,9 +9,10 @@ Package db contains all communication between ppacer and the database.
 
 # Supported databases
 
-  - SQLite - <TODO> (include tmp files)
-  - Postgres - <TODO> not yet ready, but this would be the second client
-  - ...
+  - SQLite - used as the default database. It's also used as in-memory database
+    and database on /tmp files for unit and integration tests.
+  - Postgres
+  - ... (More in the future)
 */
 package db
 
@@ -24,6 +25,8 @@ import (
 	"testing"
 )
 
+// DB defines a set of operations required from a database. Most of methods are
+// identical with standard `*sql.DB` type.
 type DB interface {
 	Begin() (*sql.Tx, error)
 	Exec(query string, args ...any) (sql.Result, error)
@@ -36,7 +39,7 @@ type DB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// Clinet represents the main database client.
+// Client represents the main database client.
 type Client struct {
 	dbConn DB
 	logger *slog.Logger
