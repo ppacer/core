@@ -70,7 +70,11 @@ func newSqliteClientForSchema(
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: dbFilePathAbs}
-	return &Client{&sqliteDB, logger}, nil
+	return &Client{
+		dbConn:   &sqliteDB,
+		dbDriver: SQLite,
+		logger:   logger,
+	}, nil
 }
 
 func newSqliteInMemoryClientForSchema(
@@ -92,7 +96,11 @@ func newSqliteInMemoryClientForSchema(
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: ":memory:"}
-	return &Client{&sqliteDB, logger}, nil
+	return &Client{
+		dbConn:   &sqliteDB,
+		dbDriver: SQLite,
+		logger:   logger,
+	}, nil
 }
 
 // Produces new Client using SQLite database created as temp file. It's mainly
@@ -136,7 +144,11 @@ func newSqliteTmpClientForSchema(
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	sqliteDB := SqliteDB{dbConn: db, dbFilePath: tmpFilePath}
-	return &Client{&sqliteDB, logger}, nil
+	return &Client{
+		dbConn:   &sqliteDB,
+		dbDriver: SQLite,
+		logger:   logger,
+	}, nil
 }
 
 func sqliteConnString(dbFilePath string) string {

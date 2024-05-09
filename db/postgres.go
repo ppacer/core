@@ -50,7 +50,11 @@ func setupPostgresSchemaIfNotExists(
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	postgresDB := PostgresDB{dbConn: dbConn, dbName: dbName}
-	return &Client{&postgresDB, logger}, nil
+	return &Client{
+		dbConn:   &postgresDB,
+		dbDriver: Postgres,
+		logger:   logger,
+	}, nil
 }
 
 func isPostgresSchemaSet(dbConn *sql.DB, expectedTableNames []string) (bool, error) {

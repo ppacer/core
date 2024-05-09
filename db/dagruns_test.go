@@ -14,7 +14,7 @@ import (
 )
 
 func TestInsertDagRunSimple(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := newClientForTesting(t)
 	if err != nil {
 		t.Error(err)
 	}

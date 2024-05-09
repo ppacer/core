@@ -25,6 +25,22 @@ import (
 	"testing"
 )
 
+// Supported by ppacer SQL drivers.
+type Driver int
+
+const (
+	SQLite Driver = iota
+	Postgres
+)
+
+// String return Driver name as a string.
+func (d Driver) String() string {
+	return [...]string{
+		"SQLite",
+		"Postgres",
+	}[d]
+}
+
 // DB defines a set of operations required from a database. Most of methods are
 // identical with standard `*sql.DB` type.
 type DB interface {
@@ -41,8 +57,9 @@ type DB interface {
 
 // Client represents the main database client.
 type Client struct {
-	dbConn DB
-	logger *slog.Logger
+	dbConn   DB
+	dbDriver Driver
+	logger   *slog.Logger
 }
 
 // Produces new Client using in-memory SQLite database with schema created
@@ -68,7 +85,11 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 	sqliteDB := SqliteDB{dbConn: db}
 	opts := slog.HandlerOptions{Level: slog.LevelInfo}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &opts))
-	return &Client{&sqliteDB, logger}, nil
+	return &Client{
+		dbConn:   &sqliteDB,
+		dbDriver: SQLite,
+		logger:   logger,
+	}, nil
 }
 
 // CleanUpSqliteTmp deletes SQLite database source file if all tests in the

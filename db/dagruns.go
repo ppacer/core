@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ppacer/core/timeutils"
@@ -273,8 +274,10 @@ func parseDagRun(rows *sql.Rows) (DagRun, error) {
 }
 
 func (c *Client) readDagRunsQuery(topN int) string {
-	if topN == -1 {
-		return `
+	var query string
+	switch c.dbDriver {
+	case SQLite:
+		query = `
 			SELECT
 				RunId,
 				DagId,
@@ -290,32 +293,56 @@ func (c *Client) readDagRunsQuery(topN int) string {
 			ORDER BY
 				RunId DESC
 		`
+	case Postgres:
+		query = `
+			SELECT
+				RunId,
+				DagId,
+				ExecTs,
+				InsertTs,
+				Status,
+				StatusUpdateTs,
+				Version
+			FROM
+				dagruns
+			WHERE
+				DagId = $1
+			ORDER BY
+				RunId DESC
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
 	}
-	return `
-		SELECT
-			RunId,
-			DagId,
-			ExecTs,
-			InsertTs,
-			Status,
-			StatusUpdateTs,
-			Version
-		FROM
-			dagruns
-		WHERE
-			DagId = ?
-		ORDER BY
-			RunId DESC
-		LIMIT
-			?
-	`
+	if topN == -1 {
+		return query
+	}
+
+	// topN >= 0 case
+	switch c.dbDriver {
+	case SQLite:
+		return query + "LIMIT ?"
+	case Postgres:
+		return query + "LIMIT $2"
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) insertDagRunQuery() string {
-	return `
+	switch c.dbDriver {
+	case SQLite:
+		return `
 		INSERT INTO dagruns (DagId, ExecTs, InsertTs, Status, StatusUpdateTs, Version)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`
+		`
+	case Postgres:
+		return `
+		INSERT INTO dagruns (DagId, ExecTs, InsertTs, Status, StatusUpdateTs, Version)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) latestDagRunsQuery() string {
@@ -345,45 +372,98 @@ func (c *Client) latestDagRunsQuery() string {
 }
 
 func (c *Client) updateDagRunStatusQuery() string {
-	return `
-	UPDATE
-		dagruns
-	SET
-		Status = ?,
-		StatusUpdateTs = ?
-	WHERE
-		RunId = ?
-	`
+	switch c.dbDriver {
+	case SQLite:
+		return `
+			UPDATE
+				dagruns
+			SET
+				Status = ?,
+				StatusUpdateTs = ?
+			WHERE
+				RunId = ?
+		`
+	case Postgres:
+		return `
+			UPDATE
+				dagruns
+			SET
+				Status = $1,
+				StatusUpdateTs = $2
+			WHERE
+				RunId = $3
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) updateDagRunStatusByExecTsQuery() string {
-	return `
-	UPDATE
-		dagruns
-	SET
-		Status = ?,
-		StatusUpdateTs = ?
-	WHERE
-			DagId = ?
-		AND ExecTs = ?
-	`
+	switch c.dbDriver {
+	case SQLite:
+		return `
+			UPDATE
+				dagruns
+			SET
+				Status = ?,
+				StatusUpdateTs = ?
+			WHERE
+					DagId = ?
+				AND ExecTs = ?
+		`
+	case Postgres:
+		return `
+			UPDATE
+				dagruns
+			SET
+				Status = $1,
+				StatusUpdateTs = $2
+			WHERE
+					DagId = $3
+				AND ExecTs = $4
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) readDagRunNotFinishedQuery() string {
-	return `
-		SELECT
-			RunId,
-			DagId,
-			ExecTs,
-			InsertTs,
-			Status,
-			StatusUpdateTs,
-			Version
-		FROM
-			dagruns
-		WHERE
-			Status NOT IN (?, ?)
-		ORDER BY
-			RunId ASC
-	`
+	switch c.dbDriver {
+	case SQLite:
+		return `
+			SELECT
+				RunId,
+				DagId,
+				ExecTs,
+				InsertTs,
+				Status,
+				StatusUpdateTs,
+				Version
+			FROM
+				dagruns
+			WHERE
+				Status NOT IN (?, ?)
+			ORDER BY
+				RunId ASC
+		`
+	case Postgres:
+		return `
+			SELECT
+				RunId,
+				DagId,
+				ExecTs,
+				InsertTs,
+				Status,
+				StatusUpdateTs,
+				Version
+			FROM
+				dagruns
+			WHERE
+				Status NOT IN ($1, $2)
+			ORDER BY
+				RunId ASC
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }

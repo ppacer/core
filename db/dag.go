@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -127,8 +128,9 @@ func (c *Client) insertDag(ctx context.Context, tx *sql.Tx, d Dag, insertTs stri
 	_, err := tx.ExecContext(
 		ctx,
 		c.dagInsertQuery(),
-		d.DagId, d.StartTs, d.Schedule, d.CreateTs, d.LatestUpdateTs, d.CreateVersion, d.LatestUpdateVersion, d.HashDagMeta,
-		d.HashTasks, d.Attributes,
+		d.DagId, d.StartTs, d.Schedule, d.CreateTs, d.LatestUpdateTs,
+		d.CreateVersion, d.LatestUpdateVersion, d.HashDagMeta, d.HashTasks,
+		d.Attributes,
 	)
 	if err != nil {
 		return err
@@ -141,7 +143,8 @@ func (c *Client) updateDag(ctx context.Context, tx *sql.Tx, d Dag) error {
 	_, err := tx.ExecContext(
 		ctx,
 		c.dagUpdateQuery(),
-		d.StartTs, d.Schedule, d.LatestUpdateTs, d.LatestUpdateVersion, d.HashDagMeta, d.HashTasks, d.Attributes, d.DagId,
+		d.StartTs, d.Schedule, d.LatestUpdateTs, d.LatestUpdateVersion,
+		d.HashDagMeta, d.HashTasks, d.Attributes, d.DagId,
 	)
 	if err != nil {
 		return err
@@ -201,7 +204,7 @@ func dagStartAndScheduleStrings(d dag.Dag) (*string, *string) {
 }
 
 func (c *Client) readDagQuery() string {
-	return `
+	query := `
 		SELECT
 			DagId,
 			StartTs,
@@ -216,35 +219,75 @@ func (c *Client) readDagQuery() string {
 		FROM
 			dags
 		WHERE
-			DagId = ?
 	`
+	switch c.dbDriver {
+	case SQLite:
+		return query + "DagId = ?"
+	case Postgres:
+		return query + "DagId = $1"
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) dagInsertQuery() string {
-	return `
-		INSERT INTO dags (
-			DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion,
-			LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
+	switch c.dbDriver {
+	case SQLite:
+		return `
+			INSERT INTO dags (
+				DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion,
+				LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+	case Postgres:
+		return `
+			INSERT INTO dags (
+				DagId, StartTs, Schedule, CreateTs, LatestUpdateTs, CreateVersion,
+				LatestUpdateVersion, HashDagMeta, HashTasks, Attributes
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 func (c *Client) dagUpdateQuery() string {
-	return `
-		UPDATE
-			dags
-		SET
-			StartTs = ?,
-			Schedule = ?,
-			LatestUpdateTs = ?,
-			LatestUpdateVersion = ?,
-			HashDagMeta = ?,
-			HashTasks = ?,
-			Attributes = ?
-		WHERE
-			DagId = ?
-	`
+	switch c.dbDriver {
+	case SQLite:
+		return `
+			UPDATE
+				dags
+			SET
+				StartTs = ?,
+				Schedule = ?,
+				LatestUpdateTs = ?,
+				LatestUpdateVersion = ?,
+				HashDagMeta = ?,
+				HashTasks = ?,
+				Attributes = ?
+			WHERE
+				DagId = ?
+		`
+	case Postgres:
+		return `
+			UPDATE
+				dags
+			SET
+				StartTs = $1,
+				Schedule = $2,
+				LatestUpdateTs = $3,
+				LatestUpdateVersion = %4,
+				HashDagMeta = $5,
+				HashTasks = $6,
+				Attributes = $7
+			WHERE
+				DagId = $8
+		`
+	default:
+		panic(fmt.Sprintf("Unsupported SQL driver: %s", c.dbDriver.String()))
+	}
 }
 
 // TODO: Move somewhere?
