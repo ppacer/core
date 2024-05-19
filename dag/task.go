@@ -11,12 +11,21 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/ppacer/core/meta"
 )
 
 const MAX_RECURSION = 10000
 
+// DAG run task information context.
+type TaskRunInfo struct {
+	DagId  Id
+	ExecTs time.Time
+	TaskId string
+}
+
+// TaskContext is a context for Task execute method.
 type TaskContext struct {
 	Context context.Context
 	Logger  *slog.Logger

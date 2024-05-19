@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -78,6 +79,36 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 	return logs, err
 }
 
+// ReadDagRunTaskLogsLatest reads given number of latest DAG run task logs in
+// chronological order.
+func (c *Client) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, taskId string, latest int) ([]TaskLogRecord, error) {
+	records, rErr := c.readTaskLogsQuery(
+		ctx, c.readDagRunTaskLogsLatestQuery(), dagId, execTs, taskId, latest,
+	)
+	if rErr != nil {
+		return nil, rErr
+	}
+	slices.Reverse(records)
+	return records, nil
+}
+
+func (c *Client) readTaskLogsQuery(ctx context.Context, query string, args ...any) ([]TaskLogRecord, error) {
+	rows, rErr := c.dbConn.QueryContext(ctx, query, args...)
+	if rErr != nil {
+		c.logger.Error("Error while querying DAG run task logs", "query", query,
+			"err", rErr)
+		return nil, rErr
+	}
+	defer rows.Close()
+	logs, err := c.readTaskLogs(rows)
+	if rowsErr := rows.Err(); rowsErr != nil {
+		c.logger.Error("Error while processing SQL rows from tasklogs",
+			"query", query, "err", rowsErr)
+		return nil, rowsErr
+	}
+	return logs, err
+}
+
 // For given *sql.Rows reads and parse TaskLogRecord from presumably tasklogs
 // table. Given rows should be close by the parent function.
 func (c *Client) readTaskLogs(rows *sql.Rows) ([]TaskLogRecord, error) {
@@ -127,6 +158,38 @@ func (c *Client) readDagRunLogsQuery() string {
 		WHERE
 				DagId = ?
 			AND ExecTs = ?
+		ORDER BY
+			InsertTs ASC
+	`
+}
+
+func (c *Client) readDagRunTaskLogsLatestQuery() string {
+	return `
+		SELECT
+			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+		FROM
+			tasklogs
+		WHERE
+				DagId = ?
+			AND ExecTs = ?
+			AND TaskId = ?
+		ORDER BY
+			InsertTs DESC
+		LIMIT
+			?
+	`
+}
+
+func (c *Client) readDagRunLogsAfterQuery() string {
+	return `
+		SELECT
+			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+		FROM
+			tasklogs
+		WHERE
+				DagId = ?
+			AND ExecTs = ?
+			AND InsertTs > ?
 		ORDER BY
 			InsertTs ASC
 	`

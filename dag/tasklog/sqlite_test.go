@@ -149,3 +149,45 @@ func testSQLiteLoggerLevel(t *testing.T, lvl slog.Level, expectedRows int) {
 		t.Errorf("Expected %d log in tasklogs, got: %d", expectedRows, len(tlrs))
 	}
 }
+
+func TestToTaskLogRecord(t *testing.T) {
+	now := timeutils.ToString(time.Now())
+	msg := "Message"
+	data := []struct {
+		attrString    string
+		expAttributes map[string]any
+	}{
+		{"{}", map[string]any{}},
+		{`{"x": 42.12}`, map[string]any{"x": 42.12}},
+		{`{"y": "test"}`, map[string]any{"y": "test"}},
+		{`{"a": null, "b": "test"}`, map[string]any{"a": nil, "b": "test"}},
+	}
+
+	for _, d := range data {
+		dbtlr := db.TaskLogRecord{
+			Level:      "INFO",
+			InsertTs:   now,
+			Message:    msg,
+			Attributes: d.attrString,
+		}
+		tlr, err := toTaskLogRecord(dbtlr)
+		if err != nil {
+			t.Errorf("Error while mapping from db.TaskLogRecord to TaskLogRecord: %s",
+				err.Error())
+		}
+		if len(tlr.Attributes) != len(d.expAttributes) {
+			t.Errorf("Attributes map has different sizes: expected %d, got %d",
+				len(d.expAttributes), len(tlr.Attributes))
+		}
+		for k, v := range d.expAttributes {
+			v2, ok := tlr.Attributes[k]
+			if !ok {
+				t.Errorf("Key %s is missing in TaskLogRecord Attrs", k)
+			}
+			if v2 != v {
+				t.Errorf("Attributes for key %s differs. Expected %v, got %v",
+					k, v, v2)
+			}
+		}
+	}
+}
