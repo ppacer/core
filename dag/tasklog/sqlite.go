@@ -13,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/timeutils"
 )
@@ -24,44 +23,49 @@ const (
 	messageFieldKey = "msg"
 )
 
-// TODO
+// SQLite implements Factory using SQLite database as a target for task logs.
 type SQLite struct {
 	dbClient   *db.Client
 	loggerOpts *slog.HandlerOptions
 }
 
-func (s *SQLite) GetLogger(tri dag.TaskRunInfo) *slog.Logger {
-	ri := dag.RunInfo{DagId: tri.DagId, ExecTs: tri.ExecTs}
-	return NewSQLiteLogger(ri, tri.TaskId, s.dbClient, s.loggerOpts)
+// NewSQLite instantiate new SQLite object. Given database client should be
+// setup to use SQLite. Optionally provided loggerOpts would be used in the
+// logger for task logs.
+func NewSQLite(dbClient *db.Client, loggerOpts *slog.HandlerOptions) *SQLite {
+	return &SQLite{
+		dbClient:   dbClient,
+		loggerOpts: loggerOpts,
+	}
 }
 
-// TODO
-func (s *SQLite) GetLogReader(tri dag.TaskRunInfo) TaskLogReader {
-	// TODO
-	return nil
+// GetLogger returns new instance of slog.Logger dedicated to log events
+// related to given DAG run task. Logs are stored in SQLite database configured
+// in NewSQLite.
+func (s *SQLite) GetLogger(ti TaskInfo) *slog.Logger {
+	sw := sqliteLogWriter{ti: ti, dbClient: s.dbClient}
+	return slog.New(slog.NewJSONHandler(&sw, s.loggerOpts))
 }
 
-// NewSQLiteLogger instantiate new structured logger instance for writing DAG
-// run task logs into SQLite database. It writes logs into tasklogs table which
-// is indexed by date and DAG run task metadata.
-func NewSQLiteLogger(ri dag.RunInfo, taskId string, dbClient *db.Client, opts *slog.HandlerOptions) *slog.Logger {
-	sw := sqliteLogWriter{ri: ri, taskId: taskId, dbClient: dbClient}
-	return slog.New(slog.NewJSONHandler(&sw, opts))
+// GetLogReader returns an instance of Reader for reading log records related
+// to given DAG run task.
+func (s *SQLite) GetLogReader(ti TaskInfo) Reader {
+	return &sqliteLogReader{
+		ti:       ti,
+		dbClient: s.dbClient,
+	}
 }
 
 type sqliteLogReader struct {
-	tri      dag.TaskRunInfo
+	ti       TaskInfo
 	dbClient *db.Client
-	timeout  time.Duration
 }
 
 // ReadAll reads all log records for the DAG run task context in chronological
 // order.
-func (s *sqliteLogReader) ReadAll() ([]TaskLogRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-	defer cancel()
+func (s *sqliteLogReader) ReadAll(ctx context.Context) ([]Record, error) {
 	logs, readErr := s.dbClient.ReadDagRunTaskLogs(
-		ctx, string(s.tri.DagId), timeutils.ToString(s.tri.ExecTs), s.tri.TaskId,
+		ctx, s.ti.DagId, timeutils.ToString(s.ti.ExecTs), s.ti.TaskId,
 	)
 	if readErr != nil {
 		return nil, readErr
@@ -71,12 +75,9 @@ func (s *sqliteLogReader) ReadAll() ([]TaskLogRecord, error) {
 
 // ReadLatest reads n latest log records for the DAG run task context in
 // chronological order.
-func (s *sqliteLogReader) ReadLatest(n int) ([]TaskLogRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-	defer cancel()
+func (s *sqliteLogReader) ReadLatest(ctx context.Context, n int) ([]Record, error) {
 	logs, readErr := s.dbClient.ReadDagRunTaskLogsLatest(
-		ctx, string(s.tri.DagId), timeutils.ToString(s.tri.ExecTs),
-		s.tri.TaskId, n,
+		ctx, s.ti.DagId, timeutils.ToString(s.ti.ExecTs), s.ti.TaskId, n,
 	)
 	if readErr != nil {
 		return nil, readErr
@@ -85,8 +86,7 @@ func (s *sqliteLogReader) ReadLatest(n int) ([]TaskLogRecord, error) {
 }
 
 type sqliteLogWriter struct {
-	ri       dag.RunInfo
-	taskId   string
+	ti       TaskInfo
 	dbClient *db.Client
 }
 
@@ -117,9 +117,9 @@ func (s *sqliteLogWriter) Write(p []byte) (int, error) {
 		return 0, fmt.Errorf("cannot serialize attributes to JSON: %w", jErr)
 	}
 	tlr := db.TaskLogRecord{
-		DagId:      string(s.ri.DagId),
-		ExecTs:     timeutils.ToString(s.ri.ExecTs),
-		TaskId:     s.taskId,
+		DagId:      s.ti.DagId,
+		ExecTs:     timeutils.ToString(s.ti.ExecTs),
+		TaskId:     s.ti.TaskId,
 		InsertTs:   timeutils.ToString(time.Now()),
 		Level:      lvl,
 		Message:    msg,
@@ -145,8 +145,8 @@ func getKeyAndDelete(m map[string]any, key string) (string, error) {
 	return valStr, nil
 }
 
-func toTaskLogRecords(tlrs []db.TaskLogRecord) ([]TaskLogRecord, error) {
-	newTlrs := make([]TaskLogRecord, len(tlrs))
+func toTaskLogRecords(tlrs []db.TaskLogRecord) ([]Record, error) {
+	newTlrs := make([]Record, len(tlrs))
 	for idx, rec := range tlrs {
 		newRec, err := toTaskLogRecord(rec)
 		if err != nil {
@@ -157,13 +157,13 @@ func toTaskLogRecords(tlrs []db.TaskLogRecord) ([]TaskLogRecord, error) {
 	return newTlrs, nil
 }
 
-func toTaskLogRecord(tlr db.TaskLogRecord) (TaskLogRecord, error) {
+func toTaskLogRecord(tlr db.TaskLogRecord) (Record, error) {
 	var attrs map[string]any
 	jErr := json.Unmarshal([]byte(tlr.Attributes), &attrs)
 	if jErr != nil {
-		return TaskLogRecord{}, jErr
+		return Record{}, jErr
 	}
-	newTlr := TaskLogRecord{
+	newTlr := Record{
 		Level:      tlr.Level,
 		InsertTs:   timeutils.FromStringMust(tlr.InsertTs),
 		Message:    tlr.Message,

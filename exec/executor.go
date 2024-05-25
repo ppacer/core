@@ -136,9 +136,13 @@ func executeTask(
 
 	// Executing
 	ri := dag.RunInfo{DagId: dag.Id(tte.DagId), ExecTs: execTs}
+	ti := tasklog.TaskInfo{DagId: tte.DagId, ExecTs: execTs, TaskId: task.Id()}
+
+	// TODO(dskrzypiec): create constructor and inject tasklog.Factory
+	sqliteLogs := tasklog.NewSQLite(logDbClient, nil)
 	taskContext := dag.TaskContext{
 		Context: context.TODO(),
-		Logger:  tasklog.NewSQLiteLogger(ri, tte.TaskId, logDbClient, nil),
+		Logger:  sqliteLogs.GetLogger(ti),
 		DagRun:  ri,
 	}
 	execErr := task.Execute(taskContext)

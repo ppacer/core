@@ -1,3 +1,7 @@
+// Copyright 2023 The ppacer Authors.
+// Licensed under the Apache License, Version 2.0.
+// See LICENSE file in the project root for full license information.
+
 package tasklog
 
 import (
@@ -6,10 +10,62 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/timeutils"
 )
+
+func TestNewSQLite(t *testing.T) {
+	c, err := db.NewSqliteTmpClientForLogs(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	s := NewSQLite(c, nil)
+	if s.dbClient != c {
+		t.Error("Expected dbClient to be set")
+	}
+}
+
+func TestSQLiteLoggerAndReaderSimple(t *testing.T) {
+	c, err := db.NewSqliteTmpClientForLogs(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+
+	sqlite := NewSQLite(c, nil)
+	const dagId = "mock_dag"
+	const taskId = "task_1"
+	ts := time.Now()
+	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
+	sqliteLogger := sqlite.GetLogger(ti)
+	logReader := sqlite.GetLogReader(ti)
+
+	msgs := []string{"test", "another msg", ""}
+
+	// Insert logs
+	for _, msg := range msgs {
+		sqliteLogger.Warn(msg)
+	}
+
+	// Read logs
+	ctx := context.Background()
+	logs, rErr := logReader.ReadAll(ctx)
+	if rErr != nil {
+		t.Errorf("Could not read log records: %s", rErr.Error())
+	}
+	if len(logs) != len(msgs) {
+		t.Errorf("Expected %d log records, got: %d", len(msgs), len(logs))
+	}
+
+	for idx, msg := range msgs {
+		if logs[idx].Message != msg {
+			t.Errorf("Expected message [%s] for row %d, got [%s]",
+				msg, idx, logs[idx])
+		}
+	}
+}
 
 func TestSQLiteLoggerSimple(t *testing.T) {
 	c, err := db.NewSqliteTmpClientForLogs(nil)
@@ -22,8 +78,8 @@ func TestSQLiteLoggerSimple(t *testing.T) {
 	const taskId = "task_1"
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
-	ri := dag.RunInfo{DagId: dag.Id(dagId), ExecTs: ts}
-	sqliteLogger := NewSQLiteLogger(ri, taskId, c, nil)
+	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
+	sqliteLogger := NewSQLite(c, nil).GetLogger(ti)
 
 	messages := []string{
 		"test message 1",
@@ -62,8 +118,8 @@ func TestSQLiteLoggerAttributes(t *testing.T) {
 	const taskId = "task_1"
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
-	ri := dag.RunInfo{DagId: dag.Id(dagId), ExecTs: ts}
-	sqliteLogger := NewSQLiteLogger(ri, taskId, c, nil)
+	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
+	sqliteLogger := NewSQLite(c, nil).GetLogger(ti)
 
 	type tmp struct {
 		X int     `json:"my_x"`
@@ -131,9 +187,9 @@ func testSQLiteLoggerLevel(t *testing.T, lvl slog.Level, expectedRows int) {
 	const taskId = "task_1"
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
-	ri := dag.RunInfo{DagId: dag.Id(dagId), ExecTs: ts}
+	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
 	opts := slog.HandlerOptions{Level: lvl}
-	sqliteLogger := NewSQLiteLogger(ri, taskId, c, &opts)
+	sqliteLogger := NewSQLite(c, &opts).GetLogger(ti)
 
 	sqliteLogger.Debug("debug")
 	sqliteLogger.Info("info")

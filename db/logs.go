@@ -50,7 +50,7 @@ func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]Ta
 		return nil, rErr
 	}
 	defer rows.Close()
-	logs, err := c.readTaskLogs(rows)
+	logs, err := c.readTaskLogs(ctx, rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
 		c.logger.Error("Error while processing SQL rows from tasklogs", "dagId",
 			dagId, "execTs", execTs, "err", rowsErr)
@@ -70,7 +70,7 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 		return nil, rErr
 	}
 	defer rows.Close()
-	logs, err := c.readTaskLogs(rows)
+	logs, err := c.readTaskLogs(ctx, rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
 		c.logger.Error("Error while processing SQL rows from tasklogs", "dagId",
 			dagId, "execTs", execTs, "taskId", taskId, "err", rowsErr)
@@ -100,7 +100,7 @@ func (c *Client) readTaskLogsQuery(ctx context.Context, query string, args ...an
 		return nil, rErr
 	}
 	defer rows.Close()
-	logs, err := c.readTaskLogs(rows)
+	logs, err := c.readTaskLogs(ctx, rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
 		c.logger.Error("Error while processing SQL rows from tasklogs",
 			"query", query, "err", rowsErr)
@@ -111,13 +111,20 @@ func (c *Client) readTaskLogsQuery(ctx context.Context, query string, args ...an
 
 // For given *sql.Rows reads and parse TaskLogRecord from presumably tasklogs
 // table. Given rows should be close by the parent function.
-func (c *Client) readTaskLogs(rows *sql.Rows) ([]TaskLogRecord, error) {
+func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRecord, error) {
 	start := time.Now()
 	c.logger.Debug("Start reading tasklogs records")
 	tlrs := make([]TaskLogRecord, 0, 10)
 	var dagId, execTs, taskId, insertTs, lvl, msg, attr string
 
 	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			c.logger.Warn("Context done while processing DAG run task log records",
+				"err", ctx.Err())
+			return nil, ctx.Err()
+		default:
+		}
 		scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &lvl, &msg, &attr)
 		if scanErr != nil {
 			c.logger.Error("Cannot parse tasklogs record", "err", scanErr.Error())
