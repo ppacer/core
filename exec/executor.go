@@ -23,10 +23,13 @@ import (
 	"github.com/ppacer/core/timeutils"
 )
 
+// Executor executes DAG run tasks, each in a separate goroutine. When Start
+// method is called Executor starts polling ppacer scheduler for new DAG run
+// tasks to be run.
 type Executor struct {
 	schedClient *scheduler.Client
 	config      Config
-	logDbClient *db.Client
+	taskLogs    tasklog.Factory
 	logger      *slog.Logger
 }
 
@@ -63,7 +66,7 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 	return &Executor{
 		schedClient: sc,
 		config:      cfg,
-		logDbClient: logDbClient,
+		taskLogs:    tasklog.NewSQLite(logDbClient, nil),
 		logger:      logger,
 	}
 }
@@ -106,13 +109,13 @@ func (e *Executor) Start(dags dag.Registry) {
 				"taskId", tte.TaskId)
 			break
 		}
-		go executeTask(tte, task, e.schedClient, e.logDbClient, e.logger)
+		go executeTask(tte, task, e.schedClient, e.taskLogs, e.logger)
 	}
 }
 
 func executeTask(
 	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
-	logDbClient *db.Client, logger *slog.Logger,
+	taskLogs tasklog.Factory, logger *slog.Logger,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -138,11 +141,9 @@ func executeTask(
 	ri := dag.RunInfo{DagId: dag.Id(tte.DagId), ExecTs: execTs}
 	ti := tasklog.TaskInfo{DagId: tte.DagId, ExecTs: execTs, TaskId: task.Id()}
 
-	// TODO(dskrzypiec): create constructor and inject tasklog.Factory
-	sqliteLogs := tasklog.NewSQLite(logDbClient, nil)
 	taskContext := dag.TaskContext{
 		Context: context.TODO(),
-		Logger:  sqliteLogs.GetLogger(ti),
+		Logger:  taskLogs.GetLogger(ti),
 		DagRun:  ri,
 	}
 	execErr := task.Execute(taskContext)
