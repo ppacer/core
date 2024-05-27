@@ -125,7 +125,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
+	delay := ts.Config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start"}
 	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end"}
@@ -167,7 +167,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	delay := time.Duration(ts.Config.CheckDependenciesStatusMs * 2)
+	delay := ts.Config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
 	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21"}
@@ -964,7 +964,7 @@ func markSuccessAllTasks(
 	taskExecutionDuration time.Duration,
 	t *testing.T,
 ) {
-	delay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
+	delay := ts.Config.CheckDependenciesStatusWait
 	for {
 		select {
 		case <-ctx.Done():
@@ -999,7 +999,7 @@ func markSuccessAllTasksExceptFew(
 	taskExecutionDuration time.Duration,
 	t *testing.T,
 ) {
-	delay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
+	delay := ts.Config.CheckDependenciesStatusWait
 	for {
 		select {
 		case <-ctx.Done():

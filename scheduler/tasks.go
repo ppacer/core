@@ -72,7 +72,7 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 		}
 		if ts.DagRunQueue.Size() == 0 {
 			// DagRunQueue is empty, we wait for a bit and then we'll try again
-			time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
+			time.Sleep(ts.Config.Heartbeat)
 			continue
 		}
 		dagrun, err := ts.DagRunQueue.Pop()
@@ -206,7 +206,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	// At this point all tasks has been scheduled, but not necessarily done.
 	tasks := d.Flatten()
 	for !ts.allTasksAreDone(dagrun, tasks, sharedState) {
-		time.Sleep(time.Duration(ts.Config.HeartbeatMs) * time.Millisecond)
+		time.Sleep(ts.Config.Heartbeat)
 	}
 
 	// Update dagrun state to finished
@@ -292,7 +292,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
-	checkDelay := time.Duration(ts.Config.CheckDependenciesStatusMs) * time.Millisecond
+	checkDelay := ts.Config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
 	ts.Logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
 
