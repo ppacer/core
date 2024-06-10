@@ -20,3 +20,11 @@ type Message struct {
 	TaskId *string
 	Body   string
 }
+
+// Returns TaskId if *TaskId is not nil, else it return empty string.
+func (m Message) TaskIdOrEmpty() string {
+	if m.TaskId == nil {
+		return ""
+	}
+	return *m.TaskId
+}
