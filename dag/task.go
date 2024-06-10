@@ -117,13 +117,26 @@ func TaskHash(t Task) string {
 // Node represents single node (vertex) in the DAG.
 type Node struct {
 	Task     Task
+	Config   TaskConfig
 	Children []*Node
 }
 
-// NewNode initialize Node with given task and returns the reference.
-func NewNode(task Task) *Node {
+// NewNode initialize Node with given task and returns the reference. For
+// custom configuration a set of TaskConfigFunc can be passed. For example:
+//
+//	var t Task = T()
+//	n1 := NewNode(t, WithTaskTimeout(10 * time.Second), WithTaskRetries(3))
+//
+// In case when no configFuncs are passed, then DefaultTaskConfig would be
+// used.
+func NewNode(task Task, configFuncs ...TaskConfigFunc) *Node {
+	config := &DefaultTaskConfig
+	for _, configFunc := range configFuncs {
+		configFunc(config)
+	}
 	n := Node{
 		Task:     task,
+		Config:   *config,
 		Children: make([]*Node, 0),
 	}
 	return &n
