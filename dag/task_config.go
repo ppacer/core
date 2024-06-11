@@ -1,21 +1,19 @@
 package dag
 
-import "time"
-
 // TaskConfig represents Task configuration. It contains information about
 // configuration of a task execution, like a timeout for executing given task
 // or how many times scheduler should retry in case of failures.
 type TaskConfig struct {
-	Timeout            time.Duration `json:"timeout"`
-	Retries            int           `json:"retries"`
-	SendAlertOnRetry   bool          `json:"sendAlertOnRetry"`
-	SendAlertOnFailure bool          `json:"sendAlertOnFailure"`
+	TimeoutSeconds     int  `json:"timeoutSeconds"`
+	Retries            int  `json:"retries"`
+	SendAlertOnRetry   bool `json:"sendAlertOnRetry"`
+	SendAlertOnFailure bool `json:"sendAlertOnFailure"`
 }
 
 // Default task configuration. If not specified otherwise the followig
 // configuration values would be used for Task scheduling and execution.
 var DefaultTaskConfig = TaskConfig{
-	Timeout:            1 * time.Hour,
+	TimeoutSeconds:     10 * 60,
 	Retries:            0,
 	SendAlertOnRetry:   false,
 	SendAlertOnFailure: true,
@@ -27,9 +25,9 @@ type TaskConfigFunc func(*TaskConfig)
 
 // WithTaskTimeout returns TaskConfigFunc for setting a timeout for task
 // exection.
-func WithTaskTimeout(timeout time.Duration) TaskConfigFunc {
+func WithTaskTimeout(timeoutSeconds int) TaskConfigFunc {
 	return func(config *TaskConfig) {
-		config.Timeout = timeout
+		config.TimeoutSeconds = timeoutSeconds
 	}
 }
 
