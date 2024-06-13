@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS dagtasks (
     InsertTs TEXT NOT NULL,         -- Insert timestamp in %Y-%m-%D %H:%M:%S format
     Version TEXT NOT NULL,          -- Scheduler Version
     TaskTypeName TEXT NOT NULL,     -- Go type name which implements this task
+    TaskConfig TEXT NOT NULL,       -- Task configuration in form of JSON
     TaskBodyHash TEXT NOT NULL,     -- Task Execute() method body source code hash
     TaskBodySource TEXT NOT NULL,   -- Task Execute() method body source code as text
 

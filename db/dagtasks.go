@@ -7,7 +7,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -24,6 +26,7 @@ type DagTask struct {
 	InsertTs       string
 	Version        string
 	TaskTypeName   string
+	TaskConfig     string
 	TaskBodyHash   string
 	TaskBodySource string
 }
@@ -47,8 +50,8 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 		return uErr
 	}
 
-	for _, task := range d.Flatten() {
-		iErr := c.insertSingleDagTask(ctx, tx, dagId, task, insertTs)
+	for _, node := range d.FlattenNodes() {
+		iErr := c.insertSingleDagTask(ctx, tx, dagId, node.Node, insertTs)
 		if iErr != nil {
 			rollErr := tx.Rollback()
 			if rollErr != nil {
@@ -76,39 +79,50 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 // database side (DagId, TaskId, IsCurrent) defines primary key on dagtasks
 // table.
 func (c *Client) insertSingleDagTask(
-	ctx context.Context, tx *sql.Tx, dagId string, task dag.Task,
+	ctx context.Context, tx *sql.Tx, dagId string, node *dag.Node,
 	insertTs string,
 ) error {
 	start := time.Now()
 	c.logger.Debug("Start inserting new dag task", "dagId", dagId, "taskId",
-		task.Id(), "insertTs", insertTs)
+		node.Task.Id(), "insertTs", insertTs)
+
+	if node == nil {
+		return fmt.Errorf("cannot insert nil dag.Node for dagId=%s, insertTs=%s",
+			dagId, insertTs)
+	}
 
 	// Insert dagtask row
-	iErr := c.insertDagTask(ctx, tx, dagId, task, insertTs)
+	iErr := c.insertDagTask(ctx, tx, dagId, node, insertTs)
 	if iErr != nil {
 		c.logger.Error("Cannot insert new dagtask", "dagId", dagId, "taskId",
-			task.Id(), "err", iErr)
+			node.Task.Id(), "err", iErr)
 		return iErr
 	}
 	c.logger.Debug("Finished inserting new DagTask", "dagId", dagId, "taskId",
-		task.Id(), "duration", time.Since(start))
+		node.Task.Id(), "duration", time.Since(start))
 	return nil
 }
 
 // Insert new row in dagtasks table.
 func (c *Client) insertDagTask(
-	ctx context.Context, tx *sql.Tx, dagId string, task dag.Task,
+	ctx context.Context, tx *sql.Tx, dagId string, node *dag.Node,
 	insertTs string,
 ) error {
-	tTypeName := reflect.TypeOf(task).Name()
-	taskBody := dag.TaskExecuteSource(task)
-	taskHash := dag.TaskHash(task)
+	tTypeName := reflect.TypeOf(node.Task).Name()
+	taskBody := dag.TaskExecuteSource(node.Task)
+	taskHash := dag.TaskHash(node.Task)
+
+	taskConfigJson, jErr := json.Marshal(node.Config)
+	if jErr != nil {
+		return fmt.Errorf("cannot serialize Task %s config into JSON: %w",
+			node.Task.Id(), jErr)
+	}
 
 	_, err := tx.ExecContext(
 		ctx,
 		c.dagTaskInsertQuery(),
-		dagId, task.Id(), 1, insertTs, version.Version, tTypeName, taskHash,
-		taskBody,
+		dagId, node.Task.Id(), 1, insertTs, version.Version, tTypeName,
+		string(taskConfigJson), taskHash, taskBody,
 	)
 	if err != nil {
 		return err
@@ -150,26 +164,11 @@ func (c *Client) ReadDagTasks(ctx context.Context, dagId string) ([]DagTask, err
 			return nil, ctx.Err()
 		default:
 		}
-		var fetchedDagId, fetchedTaskId, typeName, insertTs, version, bodyHash,
-			bodySource string
-		var isCurrentInt int
-
-		scanErr := rows.Scan(&fetchedDagId, &fetchedTaskId, &isCurrentInt,
-			&insertTs, &version, &typeName, &bodyHash, &bodySource)
+		task, scanErr := c.scanAndParseDagTask(rows)
 		if scanErr != nil {
 			c.logger.Error("Failed scanning a DagTask record", "dagId", dagId,
 				"err", scanErr)
 			return nil, scanErr
-		}
-		task := DagTask{
-			DagId:          fetchedDagId,
-			TaskId:         fetchedTaskId,
-			IsCurrent:      isCurrentInt == 1,
-			InsertTs:       insertTs,
-			Version:        version,
-			TaskTypeName:   typeName,
-			TaskBodyHash:   bodyHash,
-			TaskBodySource: bodySource,
 		}
 		tasks = append(tasks, task)
 	}
@@ -191,17 +190,30 @@ func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask
 	c.logger.Debug("Start reading DagTask", "dagId", dagId, "taskId", taskId)
 
 	row := c.dbConn.QueryRowContext(ctx, c.readDagTaskQuery(), dagId, taskId)
-	var dId, tId, typeName, insertTs, version, bodyHash, bodySource string
+	dagtask, err := c.scanAndParseDagTask(row)
+	if err != nil {
+		return dagtask, err
+	}
+	c.logger.Debug("Finished reading DagTask", "dagId", dagId, "taskId", taskId,
+		"duration", time.Since(start))
+	return dagtask, nil
+}
+
+// scanAndParseDagTask try to parse given SQL row as DagTask.
+func (c *Client) scanAndParseDagTask(s interface{ Scan(dest ...any) error }) (DagTask, error) {
+	var (
+		dId, tId, typeName, insertTs, version, config, bodyHash,
+		bodySource string
+	)
 	var isCurrent int
-	scanErr := row.Scan(&dId, &tId, &isCurrent, &insertTs, &version, &typeName,
-		&bodyHash, &bodySource)
+	scanErr := s.Scan(&dId, &tId, &isCurrent, &insertTs, &version, &typeName,
+		&config, &bodyHash, &bodySource)
 	if scanErr == sql.ErrNoRows {
 		return DagTask{}, scanErr
 	}
 
 	if scanErr != nil {
-		c.logger.Error("Failed scanning DagTask record", "dagId", dagId,
-			"taskId", taskId)
+		c.logger.Error("Failed scanning DagTask record", "err", scanErr)
 		return DagTask{}, scanErr
 	}
 
@@ -211,11 +223,10 @@ func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask
 		IsCurrent:      isCurrent == 1,
 		Version:        version,
 		TaskTypeName:   typeName,
+		TaskConfig:     config,
 		TaskBodyHash:   bodyHash,
 		TaskBodySource: bodySource,
 	}
-	c.logger.Debug("Finished reading DagTask", "dagId", dagId, "taskId", taskId,
-		"duration", time.Since(start))
 	return dagtask, nil
 }
 
@@ -228,6 +239,7 @@ func (c *Client) readDagTaskQuery() string {
 			InsertTs,
 			Version,
 			TaskTypeName,
+			TaskConfig,
 			TaskBodyHash,
 			TaskBodySource
 		FROM
@@ -248,6 +260,7 @@ func (c *Client) readDagTasksQuery() string {
 			InsertTs,
 			Version,
 			TaskTypeName,
+			TaskConfig,
 			TaskBodyHash,
 			TaskBodySource
 		FROM
@@ -267,9 +280,9 @@ func (c *Client) dagTaskInsertQuery() string {
 	return `
 		INSERT INTO dagtasks (
 			DagId, TaskId, IsCurrent, InsertTs, Version, TaskTypeName,
-			TaskBodyHash, TaskBodySource
+			TaskConfig, TaskBodyHash, TaskBodySource
 		)
-		VALUES (?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?)
 	`
 }
 

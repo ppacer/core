@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -52,29 +53,42 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 	}
 	ctx := context.Background()
 	tx, _ := c.dbConn.Begin()
-	task := PrintTask{Name: "db_test"}
+	node := dag.NewNode(PrintTask{Name: "db_test"})
 	insertTs := timeutils.ToString(time.Now())
-	err = c.insertSingleDagTask(ctx, tx, "db_dag", task, insertTs)
+	err = c.insertSingleDagTask(ctx, tx, "db_dag", node, insertTs)
 	cErr := tx.Commit()
 	if cErr != nil {
 		t.Error(cErr)
 	}
 	if err != nil {
-		t.Errorf("Unexpected error while trying inserting dagtask to in-memory DB: %s", err.Error())
+		t.Errorf("Unexpected error while trying inserting dagtask to in-memory DB: %s",
+			err.Error())
 	}
 
-	readTask, err := c.ReadDagTask(ctx, "db_dag", task.Id())
+	readTask, err := c.ReadDagTask(ctx, "db_dag", node.Task.Id())
 	if err != nil {
-		t.Errorf("Error while reading just inserted dagtask from in-memory DB: %s", err.Error())
+		t.Errorf("Error while reading just inserted dagtask from in-memory DB: %s",
+			err.Error())
 	}
 	if readTask.DagId != "db_dag" {
 		t.Errorf("Expected DagId db_dag, got: %s", readTask.DagId)
 	}
-	if readTask.TaskId != task.Id() {
+	if readTask.TaskId != node.Task.Id() {
 		t.Errorf("Expected TaskId db_test, got: %s", readTask.TaskId)
 	}
 	if readTask.TaskTypeName != "PrintTask" {
-		t.Errorf("Expected TaskTypeName PrintTask, got: %s", readTask.TaskTypeName)
+		t.Errorf("Expected TaskTypeName PrintTask, got: %s",
+			readTask.TaskTypeName)
+	}
+
+	configJson, jsonErr := json.Marshal(node.Config)
+	if jsonErr != nil {
+		t.Errorf("error while serializing Task Config to JSON: %s",
+			jsonErr.Error())
+	}
+	if readTask.TaskConfig != string(configJson) {
+		t.Errorf("Expected TaskConfig %s, but got: %s", string(configJson),
+			readTask.TaskConfig)
 	}
 }
 
@@ -103,7 +117,8 @@ func TestInsertDagTasks(t *testing.T) {
 	}
 	rowCurrentCnt := c.CountWhere("dagtasks", "IsCurrent=1")
 	if rowCurrentCnt != dTaskNum {
-		t.Errorf("Expected %d rows with IsCurrent=1 after the first insert, got: %d", dTaskNum, rowCurrentCnt)
+		t.Errorf("Expected %d rows with IsCurrent=1 after the first insert, got: %d",
+			dTaskNum, rowCurrentCnt)
 		logDagTasks(c, dagId, t)
 	}
 
@@ -115,7 +130,8 @@ func TestInsertDagTasks(t *testing.T) {
 	dTaskNum2 := len(d2.Flatten())
 	iErr = c.InsertDagTasks(ctx, d2)
 	if iErr != nil {
-		t.Errorf("Error while inserting modified simple_dag tasks: %s", iErr.Error())
+		t.Errorf("Error while inserting modified simple_dag tasks: %s",
+			iErr.Error())
 		return
 	}
 	rowCnt = c.Count("dagtasks")
@@ -126,7 +142,8 @@ func TestInsertDagTasks(t *testing.T) {
 	}
 	rowCurrentCnt = c.CountWhere("dagtasks", "IsCurrent=1")
 	if rowCurrentCnt != dTaskNum2 {
-		t.Errorf("Expected %d rows with IsCurrent=1 after the second insert, got: %d", dTaskNum2, rowCurrentCnt)
+		t.Errorf("Expected %d rows with IsCurrent=1 after the second insert, got: %d",
+			dTaskNum2, rowCurrentCnt)
 		logDagTasks(c, dagId, t)
 	}
 }
