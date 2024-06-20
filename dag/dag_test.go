@@ -275,3 +275,26 @@ func TestRegistryAddDuplicate(t *testing.T) {
 		}
 	}
 }
+
+func TestGetNodeLL(t *testing.T) {
+	const size = 10
+	ll := linkedList(size)
+	llDag := New(Id("mock_dag")).AddRoot(ll).Done()
+
+	taskId := "step_5"
+	node5, n5Err := llDag.GetNode(taskId)
+	if n5Err != nil {
+		t.Errorf("Error while getting node [%s]: %s", taskId, n5Err)
+	}
+	if node5.Task.Id() != taskId {
+		t.Errorf("Expected taskId [%s], got: [%s]", taskId, node5.Task.Id())
+	}
+
+	wrongTaskId := "nonexistingtaskid"
+	_, err := llDag.GetNode(wrongTaskId)
+	if err != ErrTaskNotFoundInDag {
+		t.Errorf("Expected error [%s], but got: [%v]",
+			ErrTaskNotFoundInDag.Error(), err)
+
+	}
+}

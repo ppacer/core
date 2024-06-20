@@ -7,6 +7,7 @@ package scheduler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -35,12 +37,14 @@ type DagRunTaskState struct {
 //
 // If you use Scheduler, you probably don't need to use this object directly.
 type TaskScheduler struct {
+	DagRegistry        dag.Registry
 	DbClient           *db.Client
 	DagRunQueue        ds.Queue[DagRun]
 	TaskQueue          ds.Queue[DagRunTask]
 	TaskCache          ds.Cache[DagRunTask, DagRunTaskState]
 	Config             TaskSchedulerConfig
 	Logger             *slog.Logger
+	Notifier           notify.Sender
 	SchedulerStateFunc GetStateFunc
 }
 
@@ -102,9 +106,7 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 // UpsertTaskStatus inserts or updates given DAG run task status. That includes
 // caches, queues, database and every place that needs to be included regarding
 // task status update.
-func (ts *TaskScheduler) UpsertTaskStatus(
-	ctx context.Context, drt DagRunTask, status dag.TaskStatus,
-) error {
+func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, status dag.TaskStatus, taskErrStr *string) error {
 	ts.Logger.Info("Start upserting dag run task status", "dagruntask", drt,
 		"status", status.String())
 
@@ -146,6 +148,22 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 		ts.Logger.Error("Could not read from dagruntasks", "dagruntask", drt,
 			"status", status.String())
 		return getErr
+	}
+	if status == dag.TaskFailed {
+		var taskErr error = nil
+		if taskErrStr == nil {
+			ts.Logger.Error("Got failed task with empty task error",
+				"dagruntask", drt, "status", status.String())
+		} else {
+			taskErr = fmt.Errorf("%s", *taskErrStr)
+		}
+		aofErr := ts.actOnFailedTask(drt, taskErr)
+		if aofErr != nil {
+			// TODO(dskrzypiec): we probably want to retry this in case of
+			// errors.
+			ts.Logger.Error("error while running post-hooks on failed task",
+				"dagruntask", drt, "err", aofErr)
+		}
 	}
 	return nil
 }
@@ -360,11 +378,12 @@ func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: config
 	defer cancel()
 	ds.PutContext(ctx, ts.TaskQueue, drt)
-	usErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskScheduled)
+	usErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskScheduled, nil)
 	if usErr != nil {
 		ts.Logger.Error("Cannot update dag run task status", "dagruntask", drt,
 			"status", dag.TaskScheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
+		// This mechanism will be implemented under "task retries" story.
 	}
 }
 
@@ -413,7 +432,7 @@ func (ts *TaskScheduler) markDownstreamTasks(
 ) {
 	for _, task := range node.Flatten() {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, task.Node.Task.Id()}
-		uErr := ts.UpsertTaskStatus(ctx, drt, status)
+		uErr := ts.UpsertTaskStatus(ctx, drt, status, nil)
 		if uErr != nil {
 			ts.Logger.Error("UpsertTaskStatus failed during markDownstreamTasks",
 				"dagrun", dagrun, "taskId", node.Task.Id(), "status", status)
@@ -463,7 +482,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 			AtTime: dagrun.AtTime,
 			TaskId: parentTaskId,
 		}
-		isParentTaskDone, status := ts.checkIfParentTaskIsDone(dagrun, key)
+		isParentTaskDone, status := ts.isTaskDone(dagrun, key)
 		if status == dag.TaskFailed {
 			return false, dag.TaskFailed
 		}
@@ -474,10 +493,37 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 	return true, dag.TaskSuccess
 }
 
+// This routine is called for failed DAG run tasks.
+func (ts *TaskScheduler) actOnFailedTask(drt DagRunTask, execErr error) error {
+	// TODO(dskrzypiec): should be lift this logic to the separated type?
+	dag, exists := ts.DagRegistry[drt.DagId]
+	if !exists {
+		return fmt.Errorf("dag [%s] does not exist in the registry",
+			string(drt.DagId))
+	}
+	drtNode, nErr := dag.GetNode(drt.TaskId)
+	if nErr != nil {
+		return nErr
+	}
+
+	if drtNode.Config.SendAlertOnFailure {
+		ctx := context.TODO()
+		msg := notify.Message{
+			DagId:  string(drt.DagId),
+			ExecTs: timeutils.ToString(drt.AtTime),
+			TaskId: &drt.TaskId,
+			Body:   fmt.Sprintf("[MOCK FOR NOW] ALERT! [%s]", execErr.Error()),
+		}
+		ts.Notifier.Send(ctx, msg)
+	}
+
+	return nil
+}
+
 // Check if given parent task in given dag run is completed, to determine if
 // DAG can proceed forward. It checks cache first and if there is no info there
 // it reaches the database, to check the status.
-func (ts *TaskScheduler) checkIfParentTaskIsDone(
+func (ts *TaskScheduler) isTaskDone(
 	dagrun DagRun, parent DagRunTask,
 ) (bool, dag.TaskStatus) {
 	statusFromCache, exists := ts.TaskCache.Get(parent)

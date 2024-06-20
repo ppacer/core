@@ -129,6 +129,19 @@ func (d *Dag) GetTask(taskId string) (Task, error) {
 	return nil, ErrTaskNotFoundInDag
 }
 
+// GetNoe return DAG Node by task identifier. In case when there is no Task
+// within the DAG of given taskId, then non-nil error will be returned
+// (ErrTaskNotFoundInDag).
+func (d *Dag) GetNode(taskId string) (*Node, error) {
+	nodesInfo := d.Root.Flatten()
+	for _, ni := range nodesInfo {
+		if ni.Node.Task.Id() == taskId {
+			return ni.Node, nil
+		}
+	}
+	return nil, ErrTaskNotFoundInDag
+}
+
 // Flatten DAG into list of Tasks in BFS order.
 func (d *Dag) Flatten() []Task {
 	if d.Root == nil {

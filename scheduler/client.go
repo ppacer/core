@@ -90,16 +90,22 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 // UpsertTaskStatus either updates existing DAG run task status or inserts new
 // one.
-func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus) error {
+func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus, taskErr error) error {
 	start := time.Now()
 	statusStr := status.String()
 	c.logger.Debug("Start updating task status", "taskToExec", tte, "status",
 		statusStr)
+	var taskErrStr *string = nil
+	if taskErr != nil {
+		tmp := taskErr.Error()
+		taskErrStr = &tmp
+	}
 	drts := models.DagRunTaskStatus{
-		DagId:  tte.DagId,
-		ExecTs: tte.ExecTs,
-		TaskId: tte.TaskId,
-		Status: statusStr,
+		DagId:   tte.DagId,
+		ExecTs:  tte.ExecTs,
+		TaskId:  tte.TaskId,
+		Status:  statusStr,
+		TaskErr: taskErrStr,
 	}
 	drtsJson, jErr := json.Marshal(drts)
 	if jErr != nil {
