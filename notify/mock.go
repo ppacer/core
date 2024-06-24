@@ -1,8 +1,9 @@
 package notify
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"text/template"
 )
 
 // Mock sends message into a string slice in memory. It implements Sender
@@ -17,12 +18,25 @@ func NewMock(buffor *[]string) *Mock {
 }
 
 // Send sends a message onto internal Mock buffor.
-func (m *Mock) Send(_ context.Context, msg Message) error {
-	taskId := ""
-	if msg.TaskId != nil {
-		taskId = *msg.TaskId
+func (m *Mock) Send(_ context.Context, tmpl *template.Template, data MsgData) error {
+	var msgBuff bytes.Buffer
+	writeErr := tmpl.Execute(&msgBuff, data)
+	if writeErr != nil {
+		return writeErr
 	}
-	text := fmt.Sprintf("%s %s %s: %s", msg.DagId, msg.ExecTs, taskId, msg.Body)
-	*m.buf = append(*m.buf, text)
+	*m.buf = append(*m.buf, msgBuff.String())
 	return nil
+}
+
+// MockTemplate returns parsed text template to be used in Mock notifier,
+// mainly for testing.
+func MockTemplate(tmplName string) *template.Template {
+	def := `
+[{{.DagId}}] [{{.ExecTs}}] [{{.TaskId}}]:
+	Mock message!
+{{- if .TaskRunError}}
+	Got error: {{.TaskRunError.Error}}
+{{end}}
+`
+	return template.Must(template.New(tmplName).Parse(def))
 }

@@ -3,10 +3,12 @@ package notify
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"slices"
 	"strings"
 	"testing"
+	"text/template"
 )
 
 func TestLogsErrSimple(t *testing.T) {
@@ -18,27 +20,109 @@ func TestLogsErrSimple(t *testing.T) {
 	var buffor bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buffor, nil))
 	logsErr := NewLogsErr(logger)
+	tmpl := MockTemplate("mock")
 
 	inputs := []struct {
 		taskId *string
-		msg    string
 	}{
-		{&task1, "test msg"},
-		{nil, "test msg for nil"},
-		{nil, ""},
-		{&task1, ""},
+		{&task1},
+		{nil},
 	}
 
 	for _, input := range inputs {
-		err := logsErr.Send(ctx, Message{
+		err := logsErr.Send(ctx, tmpl, MsgData{
 			DagId:  dagId,
 			ExecTs: execTs,
 			TaskId: input.taskId,
-			Body:   input.msg,
 		})
 		if err != nil {
 			t.Errorf("Error while sending notification for [%v]: %s",
 				input, err.Error())
+		}
+	}
+
+	logsOutLines := strings.Split(buffor.String(), "\n")
+	logsOutLines = slices.DeleteFunc(logsOutLines, func(s string) bool {
+		return len(s) == 0 // remove empty lines (should be one at the end)
+	})
+	if len(logsOutLines) != len(inputs) {
+		t.Errorf("Expected %d notifications, got: %d",
+			len(inputs), len(logsOutLines))
+	}
+
+	for idx := range inputs {
+		if !strings.Contains(logsOutLines[idx], "ERR") {
+			t.Errorf("Expected ERR severity in log notification [%s], but is not",
+				logsOutLines[idx])
+		}
+	}
+}
+
+func TestLogsErrManyTmpl(t *testing.T) {
+	ctx := context.Background()
+
+	var buffor bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buffor, nil))
+	logsErr := NewLogsErr(logger)
+
+	inputs := []struct {
+		tmplStr  string
+		data     MsgData
+		expected string
+	}{
+		{"CONST MOCK", MsgData{}, "CONST MOCK"},
+		{
+			"Hello from {{.DagId}}",
+			MsgData{DagId: "my_dag"},
+			"Hello from my_dag",
+		},
+		{
+			"{{.DagId}}|{{.ExecTs}}",
+			MsgData{DagId: "my_dag", ExecTs: "2024-06-24"},
+			"my_dag|2024-06-24",
+		},
+		{
+			`
+				Alert for {{.DagId}} at {{.ExecTs}}
+			`,
+			MsgData{DagId: "my_dag", ExecTs: "2024-06-24"},
+			`Alert for my_dag at 2024-06-24`,
+		},
+		{
+			`
+				Alert for {{.DagId}} at {{.ExecTs}}
+				{{- if .TaskRunError}}
+					Error: {{.TaskRunError.Error}}
+				{{end}}
+			`,
+			MsgData{DagId: "my_dag", ExecTs: "2024-06-24"},
+			`Alert for my_dag at 2024-06-24`,
+		},
+		{
+			`
+				Alert for {{.DagId}} at {{.ExecTs}}
+				{{- if .TaskRunError}}
+					Error: {{.TaskRunError.Error}}
+				{{- end}}
+			`,
+			MsgData{
+				DagId:        "my_dag",
+				ExecTs:       "2024-06-24",
+				TaskRunError: errors.New("ops!"),
+			},
+			`Error: ops!`,
+		},
+	}
+
+	for _, input := range inputs {
+		tmpl, parseErr := template.New("tmp").Parse(input.tmplStr)
+		if parseErr != nil {
+			t.Errorf("Error while parsing template [%s]: %s", input.tmplStr,
+				parseErr.Error())
+		}
+		sErr := logsErr.Send(ctx, tmpl, input.data)
+		if sErr != nil {
+			t.Errorf("Error while sending a message: %s", sErr.Error())
 		}
 	}
 
@@ -56,9 +140,10 @@ func TestLogsErrSimple(t *testing.T) {
 			t.Errorf("Expected ERR severity in log notification [%s], but is not",
 				logsOutLines[idx])
 		}
-		if !strings.Contains(logsOutLines[idx], input.msg) {
-			t.Errorf("Expected [%s] to be substring of notification [%s], but is not",
-				input.msg, logsOutLines[idx])
+		phrase := strings.TrimSpace(input.expected)
+		if !strings.Contains(logsOutLines[idx], phrase) {
+			t.Errorf("Expected [%s] in log notification [%s] (line %d), but it's not",
+				phrase, logsOutLines[idx], idx)
 		}
 	}
 }

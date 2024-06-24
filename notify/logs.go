@@ -1,9 +1,10 @@
 package notify
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"log/slog"
+	"text/template"
 )
 
 // LogsErr is a notification client which "sends" notification as logs of severity
@@ -20,10 +21,12 @@ func NewLogsErr(logger *slog.Logger) *LogsErr {
 }
 
 // Send sends given message as a log of severity ERROR.
-func (l *LogsErr) Send(_ context.Context, msg Message) error {
-	const prefix = "[NOTIFICATION]"
-	text := fmt.Sprintf("%s [%s][%s][%s]: %s", prefix, msg.DagId, msg.ExecTs,
-		msg.TaskIdOrEmpty(), msg.Body)
-	l.logger.Error(text)
+func (l *LogsErr) Send(_ context.Context, tmpl *template.Template, data MsgData) error {
+	var msgBuff bytes.Buffer
+	writeErr := tmpl.Execute(&msgBuff, data)
+	if writeErr != nil {
+		return writeErr
+	}
+	l.logger.Error(msgBuff.String())
 	return nil
 }

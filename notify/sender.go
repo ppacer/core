@@ -5,26 +5,23 @@
 // Package notify provides a way to send external notifications.
 package notify
 
-import "context"
+import (
+	"context"
+	"html/template"
+)
 
 // Sender sends a Message notification. Usually onto an external channel of
-// communication.
+// communication. Template should be already parsed text template which can use
+// additional information from MessageContext.
 type Sender interface {
-	Send(context.Context, Message) error
+	Send(context.Context, *template.Template, MsgData) error
 }
 
-// Message contains a message body text and DAG run contextual information.
-type Message struct {
-	DagId  string
-	ExecTs string
-	TaskId *string
-	Body   string
-}
-
-// Returns TaskId if *TaskId is not nil, else it return empty string.
-func (m Message) TaskIdOrEmpty() string {
-	if m.TaskId == nil {
-		return ""
-	}
-	return *m.TaskId
+// Message contains a DAG run contextual information.
+type MsgData struct {
+	DagId        string
+	ExecTs       string
+	TaskId       *string
+	TaskRunError error
+	RuntimeInfo  map[string]any
 }
