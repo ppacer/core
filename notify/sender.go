@@ -7,14 +7,20 @@ package notify
 
 import (
 	"context"
-	"html/template"
+	"io"
 )
+
+// Template represents a message template. Go standard text/template.Template
+// and html/template.Template satisfy this interface.
+type Template interface {
+	Execute(io.Writer, any) error
+}
 
 // Sender sends a Message notification. Usually onto an external channel of
 // communication. Template should be already parsed text template which can use
-// additional information from MessageContext.
+// additional information from MsgData.
 type Sender interface {
-	Send(context.Context, *template.Template, MsgData) error
+	Send(context.Context, Template, MsgData) error
 }
 
 // Message contains a DAG run contextual information.

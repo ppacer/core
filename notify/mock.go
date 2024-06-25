@@ -18,7 +18,7 @@ func NewMock(buffor *[]string) *Mock {
 }
 
 // Send sends a message onto internal Mock buffor.
-func (m *Mock) Send(_ context.Context, tmpl *template.Template, data MsgData) error {
+func (m *Mock) Send(_ context.Context, tmpl Template, data MsgData) error {
 	var msgBuff bytes.Buffer
 	writeErr := tmpl.Execute(&msgBuff, data)
 	if writeErr != nil {

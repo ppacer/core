@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	htmltmlp "html/template"
 	"strings"
 	"testing"
 	"text/template"
@@ -151,6 +152,32 @@ func TestMockSendManyTmpl(t *testing.T) {
 			t.Errorf("For message %d, expected [%s], but got [%s]",
 				idx, input.expected, msgs[idx])
 		}
+	}
+}
+
+func TestMockSendHTML(t *testing.T) {
+	const dagId = "sample_dag"
+	ctx := context.Background()
+	msgs := make([]string, 0, 10)
+	sender := NewMock(&msgs)
+
+	tmpl, err := htmltmlp.New("mock").Parse("<h2>{{.DagId}}</h2>")
+	if err != nil {
+		t.Errorf("Cannot parse HTML template: %s", err.Error())
+	}
+
+	sErr := sender.Send(ctx, tmpl, MsgData{DagId: dagId})
+	if sErr != nil {
+		t.Errorf("Error while sending message: %s", sErr.Error())
+	}
+
+	if len(msgs) != 1 {
+		t.Errorf("Expected 1 message sent, got: %d", len(msgs))
+	}
+
+	expected := fmt.Sprintf("<h2>%s</h2>", dagId)
+	if expected != msgs[0] {
+		t.Errorf("Expected HTML message [%s], got [%s]", expected, msgs[0])
 	}
 }
 
