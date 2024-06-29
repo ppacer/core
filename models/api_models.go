@@ -12,8 +12,9 @@ type TaskToExec struct {
 }
 
 type DagRunTaskStatus struct {
-	DagId  string `json:"dagId"`
-	ExecTs string `json:"execTs"`
-	TaskId string `json:"taskId"`
-	Status string `json:"status"`
+	DagId   string  `json:"dagId"`
+	ExecTs  string  `json:"execTs"`
+	TaskId  string  `json:"taskId"`
+	Status  string  `json:"status"`
+	TaskErr *string `json:"taskError"`
 }

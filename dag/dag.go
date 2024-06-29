@@ -1,4 +1,4 @@
-// Copyright 3023 The ppacer Authors.
+// Copyright 2023 The ppacer Authors.
 // Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
@@ -124,6 +124,19 @@ func (d *Dag) GetTask(taskId string) (Task, error) {
 	for _, ni := range nodesInfo {
 		if ni.Node.Task.Id() == taskId {
 			return ni.Node.Task, nil
+		}
+	}
+	return nil, ErrTaskNotFoundInDag
+}
+
+// GetNoe return DAG Node by task identifier. In case when there is no Task
+// within the DAG of given taskId, then non-nil error will be returned
+// (ErrTaskNotFoundInDag).
+func (d *Dag) GetNode(taskId string) (*Node, error) {
+	nodesInfo := d.Root.Flatten()
+	for _, ni := range nodesInfo {
+		if ni.Node.Task.Id() == taskId {
+			return ni.Node, nil
 		}
 	}
 	return nil, ErrTaskNotFoundInDag

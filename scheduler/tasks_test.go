@@ -134,7 +134,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 	// Manually mark "start" task as success, to go to another task
-	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess)
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Error while marking <start> as Success: %s", uErr.Error())
 	}
@@ -178,7 +178,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
 
-	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess)
+	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
@@ -193,7 +193,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 			drtN3)
 	}
 
-	uErr = ts.UpsertTaskStatus(ctx, drtN22, dag.TaskSuccess)
+	uErr = ts.UpsertTaskStatus(ctx, drtN22, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN22,
 			uErr.Error())
@@ -211,12 +211,12 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 			drtN3)
 	}
 
-	uErr = ts.UpsertTaskStatus(ctx, drtN21, dag.TaskSuccess)
+	uErr = ts.UpsertTaskStatus(ctx, drtN21, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN21,
 			uErr.Error())
 	}
-	uErr = ts.UpsertTaskStatus(ctx, drtN23, dag.TaskSuccess)
+	uErr = ts.UpsertTaskStatus(ctx, drtN23, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task %v status: %s", drtN23,
 			uErr.Error())
@@ -667,7 +667,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	}
 
 	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
-	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess)
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
 			dag.TaskSuccess.String())
@@ -681,7 +681,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
 				dag.TaskSuccess.String())
@@ -695,7 +695,8 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	}
 
 	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
-	uErr = ts.UpsertTaskStatus(ctx, drtn3, dag.TaskFailed)
+	errStr := "some error"
+	uErr = ts.UpsertTaskStatus(ctx, drtn3, dag.TaskFailed, &errStr)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
 			dag.TaskSuccess.String())
@@ -724,7 +725,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 
 	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
-	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess)
+	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
 			dag.TaskSuccess.String())
@@ -738,7 +739,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
-		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
 				dag.TaskSuccess.String())
@@ -982,7 +983,7 @@ func markSuccessAllTasks(
 				popErr.Error())
 		}
 		time.Sleep(taskExecutionDuration) // executor work simulation
-		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())
@@ -1018,14 +1019,15 @@ func markSuccessAllTasksExceptFew(
 		}
 		time.Sleep(taskExecutionDuration) // executor work simulation
 		if _, shouldFail := taskIdsToFail[drt.TaskId]; shouldFail {
-			uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskFailed)
+			errStr := "some error"
+			uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskFailed, &errStr)
 			if uErr != nil {
 				t.Errorf("Error while marking %v as Failed: %s",
 					drt, uErr.Error())
 			}
 			continue
 		}
-		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess)
+		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Error while marking %v as success: %s",
 				drt, uErr.Error())

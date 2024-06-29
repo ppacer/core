@@ -19,6 +19,7 @@ import (
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
+	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -31,6 +32,7 @@ type Scheduler struct {
 	config   Config
 	queues   Queues
 	logger   *slog.Logger
+	notifier notify.Sender
 
 	sync.Mutex
 	state State
@@ -42,7 +44,7 @@ type Scheduler struct {
 // configuration is set in DefaultConfig and default fixed-size buffer queues
 // in DefaultQueues. In case when nil is provided as logger, then slog.Logger
 // is instantiated with TextHandler and INFO severity level.
-func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger) *Scheduler {
+func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger, notifier notify.Sender) *Scheduler {
 	if logger == nil {
 		opts := slog.HandlerOptions{Level: slog.LevelInfo}
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
@@ -52,6 +54,7 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger)
 		config:   config,
 		queues:   queues,
 		logger:   logger,
+		notifier: notifier,
 		state:    StateStarted,
 	}
 }
@@ -70,7 +73,8 @@ func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
 	}
 
 	config := DefaultConfig
-	sched := New(dbClient, DefaultQueues(config), config, logger)
+	notifier := notify.NewLogsErr(logger)
+	sched := New(dbClient, DefaultQueues(config), config, logger, notifier)
 	schedulerHttpHandler := sched.Start(dags)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -102,12 +106,14 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	)
 
 	taskScheduler := TaskScheduler{
+		DagRegistry:        dags,
 		DbClient:           s.dbClient,
 		DagRunQueue:        s.queues.DagRuns,
 		TaskQueue:          s.queues.DagRunTasks,
 		TaskCache:          taskCache,
 		Config:             s.config.TaskSchedulerConfig,
 		Logger:             s.logger,
+		Notifier:           s.notifier,
 		SchedulerStateFunc: s.getState,
 	}
 
@@ -235,7 +241,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := context.TODO()
-	updateErr := ts.UpsertTaskStatus(ctx, drt, status)
+	updateErr := ts.UpsertTaskStatus(ctx, drt, status, drts.TaskErr)
 	if updateErr != nil {
 		msg := fmt.Sprintf("Error while updating dag run task status: %s",
 			updateErr.Error())

@@ -7,6 +7,7 @@ package exec
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -119,12 +120,13 @@ func executeTask(
 ) {
 	defer func() {
 		if r := recover(); r != nil {
-			schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
+			stackAsErr := fmt.Errorf("%s", string(debug.Stack()))
+			schedClient.UpsertTaskStatus(tte, dag.TaskFailed, stackAsErr)
 			logger.Error("Recovered from panic:", "err", r, "stack",
 				string(debug.Stack()))
 		}
 	}()
-	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskRunning)
+	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskRunning, nil)
 	if uErr != nil {
 		logger.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskRunning.String(), "err", uErr.Error())
@@ -133,7 +135,7 @@ func executeTask(
 	if parseErr != nil {
 		logger.Error("Error while parsing ExecTs", "ExecTs", tte.ExecTs, "err",
 			parseErr.Error())
-		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
+		schedClient.UpsertTaskStatus(tte, dag.TaskFailed, parseErr)
 		return
 	}
 
@@ -150,12 +152,12 @@ func executeTask(
 	if execErr != nil {
 		logger.Error("Task finished with error", "tte", tte, "err",
 			execErr.Error())
-		schedClient.UpsertTaskStatus(tte, dag.TaskFailed)
+		schedClient.UpsertTaskStatus(tte, dag.TaskFailed, execErr)
 		return
 	}
 
 	logger.Info("Finished executing task", "taskToExec", tte)
-	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
+	uErr = schedClient.UpsertTaskStatus(tte, dag.TaskSuccess, nil)
 	if uErr != nil {
 		logger.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskSuccess.String(), "err", uErr.Error())

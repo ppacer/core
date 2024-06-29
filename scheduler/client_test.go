@@ -7,6 +7,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
+	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -135,7 +137,7 @@ func TestClientUpsertTaskEmptyDb(t *testing.T) {
 		ExecTs: timeutils.ToString(time.Now()),
 		TaskId: "task1",
 	}
-	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskSuccess)
+	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Cannot insert new DAG run task on empty dagruntasks table: %s",
 			uErr.Error())
@@ -179,7 +181,7 @@ func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
 	// Update task statuses to SUCCESS
 	for _, taskId := range taskIds {
 		tte := newTaskToExec(dagId, execTs, taskId)
-		uErr := schedClient.UpsertTaskStatus(tte, newStatus)
+		uErr := schedClient.UpsertTaskStatus(tte, newStatus, nil)
 		if uErr != nil {
 			t.Errorf("Error while updating task status by the client: %s",
 				uErr.Error())
@@ -210,7 +212,7 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 	const taskId = "mock_task_id"
 	tte := newTaskToExec(dagId, execTsStr, taskId)
 
-	u1Err := schedClient.UpsertTaskStatus(tte, dag.TaskScheduled)
+	u1Err := schedClient.UpsertTaskStatus(tte, dag.TaskScheduled, nil)
 	if u1Err != nil {
 		t.Errorf("Cannot insert new DAG run task %+v: %s", tte, u1Err.Error())
 	}
@@ -223,7 +225,7 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 
 	prev := readDagRunTaskFromDb(scheduler.dbClient, dagId, execTsStr, taskId, t)
 	for _, status := range statuses {
-		uErr := schedClient.UpsertTaskStatus(tte, status)
+		uErr := schedClient.UpsertTaskStatus(tte, status, nil)
 		if uErr != nil {
 			t.Errorf("Error while upserting task %+v: %s", tte, uErr.Error())
 		}
@@ -315,5 +317,7 @@ func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(dbClient, queues, config, nil)
+	logger := slog.Default()
+	notifier := notify.NewLogsErr(logger)
+	return New(dbClient, queues, config, logger, notifier)
 }
