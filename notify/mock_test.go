@@ -238,3 +238,90 @@ func TestMockTemplateWithErr(t *testing.T) {
 		t.Errorf("Expected %s, but got: %s", expectedNospace, msgBytesNospace)
 	}
 }
+
+func TestMockSendTmlCustomFields(t *testing.T) {
+	ctx := context.Background()
+
+	msgs := make([]string, 0, 10)
+	sender := NewMock(&msgs)
+
+	inputs := []struct {
+		tmplStr  string
+		data     MsgData
+		expected string
+	}{
+		{
+			"Msg: {{.RuntimeInfo.test}}",
+			MsgData{RuntimeInfo: map[string]any{"test": 42}},
+			"Msg: 42",
+		},
+		{
+			"Msg: {{.RuntimeInfo.missing}}",
+			MsgData{RuntimeInfo: map[string]any{}},
+			"Msg: <no value>",
+		},
+		{
+			"Msg: {{.RuntimeInfo.test}}",
+			MsgData{RuntimeInfo: map[string]any{"test": "test"}},
+			"Msg: test",
+		},
+		{
+			"Msg: {{.RuntimeInfo.test}}",
+			MsgData{RuntimeInfo: map[string]any{"test": nil}},
+			"Msg: <no value>",
+		},
+		{
+			"Msg: {{.RuntimeInfo.test}}",
+			MsgData{RuntimeInfo: map[string]any{"test": []int{32, 42, 123}}},
+			"Msg: [32 42 123]",
+		},
+		{
+			"Msg: {{.RuntimeInfo.test}}",
+			MsgData{
+				RuntimeInfo: map[string]any{
+					"test": struct {
+						X string
+						Y int
+						Z *int
+					}{
+						"test", 42, nil,
+					},
+				},
+			},
+			`Msg: {test 42 <nil>}`,
+		},
+		{
+			"Msg: {{.RuntimeInfo.test.t2}}",
+			MsgData{
+				RuntimeInfo: map[string]any{
+					"test": map[string]int{"t2": 42},
+				},
+			},
+			"Msg: 42",
+		},
+	}
+
+	for _, input := range inputs {
+		tmpl, parseErr := template.New("tmp").Parse(input.tmplStr)
+		if parseErr != nil {
+			t.Errorf("Error while parsing template [%s]: %s", input.tmplStr,
+				parseErr.Error())
+		}
+		sErr := sender.Send(ctx, tmpl, input.data)
+		if sErr != nil {
+			t.Errorf("Error while sending a message: %s", sErr.Error())
+		}
+	}
+
+	if len(msgs) != len(inputs) {
+		t.Errorf("Expected %d messages sent, but got: %d", len(inputs),
+			len(msgs))
+	}
+
+	for idx, input := range inputs {
+		if input.expected != msgs[idx] {
+			t.Errorf("For message %d, expected [%s], but got [%s]",
+				idx, input.expected, msgs[idx])
+		}
+	}
+}
