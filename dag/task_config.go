@@ -1,5 +1,11 @@
 package dag
 
+import (
+	"text/template"
+
+	"github.com/ppacer/core/notify"
+)
+
 // TaskConfig represents Task configuration. It contains information about
 // configuration of a task execution, like a timeout for executing given task
 // or how many times scheduler should retry in case of failures.
@@ -8,15 +14,32 @@ type TaskConfig struct {
 	Retries            int  `json:"retries"`
 	SendAlertOnRetry   bool `json:"sendAlertOnRetry"`
 	SendAlertOnFailure bool `json:"sendAlertOnFailure"`
+
+	AlertOnRetryTemplate   notify.Template `json:"-"`
+	AlertOnFailureTemplate notify.Template `json:"-"`
+}
+
+// Default template for alerts.
+func DefaultAlertTemplate() *template.Template {
+	body := `
+Task [{{.TaskId}}] in DAG [{{.DagId}}] at {{.ExecTs}} has failed.
+{{- if .TaskRunError}}
+Error:
+	{{.TaskRunError.Error}}
+{{end}}
+`
+	return template.Must(template.New("default").Parse(body))
 }
 
 // Default task configuration. If not specified otherwise the followig
 // configuration values would be used for Task scheduling and execution.
 var DefaultTaskConfig = TaskConfig{
-	TimeoutSeconds:     10 * 60,
-	Retries:            0,
-	SendAlertOnRetry:   false,
-	SendAlertOnFailure: true,
+	TimeoutSeconds:         10 * 60,
+	Retries:                0,
+	SendAlertOnRetry:       false,
+	SendAlertOnFailure:     true,
+	AlertOnRetryTemplate:   DefaultAlertTemplate(),
+	AlertOnFailureTemplate: DefaultAlertTemplate(),
 }
 
 // TaskConfigFunc is a family of functions which takes a TaskConfig and

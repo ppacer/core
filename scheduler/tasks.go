@@ -508,13 +508,13 @@ func (ts *TaskScheduler) actOnFailedTask(drt DagRunTask, execErr error) error {
 
 	if drtNode.Config.SendAlertOnFailure {
 		ctx := context.TODO()
-		msg := notify.Message{
-			DagId:  string(drt.DagId),
-			ExecTs: timeutils.ToString(drt.AtTime),
-			TaskId: &drt.TaskId,
-			Body:   fmt.Sprintf("[MOCK FOR NOW] ALERT! [%s]", execErr.Error()),
+		msg := notify.MsgData{
+			DagId:        string(drt.DagId),
+			ExecTs:       timeutils.ToString(drt.AtTime),
+			TaskId:       &drt.TaskId,
+			TaskRunError: execErr,
 		}
-		ts.Notifier.Send(ctx, msg)
+		ts.Notifier.Send(ctx, drtNode.Config.AlertOnFailureTemplate, msg)
 	}
 
 	return nil
