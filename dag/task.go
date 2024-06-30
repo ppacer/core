@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/meta"
+	"github.com/ppacer/core/notify"
 )
 
 const MAX_RECURSION = 10000
@@ -30,6 +31,11 @@ type TaskContext struct {
 	Context context.Context
 	Logger  *slog.Logger
 	DagRun  RunInfo
+
+	// Notifier can be used to send external notifications from inside of a
+	// task, additionally to standard notitifactions on task execution failures
+	// or retries provided by the TaskScheduler.
+	Notifier notify.Sender
 }
 
 // Task represents single step in DAG which is going to be scheduled and

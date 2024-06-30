@@ -20,6 +20,7 @@ import (
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
+	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/scheduler"
 	"github.com/ppacer/core/timeutils"
 )
@@ -32,6 +33,7 @@ type Executor struct {
 	config      Config
 	taskLogs    tasklog.Factory
 	logger      *slog.Logger
+	notifier    notify.Sender
 }
 
 // Executor configuration.
@@ -49,8 +51,10 @@ func defaultConfig() Config {
 }
 
 // New creates new Executor instance. When config is nil, then default
-// configuration values will be used.
-func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *Config) *Executor {
+// configuration values will be used. When logger is nil, then slog for stdout
+// with WARN severity level will be used. When notifier is nil, then
+// notify.NewLogsErr (notifications as logs) will be used.
+func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *Config, notifier notify.Sender) *Executor {
 	var cfg Config
 	if config != nil {
 		cfg = *config
@@ -61,6 +65,9 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 		opts := slog.HandlerOptions{Level: slog.LevelWarn}
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
+	if notifier == nil {
+		notifier = notify.NewLogsErr(logger)
+	}
 	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
 	scfg := scheduler.DefaultClientConfig
 	sc := scheduler.NewClient(schedAddr, httpClient, logger, scfg)
@@ -69,6 +76,7 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 		config:      cfg,
 		taskLogs:    tasklog.NewSQLite(logDbClient, nil),
 		logger:      logger,
+		notifier:    notifier,
 	}
 }
 
@@ -83,7 +91,8 @@ func NewDefault(schedulerUrl, taskLogsDbFile string) *Executor {
 			logsDbErr.Error())
 		log.Panic(logsDbErr)
 	}
-	return New(schedulerUrl, logsDbClient, nil, nil)
+	notifier := notify.NewLogsErr(logger)
+	return New(schedulerUrl, logsDbClient, nil, nil, notifier)
 }
 
 // Start starts executor. TODO...
@@ -110,13 +119,14 @@ func (e *Executor) Start(dags dag.Registry) {
 				"taskId", tte.TaskId)
 			break
 		}
-		go executeTask(tte, task, e.schedClient, e.taskLogs, e.logger)
+		go executeTask(tte, task, e.schedClient, e.taskLogs, e.logger,
+			e.notifier)
 	}
 }
 
 func executeTask(
 	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
-	taskLogs tasklog.Factory, logger *slog.Logger,
+	taskLogs tasklog.Factory, logger *slog.Logger, notifier notify.Sender,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -144,9 +154,10 @@ func executeTask(
 	ti := tasklog.TaskInfo{DagId: tte.DagId, ExecTs: execTs, TaskId: task.Id()}
 
 	taskContext := dag.TaskContext{
-		Context: context.TODO(),
-		Logger:  taskLogs.GetLogger(ti),
-		DagRun:  ri,
+		Context:  context.TODO(),
+		Logger:   taskLogs.GetLogger(ti),
+		DagRun:   ri,
+		Notifier: notifier,
 	}
 	execErr := task.Execute(taskContext)
 	if execErr != nil {

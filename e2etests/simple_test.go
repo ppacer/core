@@ -6,6 +6,7 @@ package e2etests
 
 import (
 	"context"
+	"log/slog"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -151,6 +152,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 	cfg := scheduler.DefaultConfig
 	queues := scheduler.DefaultQueues(cfg)
 	notifications := make([]string, 0)
+	notifier := notify.NewLogsErr(slog.Default())
 
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
@@ -171,7 +173,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Start executor
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil)
+		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
 		executor.Start(dags)
 	}()
 
@@ -216,6 +218,7 @@ func testSchedulerE2eManyDagRuns(
 	t.Helper()
 	cfg := scheduler.DefaultConfig
 	queues := scheduler.DefaultQueues(cfg)
+	notifier := notify.NewLogsErr(slog.Default())
 
 	// Start scheduler
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
@@ -228,7 +231,7 @@ func testSchedulerE2eManyDagRuns(
 
 	// Start executor
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil)
+		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
 		executor.Start(dags)
 	}()
 

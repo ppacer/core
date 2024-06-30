@@ -495,7 +495,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 
 // This routine is called for failed DAG run tasks.
 func (ts *TaskScheduler) actOnFailedTask(drt DagRunTask, execErr error) error {
-	// TODO(dskrzypiec): should be lift this logic to the separated type?
+	// TODO(dskrzypiec): should we lift this logic to the separated type?
 	dag, exists := ts.DagRegistry[drt.DagId]
 	if !exists {
 		return fmt.Errorf("dag [%s] does not exist in the registry",
