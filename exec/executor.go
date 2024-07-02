@@ -113,14 +113,18 @@ func (e *Executor) Start(dags dag.Registry) {
 			e.logger.Error("Could not get DAG from registry", "dagId", tte.DagId)
 			continue
 		}
-		task, tErr := d.GetTask(tte.TaskId)
+		taskNode, tErr := d.GetNode(tte.TaskId)
 		if tErr != nil {
-			e.logger.Error("Could not get task from DAG", "dagId", tte.DagId,
-				"taskId", tte.TaskId)
+			e.logger.Error("Could not get task node from DAG", "dagId",
+				tte.DagId, "taskId", tte.TaskId)
 			break
 		}
-		go executeTask(tte, task, e.schedClient, e.taskLogs, e.logger,
-			e.notifier)
+		notifier := e.notifier
+		if taskNode.Config.Notifier != nil {
+			notifier = taskNode.Config.Notifier
+		}
+		go executeTask(tte, taskNode.Task, e.schedClient, e.taskLogs, e.logger,
+			notifier)
 	}
 }
 

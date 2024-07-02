@@ -15,6 +15,13 @@ type TaskConfig struct {
 	SendAlertOnRetry   bool `json:"sendAlertOnRetry"`
 	SendAlertOnFailure bool `json:"sendAlertOnFailure"`
 
+	// Notification sender for that task. By default is nil which mean that
+	// notifier set on scheduler or executor level would be used. If we want to
+	// use non-default notification sender for this task, we should set
+	// Notifier field to non-nil instance. One can use WithCustomNotifier
+	// method, to do so.
+	Notifier notify.Sender `json:"-"`
+
 	AlertOnRetryTemplate   notify.Template `json:"-"`
 	AlertOnFailureTemplate notify.Template `json:"-"`
 }
@@ -31,13 +38,18 @@ Error:
 	return template.Must(template.New("default").Parse(body))
 }
 
-// Default task configuration. If not specified otherwise the followig
+// Default task configuration. If not specified otherwise the following
 // configuration values would be used for Task scheduling and execution.
 var DefaultTaskConfig = TaskConfig{
-	TimeoutSeconds:         10 * 60,
-	Retries:                0,
-	SendAlertOnRetry:       false,
-	SendAlertOnFailure:     true,
+	TimeoutSeconds:     10 * 60,
+	Retries:            0,
+	SendAlertOnRetry:   false,
+	SendAlertOnFailure: true,
+
+	// By default Notifier is inherited from either scheduler or executor
+	// (depending on the context).
+	Notifier: nil,
+
 	AlertOnRetryTemplate:   DefaultAlertTemplate(),
 	AlertOnFailureTemplate: DefaultAlertTemplate(),
 }
@@ -59,6 +71,14 @@ func WithTaskTimeout(timeoutSeconds int) TaskConfigFunc {
 func WithTaskRetries(retries int) TaskConfigFunc {
 	return func(config *TaskConfig) {
 		config.Retries = retries
+	}
+}
+
+// WithCustomNotifier returns TaskConfigFunc for setting a custom notification
+// sender for the task.
+func WithCustomNotifier(notifier notify.Sender) TaskConfigFunc {
+	return func(config *TaskConfig) {
+		config.Notifier = notifier
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,10 +98,45 @@ func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 	if len(notifications) == 0 {
 		t.Error("Expected at least one error notification, but got zero")
 	}
-	t.Log("Notifications:")
-	for _, n := range notifications {
-		t.Log(n)
+	/*
+		t.Log("Notifications:")
+		for _, n := range notifications {
+			t.Log(n)
+		}
+	*/
+}
+
+func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
+	notifications := make([]string, 0)
+	notifierPhrase := "Who's mocking whom?"
+	notifier := newCustomNotifier(notifierPhrase, &notifications)
+	dagId := dag.Id("mock_failing_dag")
+	dags.Add(simpleDAGWithErrTaskCustomNotifier(dagId, &schedule, notifier))
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+
+	testSchedulerE2eSingleDagRun(
+		dags, dr, 3*time.Second, false, &notifications, t,
+	)
+
+	if len(notifications) == 0 {
+		t.Error("Expected at least one error notification, but got zero")
 	}
+	for idx, notification := range notifications {
+		if !strings.Contains(notification, notifierPhrase) {
+			t.Errorf("Notification [%d] [%s] does not contain expected phrase [%s]",
+				idx, notification, notifierPhrase)
+		}
+	}
+	/*
+		t.Log("Notifications:")
+		for _, n := range notifications {
+			t.Log(n)
+		}
+	*/
 }
 
 func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
