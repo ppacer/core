@@ -93,3 +93,20 @@ func WithTaskSendAlertOnRetries(config *TaskConfig) {
 func WithTaskNotSendAlertsOnFailures(config *TaskConfig) {
 	config.SendAlertOnFailure = false
 }
+
+// WithCustomFailureAlertTemplate returns TaskConfigFunc for setting a custom
+// template for alerts in cases when Task execution has failed.
+func WithCustomFailureAlertTemplate(tmpl notify.Template) TaskConfigFunc {
+	return func(config *TaskConfig) {
+		config.AlertOnFailureTemplate = tmpl
+	}
+}
+
+// WithCustomRetryAlertTemplate returns TaskConfigFunc for setting a custom
+// template for alerts in cases when Task execution has failed and will be
+// retried.
+func WithCustomRetryAlertTemplate(tmpl notify.Template) TaskConfigFunc {
+	return func(config *TaskConfig) {
+		config.AlertOnRetryTemplate = tmpl
+	}
+}
