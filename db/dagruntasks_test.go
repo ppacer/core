@@ -25,7 +25,7 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 	execTs := timeutils.ToString(time.Now())
 	taskId := "my_task_1"
 	iErr := c.InsertDagRunTask(
-		ctx, dagId, execTs, taskId, DagRunTaskStatusScheduled,
+		ctx, dagId, execTs, taskId, 0, DagRunTaskStatusScheduled,
 	)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
@@ -38,7 +38,7 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 
 	taskId2 := "my_task_2"
 	iErr2 := c.InsertDagRunTask(
-		ctx, dagId, execTs, taskId2, DagRunTaskStatusScheduled,
+		ctx, dagId, execTs, taskId2, 0, DagRunTaskStatusScheduled,
 	)
 	if iErr2 != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr2.Error())
@@ -107,7 +107,7 @@ func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task")
+	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task", 0)
 	if rErr != sql.ErrNoRows {
 		t.Errorf("Expected no rows error, got: %s", rErr.Error())
 	}
@@ -124,7 +124,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -139,6 +139,182 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 	}
 }
 
+func TestReadDagRunTaskLatestFromEmpty(t *testing.T) {
+	c, err := NewSqliteInMemoryClient(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, rErr := c.ReadDagRunTaskLatest(ctx, "any_dag", "any_time", "any_task")
+	if rErr != sql.ErrNoRows {
+		t.Errorf("Expected no rows error, got: %s", rErr.Error())
+	}
+}
+
+func TestReadDagRunTaskLatestSingleDag(t *testing.T) {
+	c, err := NewSqliteTmpClient(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	const (
+		dagId  = "sample_dag"
+		taskId = "task1"
+	)
+	ctx := context.Background()
+	now := time.Now()
+
+	type retryInfo struct {
+		retry  int
+		status string
+	}
+	data := []struct {
+		execTs               string
+		retries              []retryInfo
+		expectedLatestStatus string
+	}{
+		{
+			timeutils.ToString(now.Add(0 * time.Minute)),
+			[]retryInfo{
+				{0, statusFailed},
+				{1, statusFailed},
+				{2, statusRunning},
+			},
+			statusRunning,
+		},
+		{
+			timeutils.ToString(now.Add(17 * time.Minute)),
+			[]retryInfo{
+				{2, statusRunning},
+				{0, statusFailed},
+				{1, statusFailed},
+			},
+			statusRunning,
+		},
+		{
+			timeutils.ToString(now.Add(111 * time.Minute)),
+			[]retryInfo{{1, statusSuccess}},
+			statusSuccess,
+		},
+		{
+			timeutils.ToString(now.Add(222 * time.Minute)),
+			[]retryInfo{
+				{0, statusFailed},
+				{1, statusSuccess},
+			},
+			statusSuccess,
+		},
+	}
+
+	// arrange
+	for _, input := range data {
+		for _, retryInfo := range input.retries {
+			insertDagRunTaskStatus(c, ctx, dagId, input.execTs, taskId,
+				retryInfo.retry, retryInfo.status, t)
+		}
+	}
+
+	// act and assert
+	for _, input := range data {
+		drt, rErr := c.ReadDagRunTaskLatest(ctx, dagId, input.execTs, taskId)
+		if rErr != nil {
+			t.Errorf("Cannot read latest DAG run task info for %s %s %s: %s",
+				dagId, input.execTs, taskId, rErr.Error())
+		}
+		if drt.Status != input.expectedLatestStatus {
+			t.Errorf("For the latest DRT(%s, %s, %s) expected %s, got %s",
+				dagId, input.execTs, taskId, input.expectedLatestStatus,
+				drt.Status)
+		}
+	}
+}
+
+func TestReadDagRunTaskLatestManyDags(t *testing.T) {
+	c, err := NewSqliteTmpClient(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	ctx := context.Background()
+	now := time.Now()
+
+	type retryInfo struct {
+		retry  int
+		status string
+	}
+	data := []struct {
+		dagId                string
+		execTs               string
+		taskId               string
+		retries              []retryInfo
+		expectedLatestStatus string
+	}{
+		{
+			"mock_dag_1",
+			timeutils.ToString(now.Add(0 * time.Minute)),
+			"task1",
+			[]retryInfo{
+				{0, statusFailed},
+				{1, statusFailed},
+				{2, statusRunning},
+			},
+			statusRunning,
+		},
+		{
+			"mock_dag_1",
+			timeutils.ToString(now.Add(0 * time.Minute)),
+			"task2",
+			[]retryInfo{
+				{0, statusFailed},
+				{1, statusSuccess},
+			},
+			statusSuccess,
+		},
+		{
+			"mock_dag_2",
+			timeutils.ToString(now.Add(33 * time.Minute)),
+			"task1",
+			[]retryInfo{
+				{0, statusSuccess},
+			},
+			statusSuccess,
+		},
+		{
+			"mock_dag_2",
+			timeutils.ToString(now.Add(66 * time.Minute)),
+			"task1",
+			[]retryInfo{
+				{0, statusFailed},
+				{1, statusScheduled},
+			},
+			statusScheduled,
+		},
+	}
+
+	// arrange
+	for _, input := range data {
+		for _, retryInfo := range input.retries {
+			insertDagRunTaskStatus(c, ctx, input.dagId, input.execTs,
+				input.taskId, retryInfo.retry, retryInfo.status, t)
+		}
+	}
+
+	// act and assert
+	for _, input := range data {
+		drt, rErr := c.ReadDagRunTaskLatest(ctx, input.dagId, input.execTs,
+			input.taskId)
+		if rErr != nil {
+			t.Errorf("Cannot read latest DAG run task info for %s %s %s: %s",
+				input.dagId, input.execTs, input.taskId, rErr.Error())
+		}
+		if drt.Status != input.expectedLatestStatus {
+			t.Errorf("For the latest DRT(%s, %s, %s) expected %s, got %s",
+				input.dagId, input.execTs, input.taskId,
+				input.expectedLatestStatus, drt.Status)
+		}
+	}
+}
+
 func TestReadDagRunTaskUpdate(t *testing.T) {
 	c, err := NewSqliteInMemoryClient(nil)
 	if err != nil {
@@ -150,7 +326,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -169,12 +345,12 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 	}
 
 	const newStatus = "NEW_STATUS"
-	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, execTs, taskId, newStatus)
+	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, execTs, taskId, 0, newStatus)
 	if uErr != nil {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
 
-	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr2 != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -234,7 +410,7 @@ func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
 	for _, d := range inputData {
 		insertDagRunTask(c, ctx, dId, ts, d.taskId, t)
 		uErr := c.UpdateDagRunTaskStatus(
-			ctx, dId, ts, d.taskId, d.status.String(),
+			ctx, dId, ts, d.taskId, 0, d.status.String(),
 		)
 		if uErr != nil {
 			t.Errorf("Cannot update DAG run task status for %s: %s",
@@ -298,7 +474,7 @@ func TestRunningTasksNumAllFinished(t *testing.T) {
 	}
 
 	for _, d := range data {
-		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, d.status, t)
+		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, 0, d.status, t)
 	}
 
 	num, dErr := c.RunningTasksNum(ctx)
@@ -334,7 +510,7 @@ func TestRunningTasksNumWithRunningTasks(t *testing.T) {
 	}
 
 	for _, d := range data {
-		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, d.status, t)
+		insertDagRunTaskStatus(c, ctx, d.dagId, ts, d.taskId, 0, d.status, t)
 	}
 
 	num, dErr := c.RunningTasksNum(ctx)
@@ -367,7 +543,7 @@ func TestRunningTasksNumWithUpdate(t *testing.T) {
 	}
 
 	for _, d := range data {
-		insertDagRunTaskStatus(c, ctx, dagId, ts, d.taskId, d.status, t)
+		insertDagRunTaskStatus(c, ctx, dagId, ts, d.taskId, 0, d.status, t)
 	}
 
 	num1, dErr := c.RunningTasksNum(ctx)
@@ -378,7 +554,7 @@ func TestRunningTasksNumWithUpdate(t *testing.T) {
 		t.Errorf("Expected 1 running task, got: %d", num1)
 	}
 
-	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, ts, "task_3", statusSuccess)
+	uErr := c.UpdateDagRunTaskStatus(ctx, dagId, ts, "task_3", 0, statusSuccess)
 	if uErr != nil {
 		t.Errorf("Error when updating DAG run task status: %s", uErr.Error())
 	}
@@ -399,7 +575,7 @@ func insertDagRunTask(
 	t *testing.T,
 ) {
 	iErr := c.InsertDagRunTask(
-		ctx, dagId, execTs, taskId, DagRunTaskStatusScheduled,
+		ctx, dagId, execTs, taskId, 0, DagRunTaskStatusScheduled,
 	)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
@@ -407,10 +583,10 @@ func insertDagRunTask(
 }
 
 func insertDagRunTaskStatus(
-	c *Client, ctx context.Context, dagId, execTs, taskId, status string,
-	t *testing.T,
+	c *Client, ctx context.Context, dagId, execTs, taskId string, retry int,
+	status string, t *testing.T,
 ) {
-	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, status)
+	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, retry, status)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run task: %s", iErr.Error())
 	}

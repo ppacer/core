@@ -101,12 +101,13 @@ CREATE TABLE IF NOT EXISTS dagruntasks (
     DagId TEXT NOT NULL,            -- DAG ID
     ExecTs TEXT NOT NULL,           -- Execution timestamp
     TaskId TEXT NOT NULL,           -- Task ID
+    Retry INT NOT NULL,             -- Identifier for task retry. For initial run it's 0.
     InsertTs TEXT NOT NULL,         -- Insert timestamp
     Status TEXT NOT NULL,           -- DAG task execution status
     StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
     Version TEXT NOT NULL,          -- Scheduler version
 
-    PRIMARY KEY (DagId, ExecTs, TaskId)
+    PRIMARY KEY (DagId, ExecTs, TaskId, Retry)
 );
 `
 }

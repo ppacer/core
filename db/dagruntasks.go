@@ -22,6 +22,7 @@ type DagRunTask struct {
 	DagId          string
 	ExecTs         string
 	TaskId         string
+	Retry          int
 	InsertTs       string
 	Status         string
 	StatusUpdateTs string
@@ -66,14 +67,14 @@ func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]D
 }
 
 // Inserts new DagRunTask with default status SCHEDULED.
-func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId, status string) error {
+func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId string, retry int, status string) error {
 	start := time.Now()
 	insertTs := timeutils.ToString(start)
 	c.logger.Debug("Start inserting new dag run task", "dagId", dagId, "execTs",
-		execTs, "taskId", taskId)
+		execTs, "taskId", taskId, "retry", retry)
 	_, iErr := c.dbConn.ExecContext(
 		ctx, c.insertDagRunTaskQuery(),
-		dagId, execTs, taskId, insertTs, status, insertTs,
+		dagId, execTs, taskId, retry, insertTs, status, insertTs,
 		version.Version,
 	)
 	if iErr != nil {
@@ -81,18 +82,19 @@ func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId, st
 			"execTs", execTs, "taskId", taskId, "err", iErr)
 	}
 	c.logger.Debug("Finished inserting new dag run task", "dagId", dagId,
-		"execTs", execTs, "taskId", taskId, "duration", time.Since(start))
+		"execTs", execTs, "taskId", taskId, "retry", retry, "duration",
+		time.Since(start))
 	return nil
 }
 
 // ReadDagRunTask reads information about given taskId in given dag run.
-func (c *Client) ReadDagRunTask(ctx context.Context, dagId, execTs, taskId string) (DagRunTask, error) {
+func (c *Client) ReadDagRunTask(ctx context.Context, dagId, execTs, taskId string, retry int) (DagRunTask, error) {
 	start := time.Now()
 	c.logger.Debug("Start reading single dag run task", "dagId", dagId, "execTs",
-		execTs, "taskId", taskId)
+		execTs, "taskId", taskId, "retry", retry)
 
 	row := c.dbConn.QueryRowContext(ctx, c.readDagRunTaskQuery(), dagId,
-		execTs, taskId)
+		execTs, taskId, retry)
 	var insertTs, status, statusTs, version string
 	scanErr := row.Scan(&insertTs, &status, &statusTs, &version)
 	if scanErr == sql.ErrNoRows {
@@ -108,18 +110,57 @@ func (c *Client) ReadDagRunTask(ctx context.Context, dagId, execTs, taskId strin
 		DagId:          dagId,
 		ExecTs:         execTs,
 		TaskId:         taskId,
+		Retry:          retry,
 		InsertTs:       insertTs,
 		Status:         status,
 		StatusUpdateTs: statusTs,
 		Version:        version,
 	}
 	c.logger.Debug("Finished reading dag run task", "dagId", dagId, "execTs",
-		execTs, "taskId", taskId, "duration", time.Since(start))
+		execTs, "taskId", taskId, "retry", retry, "duration",
+		time.Since(start))
+	return dagRunTask, nil
+}
+
+// ReadDagRunTaskLatest reads information about latest DAG run task try, out of
+// possibly multiple retries of task execution, for given taskId and dag run.
+func (c *Client) ReadDagRunTaskLatest(ctx context.Context, dagId, execTs, taskId string) (DagRunTask, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading latest dag run task", "dagId", dagId, "execTs",
+		execTs, "taskId", taskId)
+
+	row := c.dbConn.QueryRowContext(ctx, c.readDagRunTaskLatestQuery(), dagId,
+		execTs, taskId)
+	var insertTs, status, statusTs, version string
+	var retry int
+	scanErr := row.Scan(&retry, &insertTs, &status, &statusTs, &version)
+	if scanErr == sql.ErrNoRows {
+		return DagRunTask{}, scanErr
+	}
+	if scanErr != nil {
+		c.logger.Error("Failed scanning a DagRunTask record", "dagId", dagId,
+			"execTs", execTs, "taskId", taskId, "err", scanErr)
+		return DagRunTask{}, scanErr
+	}
+
+	dagRunTask := DagRunTask{
+		DagId:          dagId,
+		ExecTs:         execTs,
+		TaskId:         taskId,
+		Retry:          retry,
+		InsertTs:       insertTs,
+		Status:         status,
+		StatusUpdateTs: statusTs,
+		Version:        version,
+	}
+	c.logger.Debug("Finished reading latest dag run task", "dagId", dagId,
+		"execTs", execTs, "taskId", taskId, "duration", time.Since(start),
+	)
 	return dagRunTask, nil
 }
 
 // Updates dagruntask status for given dag run task.
-func (c *Client) UpdateDagRunTaskStatus(ctx context.Context, dagId, execTs, taskId, status string) error {
+func (c *Client) UpdateDagRunTaskStatus(ctx context.Context, dagId, execTs, taskId string, retry int, status string) error {
 	start := time.Now()
 	updateTs := timeutils.ToString(time.Now())
 	c.logger.Debug("Start updating dag run task status", "dagId", dagId, "execTs",
@@ -198,7 +239,8 @@ func (c *Client) RunningTasksNum(ctx context.Context) (int, error) {
 
 func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
 	var dagId, execTs, taskId, insertTs, status, statusTs, version string
-	scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &status,
+	var retry int
+	scanErr := rows.Scan(&dagId, &execTs, &taskId, &retry, &insertTs, &status,
 		&statusTs, &version)
 	if scanErr != nil {
 		return DagRunTask{}, scanErr
@@ -207,6 +249,7 @@ func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
 		DagId:          dagId,
 		ExecTs:         execTs,
 		TaskId:         taskId,
+		Retry:          retry,
 		InsertTs:       insertTs,
 		Status:         status,
 		StatusUpdateTs: statusTs,
@@ -221,6 +264,7 @@ func (c *Client) readDagRunTasksQuery() string {
 		DagId,
 		ExecTs,
 		TaskId,
+		Retry,
 		InsertTs,
 		Status,
 		StatusUpdateTs,
@@ -246,15 +290,37 @@ func (c *Client) readDagRunTaskQuery() string {
 			DagId = ?
 		AND ExecTs = ?
 		AND TaskId = ?
+		AND Retry = ?
+	`
+}
+
+func (c *Client) readDagRunTaskLatestQuery() string {
+	return `
+	SELECT
+		Retry,
+		InsertTs,
+		Status,
+		StatusUpdateTs,
+		Version
+	FROM
+		dagruntasks
+	WHERE
+			DagId = ?
+		AND ExecTs = ?
+		AND TaskId = ?
+	ORDER BY
+		Retry DESC
+	LIMIT
+		1
 	`
 }
 
 func (c *Client) insertDagRunTaskQuery() string {
 	return `
 	INSERT INTO dagruntasks(
-		DagId, ExecTs, TaskId, InsertTs, Status, StatusUpdateTs, Version
+		DagId, ExecTs, TaskId, Retry, InsertTs, Status, StatusUpdateTs, Version
 	)
-	VALUES (?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 }
 
@@ -278,6 +344,7 @@ func (c *Client) readNotFinishedDagRunTasksQuery() string {
 		DagId,
 		ExecTs,
 		TaskId,
+		Retry,
 		InsertTs,
 		Status,
 		StatusUpdateTs,
