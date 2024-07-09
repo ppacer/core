@@ -13,6 +13,7 @@ type TaskLogRecord struct {
 	DagId      string
 	ExecTs     string
 	TaskId     string
+	Retry      int
 	InsertTs   string
 	Level      string
 	Message    string
@@ -22,7 +23,7 @@ type TaskLogRecord struct {
 // InsertTaskLog inserts single log record into tasklogs table.
 func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 	res, iErr := c.dbConn.Exec(c.insertTaskLogQuery(),
-		tlr.DagId, tlr.ExecTs, tlr.TaskId, tlr.InsertTs, tlr.Level,
+		tlr.DagId, tlr.ExecTs, tlr.TaskId, tlr.Retry, tlr.InsertTs, tlr.Level,
 		tlr.Message, tlr.Attributes,
 	)
 	if iErr != nil {
@@ -42,8 +43,9 @@ func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 }
 
 // ReadDagRunLogs reads all task logs for given DAG run in chronological order.
-func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]TaskLogRecord, error) {
-	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunLogsQuery(), dagId, execTs)
+func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string, retry int) ([]TaskLogRecord, error) {
+	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunLogsQuery(), dagId,
+		execTs, retry)
 	if rErr != nil {
 		c.logger.Error("Error while querying DAG run logs", "dagId", dagId,
 			"execTs", execTs, "err", rErr.Error())
@@ -61,19 +63,20 @@ func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]Ta
 
 // ReadDagRunTaskLogs reads all logs for given DAG run task in chronological
 // order.
-func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId string) ([]TaskLogRecord, error) {
+func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId string, retry int) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunTaskLogsQuery(),
-		dagId, execTs, taskId)
+		dagId, execTs, taskId, retry)
 	if rErr != nil {
 		c.logger.Error("Error while querying DAG run task logs", "dagId", dagId,
-			"execTs", execTs, "taskId", taskId, "err", rErr.Error())
+			"execTs", execTs, "taskId", taskId, "retry", retry, "err", rErr.Error())
 		return nil, rErr
 	}
 	defer rows.Close()
 	logs, err := c.readTaskLogs(ctx, rows)
 	if rowsErr := rows.Err(); rowsErr != nil {
 		c.logger.Error("Error while processing SQL rows from tasklogs", "dagId",
-			dagId, "execTs", execTs, "taskId", taskId, "err", rowsErr)
+			dagId, "execTs", execTs, "taskId", taskId, "retry", retry,
+			"err", rowsErr)
 		return nil, rowsErr
 	}
 	return logs, err
@@ -81,9 +84,10 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 
 // ReadDagRunTaskLogsLatest reads given number of latest DAG run task logs in
 // chronological order.
-func (c *Client) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, taskId string, latest int) ([]TaskLogRecord, error) {
+func (c *Client) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, taskId string, retry, latest int) ([]TaskLogRecord, error) {
 	records, rErr := c.readTaskLogsQuery(
-		ctx, c.readDagRunTaskLogsLatestQuery(), dagId, execTs, taskId, latest,
+		ctx, c.readDagRunTaskLogsLatestQuery(), dagId, execTs, taskId, retry,
+		latest,
 	)
 	if rErr != nil {
 		return nil, rErr
@@ -115,6 +119,7 @@ func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRec
 	start := time.Now()
 	c.logger.Debug("Start reading tasklogs records")
 	tlrs := make([]TaskLogRecord, 0, 10)
+	var retry int
 	var dagId, execTs, taskId, insertTs, lvl, msg, attr string
 
 	for rows.Next() {
@@ -125,7 +130,8 @@ func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRec
 			return nil, ctx.Err()
 		default:
 		}
-		scanErr := rows.Scan(&dagId, &execTs, &taskId, &insertTs, &lvl, &msg, &attr)
+		scanErr := rows.Scan(&dagId, &execTs, &taskId, &retry, &insertTs,
+			&lvl, &msg, &attr)
 		if scanErr != nil {
 			c.logger.Error("Cannot parse tasklogs record", "err", scanErr.Error())
 			continue
@@ -134,6 +140,7 @@ func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRec
 			DagId:      dagId,
 			ExecTs:     execTs,
 			TaskId:     taskId,
+			Retry:      retry,
 			InsertTs:   insertTs,
 			Level:      lvl,
 			Message:    msg,
@@ -150,21 +157,22 @@ func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRec
 func (c *Client) insertTaskLogQuery() string {
 	return `
 		INSERT INTO tasklogs (
-			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
 		)
-		VALUES (?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?)
 	`
 }
 
 func (c *Client) readDagRunLogsQuery() string {
 	return `
 		SELECT
-			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
 		FROM
 			tasklogs
 		WHERE
 				DagId = ?
 			AND ExecTs = ?
+			AND Retry = ?
 		ORDER BY
 			InsertTs ASC
 	`
@@ -173,13 +181,14 @@ func (c *Client) readDagRunLogsQuery() string {
 func (c *Client) readDagRunTaskLogsLatestQuery() string {
 	return `
 		SELECT
-			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
 		FROM
 			tasklogs
 		WHERE
 				DagId = ?
 			AND ExecTs = ?
 			AND TaskId = ?
+			AND Retry = ?
 		ORDER BY
 			InsertTs DESC
 		LIMIT
@@ -187,31 +196,17 @@ func (c *Client) readDagRunTaskLogsLatestQuery() string {
 	`
 }
 
-func (c *Client) readDagRunLogsAfterQuery() string {
-	return `
-		SELECT
-			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
-		FROM
-			tasklogs
-		WHERE
-				DagId = ?
-			AND ExecTs = ?
-			AND InsertTs > ?
-		ORDER BY
-			InsertTs ASC
-	`
-}
-
 func (c *Client) readDagRunTaskLogsQuery() string {
 	return `
 		SELECT
-			DagId, ExecTs, TaskId, InsertTs, Level, Message, Attributes
+			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
 		FROM
 			tasklogs
 		WHERE
 				DagId = ?
 			AND ExecTs = ?
 			AND TaskId = ?
+			AND Retry = ?
 		ORDER BY
 			InsertTs ASC
 	`

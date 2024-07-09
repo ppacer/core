@@ -19,11 +19,13 @@ func TestInsertTaskLogSimple(t *testing.T) {
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 
 	tlr := TaskLogRecord{
 		DagId:      dagId,
 		ExecTs:     execTs,
 		TaskId:     taskId,
+		Retry:      retry,
 		InsertTs:   execTs,
 		Level:      "INFO",
 		Message:    "Test message",
@@ -46,7 +48,7 @@ func TestInsertTaskLogSimple(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if readErr != nil {
 		t.Errorf("Error while reading DAG run task logs: %s", readErr.Error())
 	}
@@ -70,10 +72,11 @@ func TestReadDagRunTaskLogsAllEmptyTable(t *testing.T) {
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 
 	// Read all log records for the task
 	ctx := context.Background()
-	records, rErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	records, rErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if rErr != nil {
 		t.Errorf("Error while reading DAG run [%s] task [%s] logs: %s",
 			dagId, taskId, rErr.Error())
@@ -93,6 +96,7 @@ func TestReadDagRunTaskLogsAll(t *testing.T) {
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 
 	// Insert loggs for a single DAG run task
 	msgs := []struct {
@@ -122,7 +126,7 @@ func TestReadDagRunTaskLogsAll(t *testing.T) {
 
 	// Read all log records for the task
 	ctx := context.Background()
-	records, rErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	records, rErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if rErr != nil {
 		t.Errorf("Error while reading DAG run [%s] task [%s] logs: %s",
 			dagId, taskId, rErr.Error())
@@ -153,6 +157,7 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 
 	// Insert loggs for a single DAG run task
 	msgs := []struct {
@@ -169,6 +174,7 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 			DagId:      dagId,
 			ExecTs:     execTs,
 			TaskId:     taskId,
+			Retry:      retry,
 			InsertTs:   timeutils.ToString(time.Now()),
 			Level:      "INFO",
 			Message:    msg.Msg,
@@ -182,7 +188,8 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 
 	// Read only the latest log record
 	ctx := context.Background()
-	records, rErr := c.ReadDagRunTaskLogsLatest(ctx, dagId, execTs, taskId, 1)
+	records, rErr := c.ReadDagRunTaskLogsLatest(ctx, dagId, execTs, taskId,
+		retry, 1)
 	if rErr != nil {
 		t.Errorf("Error while reading DAG run [%s] task [%s] logs: %s",
 			dagId, taskId, rErr.Error())
@@ -199,7 +206,8 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 	}
 
 	// Read 2 latest log records
-	records, rErr = c.ReadDagRunTaskLogsLatest(ctx, dagId, execTs, taskId, 2)
+	records, rErr = c.ReadDagRunTaskLogsLatest(ctx, dagId, execTs, taskId,
+		retry, 2)
 	if rErr != nil {
 		t.Errorf("Error while reading DAG run [%s] task [%s] logs: %s",
 			dagId, taskId, rErr.Error())

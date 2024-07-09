@@ -167,7 +167,7 @@ func (c *Client) UpdateDagRunTaskStatus(ctx context.Context, dagId, execTs, task
 		execTs, "taskId", taskId, "status", status)
 	res, err := c.dbConn.ExecContext(
 		ctx, c.updateDagRunTaskStatusQuery(),
-		status, updateTs, dagId, execTs, taskId,
+		status, updateTs, dagId, execTs, taskId, retry,
 	)
 	if err != nil {
 		c.logger.Error("Cannot update dag run task status", "dagId", dagId,
@@ -335,6 +335,7 @@ func (c *Client) updateDagRunTaskStatusQuery() string {
 			DagId = ?
 		AND ExecTs = ?
 		AND TaskId = ?
+		AND Retry = ?
 	`
 }
 
