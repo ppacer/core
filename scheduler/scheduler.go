@@ -232,6 +232,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		DagId:  dag.Id(drts.DagId),
 		AtTime: execTs,
 		TaskId: drts.TaskId,
+		Retry:  drts.Retry,
 	}
 
 	ctx := context.TODO()

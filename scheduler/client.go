@@ -104,6 +104,7 @@ func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus, 
 		DagId:   tte.DagId,
 		ExecTs:  tte.ExecTs,
 		TaskId:  tte.TaskId,
+		Retry:   tte.Retry,
 		Status:  statusStr,
 		TaskErr: taskErrStr,
 	}

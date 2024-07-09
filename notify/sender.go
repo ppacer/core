@@ -28,6 +28,7 @@ type MsgData struct {
 	DagId        string
 	ExecTs       string
 	TaskId       *string
+	Retry        int
 	TaskRunError error
 	RuntimeInfo  map[string]any
 }
