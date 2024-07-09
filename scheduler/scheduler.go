@@ -169,11 +169,11 @@ func (s *Scheduler) currentState(w http.ResponseWriter, _ *http.Request) {
 
 // HTTP handler for popping dag run task from the queue.
 func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
-	if ts.TaskQueue.Size() == 0 {
+	if ts.taskQueue.Size() == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	drt, err := ts.TaskQueue.Pop()
+	drt, err := ts.taskQueue.Pop()
 	if err == ds.ErrQueueIsEmpty {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -243,7 +243,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	ts.Logger.Debug("Updated task status", "dagruntask", drt, "status", status,
+	ts.logger.Debug("Updated task status", "dagruntask", drt, "status", status,
 		"duration", time.Since(start))
 }
 

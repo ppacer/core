@@ -62,16 +62,15 @@ type DagRunTaskState struct {
 //
 // If you use Scheduler, you probably don't need to use this object directly.
 type TaskScheduler struct {
-	// TODO: refactor those fields to private
-	DagRegistry        dag.Registry
-	DbClient           *db.Client
-	DagRunQueue        ds.Queue[DagRun]
-	TaskQueue          ds.Queue[DagRunTask]
-	TaskCache          ds.Cache[DagRunTask, DagRunTaskState]
-	Config             TaskSchedulerConfig
-	Logger             *slog.Logger
-	Notifier           notify.Sender
-	SchedulerStateFunc GetStateFunc
+	dagRegistry        dag.Registry
+	dbClient           *db.Client
+	dagRunQueue        ds.Queue[DagRun]
+	taskQueue          ds.Queue[DagRunTask]
+	taskCache          ds.Cache[DagRunTask, DagRunTaskState]
+	config             TaskSchedulerConfig
+	logger             *slog.Logger
+	notifier           notify.Sender
+	schedulerStateFunc GetStateFunc
 
 	failedTaskManager *failedTaskManager
 }
@@ -89,15 +88,15 @@ func NewTaskScheduler(
 	}
 
 	return &TaskScheduler{
-		DagRegistry:        dags,
-		DbClient:           db,
-		DagRunQueue:        queues.DagRuns,
-		TaskQueue:          queues.DagRunTasks,
-		TaskCache:          cache,
-		Config:             config,
-		Logger:             logger,
-		Notifier:           notifier,
-		SchedulerStateFunc: schedulerStateFunc,
+		dagRegistry:        dags,
+		dbClient:           db,
+		dagRunQueue:        queues.DagRuns,
+		taskQueue:          queues.DagRunTasks,
+		taskCache:          cache,
+		config:             config,
+		logger:             logger,
+		notifier:           notifier,
+		schedulerStateFunc: schedulerStateFunc,
 
 		failedTaskManager: newFailedTaskManager(
 			dags, db, queues.DagRunTasks, cache, config, logger,
@@ -121,29 +120,29 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 		select {
 		case err := <-taskSchedulerErrors:
 			// TODO(dskrzypiec): What do we want to do with those errors?
-			ts.Logger.Error("Error while scheduling new tasks", "dagId",
+			ts.logger.Error("Error while scheduling new tasks", "dagId",
 				string(err.DagId), "execTs", err.ExecTs, "err", err.Err)
 		default:
 		}
-		if ts.SchedulerStateFunc() == StateStopping {
-			ts.Logger.Warn("Scheduler is stopping. TaskScheduler will not schedule other tasks")
-			ts.Logger.Warn("Waiting for currently running tasks...")
+		if ts.schedulerStateFunc() == StateStopping {
+			ts.logger.Warn("Scheduler is stopping. TaskScheduler will not schedule other tasks")
+			ts.logger.Warn("Waiting for currently running tasks...")
 			ts.waitForRunningTasks(1*time.Second, 1*time.Minute)
 			return
 		}
-		if ts.DagRunQueue.Size() == 0 {
+		if ts.dagRunQueue.Size() == 0 {
 			// DagRunQueue is empty, we wait for a bit and then we'll try again
-			time.Sleep(ts.Config.Heartbeat)
+			time.Sleep(ts.config.Heartbeat)
 			continue
 		}
-		dagrun, err := ts.DagRunQueue.Pop()
+		dagrun, err := ts.dagRunQueue.Pop()
 		if err == ds.ErrQueueIsEmpty {
 			continue
 		}
 		if err != nil {
 			// TODO: should we do anything else? Probably not, because item
 			// should be probably still on the queue
-			ts.Logger.Error("Error while getting dag run from the queue", "err",
+			ts.logger.Error("Error while getting dag run from the queue", "err",
 				err)
 			continue
 		}
@@ -152,7 +151,7 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 		// a separate goroutine.
 		d, existInRegistry := dags[dagrun.DagId]
 		if !existInRegistry {
-			ts.Logger.Error("TaskScheduler got DAG run for DAG which is not in given registry",
+			ts.logger.Error("TaskScheduler got DAG run for DAG which is not in given registry",
 				"dagId", string(dagrun.DagId))
 			continue
 		}
@@ -164,7 +163,7 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 // caches, queues, database and every place that needs to be included regarding
 // task status update.
 func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, status dag.TaskStatus, taskErrStr *string) error {
-	ts.Logger.Info("Start upserting dag run task status", "dagruntask", drt,
+	ts.logger.Info("Start upserting dag run task status", "dagruntask", drt,
 		"status", status.String())
 
 	shouldBeRetried, rErr := ts.failedTaskManager.ShouldBeRetried(drt, status)
@@ -193,10 +192,10 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 
 	// we have a failed task
 	alertsErr := ts.failedTaskManager.CheckAndSendAlerts(
-		drt, status, shouldBeRetried, taskErrStr, ts.Notifier,
+		drt, status, shouldBeRetried, taskErrStr, ts.notifier,
 	)
 	if alertsErr != nil {
-		ts.Logger.Error("Cannot send external alerts on task retry or failure",
+		ts.logger.Error("Cannot send external alerts on task retry or failure",
 			"dagruntask", drt, "status", status, "err", alertsErr,
 		)
 	}
@@ -206,9 +205,9 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 //  Insert/update DAG run task info in the cache.
 func (ts *TaskScheduler) upsertTaskStatusCache(drt DagRunTask, status dag.TaskStatus) {
 	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
-	drtsCache, entryExists := ts.TaskCache.Get(drt.WithNoRetry())
+	drtsCache, entryExists := ts.taskCache.Get(drt.WithNoRetry())
 	if !entryExists || (entryExists && drtsCache.Status != status) {
-		ts.TaskCache.Put(drt.WithNoRetry(), drts)
+		ts.taskCache.Put(drt.WithNoRetry(), drts)
 	}
 }
 
@@ -218,26 +217,26 @@ func (ts *TaskScheduler) upsertTaskStatusDb(
 ) error {
 	dagIdStr := string(drt.DagId)
 	execTs := timeutils.ToString(drt.AtTime)
-	drtDb, getErr := ts.DbClient.ReadDagRunTask(
+	drtDb, getErr := ts.dbClient.ReadDagRunTask(
 		ctx, dagIdStr, execTs, drt.TaskId, drt.Retry,
 	)
 	switch getErr {
 	case sql.ErrNoRows:
-		ts.Logger.Info("Inserting new dag run task", "dagId", dagIdStr,
+		ts.logger.Info("Inserting new dag run task", "dagId", dagIdStr,
 			"execTs", execTs, "taskId", drt.TaskId)
-		iErr := ts.DbClient.InsertDagRunTask(
+		iErr := ts.dbClient.InsertDagRunTask(
 			ctx, dagIdStr, execTs, drt.TaskId, drt.Retry, status.String(),
 		)
 		if iErr != nil {
 			return iErr
 		}
 	case nil:
-		ts.Logger.Info("Given dag run task exists in database", "dagruntask",
+		ts.logger.Info("Given dag run task exists in database", "dagruntask",
 			drtDb)
 		if drtDb.Status != status.String() {
-			ts.Logger.Info("Updating dag run task status", "currentStatus",
+			ts.logger.Info("Updating dag run task status", "currentStatus",
 				drtDb.Status, "newStatus", status.String())
-			dbUpdateErr := ts.DbClient.UpdateDagRunTaskStatus(
+			dbUpdateErr := ts.dbClient.UpdateDagRunTaskStatus(
 				ctx, dagIdStr, execTs, drt.TaskId, drt.Retry, status.String(),
 			)
 			if dbUpdateErr != nil {
@@ -245,7 +244,7 @@ func (ts *TaskScheduler) upsertTaskStatusDb(
 			}
 		}
 	default:
-		ts.Logger.Error("Could not read from dagruntasks", "dagruntask", drt,
+		ts.logger.Error("Could not read from dagruntasks", "dagruntask", drt,
 			"status", status.String())
 		return getErr
 	}
@@ -257,9 +256,9 @@ func (ts *TaskScheduler) scheduleRetry(drt DagRunTask) {
 	// TODO: we need to possibly awit here for a bit... time delta between the
 	// next retry
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, ts.Config.PutOnTaskQueueTimeout)
+	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
 	defer cancel()
-	ds.PutContext(ctx, ts.TaskQueue, drt.NextRetry())
+	ds.PutContext(ctx, ts.taskQueue, drt.NextRetry())
 
 	// TODO: check for the case when we got timeout and task hasn't been put on
 	// the queue
@@ -275,12 +274,12 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	errorsChan chan taskSchedulerError,
 ) {
 	dagId := string(dagrun.DagId)
-	ts.Logger.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
+	ts.logger.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
 		dagrun.AtTime)
 	execTs := timeutils.ToString(dagrun.AtTime)
 
 	// Update dagrun state to running
-	stateUpdateErr := ts.DbClient.UpdateDagRunStatusByExecTs(
+	stateUpdateErr := ts.dbClient.UpdateDagRunStatusByExecTs(
 		ctx, dagId, execTs, dag.RunRunning.String(),
 	)
 	if stateUpdateErr != nil {
@@ -290,10 +289,10 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	}
 
 	if d.Root == nil {
-		ts.Logger.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
+		ts.logger.Warn("DAG has no tasks, there is nothig to schedule", "dagId",
 			dagrun.DagId)
 		// Update dagrun state to finished
-		stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
+		stateUpdateErr = ts.dbClient.UpdateDagRunStatusByExecTs(
 			ctx, dagId, execTs, dag.RunSuccess.String(),
 		)
 		if stateUpdateErr != nil {
@@ -314,18 +313,18 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	// with status UPSTREAM_FAILED.
 	ts.checkFailsAndMarkDownstream(ctx, dagrun, d.Root, sharedState)
 
-	if ts.SchedulerStateFunc() == StateStopping {
+	if ts.schedulerStateFunc() == StateStopping {
 		return
 	}
 
 	// At this point all tasks has been scheduled, but not necessarily done.
 	tasks := d.Flatten()
 	for !ts.allTasksAreDone(dagrun, tasks, sharedState) {
-		time.Sleep(ts.Config.Heartbeat)
+		time.Sleep(ts.config.Heartbeat)
 	}
 
 	// Update dagrun state to finished
-	stateUpdateErr = ts.DbClient.UpdateDagRunStatusByExecTs(
+	stateUpdateErr = ts.dbClient.UpdateDagRunStatusByExecTs(
 		ctx, dagId, execTs, (*sharedState.DagRunStatus).String(),
 	)
 	if stateUpdateErr != nil {
@@ -342,17 +341,17 @@ func (ts *TaskScheduler) waitForRunningTasks(pollInterval, timeout time.Duration
 	for {
 		select {
 		case <-ticker.C:
-			runningTasks, err := ts.DbClient.RunningTasksNum(ctx)
+			runningTasks, err := ts.dbClient.RunningTasksNum(ctx)
 			if err != nil {
-				ts.Logger.Error("Error while checking DAG run running tasks",
+				ts.logger.Error("Error while checking DAG run running tasks",
 					"err", err)
 			}
 			if runningTasks == 0 {
-				ts.Logger.Info("All running tasks are done")
+				ts.logger.Info("All running tasks are done")
 				return
 			}
 		case <-timeoutChan:
-			ts.Logger.Error("Time out! No longer waiting for running tasks before quiting scheduler")
+			ts.logger.Error("Time out! No longer waiting for running tasks before quiting scheduler")
 			return
 		}
 	}
@@ -408,9 +407,9 @@ func (ts *TaskScheduler) walkAndSchedule(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
-	checkDelay := ts.Config.CheckDependenciesStatusWait
+	checkDelay := ts.config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
-	ts.Logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
+	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
 
 	// In case when scheduler has been restarted given task might been
 	// already completed from the previous unfinished DAG run.
@@ -426,13 +425,13 @@ func (ts *TaskScheduler) walkAndSchedule(
 		case <-ctx.Done():
 			// TODO: What to do with errors in here? Probably we should have a
 			// queue for retries on DagRunTasks level.
-			ts.Logger.Error("Context canceled while walkAndSchedule", "dagrun",
+			ts.logger.Error("Context canceled while walkAndSchedule", "dagrun",
 				dagrun, "taskId", node.Task.Id(), "err", ctx.Err())
 			// TODO: in this case we need to stop further scheduling and set
 			// appropriate status
 		default:
 		}
-		if alreadyFinished || ts.SchedulerStateFunc() == StateStopping {
+		if alreadyFinished || ts.schedulerStateFunc() == StateStopping {
 			break
 		}
 
@@ -441,7 +440,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 		)
 		if parentsStatus == dag.TaskFailed {
 			msg := "At least one parent of the task has failed. Will not proceed."
-			ts.Logger.Warn(msg, "dagrun", dagrun, "taskId", taskId)
+			ts.logger.Warn(msg, "dagrun", dagrun, "taskId", taskId)
 			return
 		}
 		if canSchedule {
@@ -470,7 +469,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
 func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
-	ts.Logger.Info("Start scheduling new dag run task", "dagrun", dagrun,
+	ts.logger.Info("Start scheduling new dag run task", "dagrun", dagrun,
 		"taskId", taskId)
 	drt := DagRunTask{
 		DagId:  dagrun.DagId,
@@ -478,12 +477,12 @@ func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 		TaskId: taskId,
 	}
 	ctx := context.TODO()
-	ctx, cancel := context.WithTimeout(ctx, ts.Config.PutOnTaskQueueTimeout)
+	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
 	defer cancel()
-	ds.PutContext(ctx, ts.TaskQueue, drt)
+	ds.PutContext(ctx, ts.taskQueue, drt)
 	usErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskScheduled, nil)
 	if usErr != nil {
-		ts.Logger.Error("Cannot update dag run task status", "dagruntask", drt,
+		ts.logger.Error("Cannot update dag run task status", "dagruntask", drt,
 			"status", dag.TaskScheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
 		// This mechanism will be implemented under "task retries" story.
@@ -501,12 +500,12 @@ func (ts *TaskScheduler) checkFailsAndMarkDownstream(
 ) {
 	status, err := ts.getDagRunTaskStatus(dagrun, node.Task.Id())
 	if err == sql.ErrNoRows {
-		ts.Logger.Error("Dag run is done but there is no cache entry and DB "+
+		ts.logger.Error("Dag run is done but there is no cache entry and DB "+
 			"entry for this dag run task. This is highly unexpected", "dagrun",
 			dagrun, "taskId", node.Task.Id())
 	}
 	if err != nil && err != sql.ErrNoRows {
-		ts.Logger.Error("Could no get dag run task status. Dag run is done. "+
+		ts.logger.Error("Could no get dag run task status. Dag run is done. "+
 			"This is unexpected. This dag run task is treated as not failed",
 			"dagrun", dagrun, "taskId", node.Task.Id())
 	}
@@ -542,7 +541,7 @@ func (ts *TaskScheduler) markDownstreamTasks(
 		}
 		uErr := ts.UpsertTaskStatus(ctx, drt, status, nil)
 		if uErr != nil {
-			ts.Logger.Error("UpsertTaskStatus failed during markDownstreamTasks",
+			ts.logger.Error("UpsertTaskStatus failed during markDownstreamTasks",
 				"dagrun", dagrun, "taskId", node.Task.Id(), "status", status)
 		}
 	}
@@ -561,7 +560,7 @@ func (ts *TaskScheduler) checkIfAlreadyFinished(
 		return false, dag.TaskNoStatus
 	}
 	if err != nil {
-		ts.Logger.Error("Canot get DAG run task status",
+		ts.logger.Error("Canot get DAG run task status",
 			"dagrun", dagrun, "taskId", taskId, "err", err.Error())
 		return false, dag.TaskNoStatus
 	}
@@ -575,7 +574,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 ) (bool, dag.TaskStatus) {
 	parents, exists := tasksParents.Get(taskId)
 	if !exists {
-		ts.Logger.Error("Task does not exist in parents map", "taskId", taskId)
+		ts.logger.Error("Task does not exist in parents map", "taskId", taskId)
 		return false, dag.TaskRunning
 	}
 	if len(parents) == 0 {
@@ -595,7 +594,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 				key, status,
 			)
 			if resErr != nil {
-				ts.Logger.Error("Cannot determine if task should be restarted",
+				ts.logger.Error("Cannot determine if task should be restarted",
 					"dagruntask", key, "err", resErr)
 			}
 			if shouldBeRetried {
@@ -616,7 +615,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 func (ts *TaskScheduler) isTaskDone(
 	dagrun DagRun, parent DagRunTask,
 ) (bool, dag.TaskStatus) {
-	statusFromCache, exists := ts.TaskCache.Get(parent.WithNoRetry())
+	statusFromCache, exists := ts.taskCache.Get(parent.WithNoRetry())
 	if exists && !statusFromCache.Status.CanProceed() {
 		return false, statusFromCache.Status
 	}
@@ -624,10 +623,10 @@ func (ts *TaskScheduler) isTaskDone(
 		return true, statusFromCache.Status
 	}
 	// If there is no entry in the cache, we need to query database
-	ts.Logger.Warn("There is no entry in TaskCache, need to query database",
+	ts.logger.Warn("There is no entry in TaskCache, need to query database",
 		"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", parent.TaskId)
 	ctx := context.TODO()
-	dagruntask, err := ts.DbClient.ReadDagRunTaskLatest(
+	dagruntask, err := ts.dbClient.ReadDagRunTaskLatest(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
 		parent.TaskId,
 	)
@@ -639,12 +638,12 @@ func (ts *TaskScheduler) isTaskDone(
 	}
 	if err != nil {
 		// No need to handle it, this function will be retried.
-		ts.Logger.Error("Cannot read DagRunTask status from DB", "err", err)
+		ts.logger.Error("Cannot read DagRunTask status from DB", "err", err)
 		return false, dag.TaskRunning
 	}
 	drtStatus, sErr := dag.ParseTaskStatus(dagruntask.Status)
 	if sErr != nil {
-		ts.Logger.Error("Cannot convert string to DagRunTaskStatus", "status",
+		ts.logger.Error("Cannot convert string to DagRunTaskStatus", "status",
 			dagruntask.Status, "err", sErr)
 		return false, dag.TaskRunning
 	}
@@ -694,7 +693,7 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 		AtTime: dagrun.AtTime,
 		TaskId: taskId,
 	}
-	drts, exists := ts.TaskCache.Get(drt.WithNoRetry())
+	drts, exists := ts.taskCache.Get(drt.WithNoRetry())
 	if exists {
 		return drts.Status, nil
 	}
@@ -704,12 +703,12 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 		return dag.TaskNoStatus, dbErr
 	}
 	if dbErr != nil {
-		ts.Logger.Error(
+		ts.logger.Error(
 			"Dag run task does not exist in the cache and cannot get it "+
 				"from database", "dagruntask", drt, "err", dbErr.Error())
 		return dag.TaskNoStatus, dbErr
 	}
-	ts.TaskCache.Put(drt.WithNoRetry(), drts)
+	ts.taskCache.Put(drt.WithNoRetry(), drts)
 	return drts.Status, nil
 }
 
@@ -717,7 +716,7 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 func (ts *TaskScheduler) getDagRunTaskStatusFromDb(
 	ctx context.Context, drt DagRunTask,
 ) (DagRunTaskState, error) {
-	dagruntask, err := ts.DbClient.ReadDagRunTaskLatest(
+	dagruntask, err := ts.dbClient.ReadDagRunTaskLatest(
 		ctx, string(drt.DagId), timeutils.ToString(drt.AtTime), drt.TaskId,
 	)
 	if err != nil {
@@ -737,7 +736,7 @@ func (ts *TaskScheduler) getDagRunTaskStatusFromDb(
 // Removes bulk of tasks for given dag run from the TaskCache.
 func (ts *TaskScheduler) cleanTaskCache(dagrun DagRun, nodes []dag.NodeInfo) {
 	for _, node := range nodes {
-		ts.TaskCache.Remove(
+		ts.taskCache.Remove(
 			DagRunTask{
 				DagId:  dagrun.DagId,
 				AtTime: dagrun.AtTime,

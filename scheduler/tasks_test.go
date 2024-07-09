@@ -33,14 +33,14 @@ func (et EmptyTask) Execute(_ dag.TaskContext) error {
 
 func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	start := dag.NewNode(EmptyTask{"start"})
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
 
@@ -61,14 +61,14 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 
 func TestScheduleSingleTaskSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	start := dag.NewNode(EmptyTask{"start"})
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(start).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
 
@@ -80,7 +80,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 		AtTime: dagrun.AtTime,
 		TaskId: taskId,
 	}
-	drt, popErr := ts.TaskQueue.Pop()
+	drt, popErr := ts.taskQueue.Pop()
 	if popErr != nil {
 		t.Errorf("Error while popping task from the queue: %s", popErr.Error())
 	}
@@ -90,7 +90,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	}
 
 	// Task's status should be cached
-	cacheStatus, existInCache := ts.TaskCache.Get(drt.WithNoRetry())
+	cacheStatus, existInCache := ts.taskCache.Get(drt.WithNoRetry())
 	if !existInCache {
 		t.Errorf("Scheduled task %v does not exist in TaskCache", drt)
 	}
@@ -101,7 +101,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 
 	// Task should be inserted into the database
 	ctx := context.Background()
-	drtDb, dbErr := ts.DbClient.ReadDagRunTaskLatest(
+	drtDb, dbErr := ts.dbClient.ReadDagRunTaskLatest(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), taskId,
 	)
 	if dbErr == sql.ErrNoRows {
@@ -116,20 +116,20 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	// Prepare scenario
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	start := dag.NewNode(EmptyTask{"start"})
 	end := dag.NewNode(EmptyTask{"end"})
 	start.Next(end)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	delay := ts.Config.CheckDependenciesStatusWait
+	delay := ts.config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start", 0}
 	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end", 0}
@@ -162,17 +162,17 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 //	   n23
 func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	delay := ts.Config.CheckDependenciesStatusWait
+	delay := ts.config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
 	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1", 0}
 	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21", 0}
@@ -193,7 +193,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	// be Scheduled.
 	testTaskCacheQueueTableSize(ts, 4, t)
 	testTaskStatusInCache(ts, drtN21, dag.TaskScheduled, t)
-	if _, n3Exists := ts.TaskCache.Get(drtN3.WithNoRetry()); n3Exists {
+	if _, n3Exists := ts.taskCache.Get(drtN3.WithNoRetry()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -211,7 +211,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	testTaskStatusInDB(ts, drtN21, dag.TaskScheduled, t)
 	testTaskStatusInCache(ts, drtN22, dag.TaskSuccess, t)
 	testTaskStatusInDB(ts, drtN22, dag.TaskSuccess, t)
-	if _, n3Exists := ts.TaskCache.Get(drtN3.WithNoRetry()); n3Exists {
+	if _, n3Exists := ts.taskCache.Get(drtN3.WithNoRetry()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -242,15 +242,15 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 }
 
 func testTaskCacheQueueTableSize(ts *TaskScheduler, expectedCount int, t *testing.T) {
-	if ts.TaskCache.Len() != expectedCount {
+	if ts.taskCache.Len() != expectedCount {
 		t.Errorf("Expected %d tasks in the cache, got: %d", expectedCount,
-			ts.TaskCache.Len())
+			ts.taskCache.Len())
 	}
-	if ts.TaskQueue.Size() != expectedCount {
+	if ts.taskQueue.Size() != expectedCount {
 		t.Errorf("Expected %d tasks on the TaskQueue, got: %d",
-			expectedCount, ts.TaskQueue.Size())
+			expectedCount, ts.taskQueue.Size())
 	}
-	rowCnt := ts.DbClient.Count("dagruntasks")
+	rowCnt := ts.dbClient.Count("dagruntasks")
 	if rowCnt != expectedCount {
 		t.Errorf("Expected %d row in dagruntasks table, got: %d", expectedCount,
 			rowCnt)
@@ -425,8 +425,8 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	const llSize = 10
 	d := linkedListDagSchedule1Min(dagId, llSize)
 	ts := defaultTaskScheduler(t, qLen)
-	ts.DagRegistry.Add(d)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	ts.dagRegistry.Add(d)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
@@ -434,7 +434,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	t0Str := timeutils.ToString(t0)
 
 	// Insert DAG run
-	_, iErr := ts.DbClient.InsertDagRun(ctx, dagId, timeutils.ToString(t0))
+	_, iErr := ts.dbClient.InsertDagRun(ctx, dagId, timeutils.ToString(t0))
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run for %s, %+v: %s", dagId, t0, iErr.Error())
 	}
@@ -445,7 +445,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	success := dag.TaskSuccess.String()
 	for i := 0; i < llSize/2; i++ {
 		taskId := tasks[i].Id()
-		iErr = ts.DbClient.InsertDagRunTask(ctx, dagId, t0Str, taskId, 0, success)
+		iErr = ts.dbClient.InsertDagRunTask(ctx, dagId, t0Str, taskId, 0, success)
 		if iErr != nil {
 			t.Errorf("Cannot insert DAG run task %s.%s at %s: %s",
 				dagId, taskId, t0Str, iErr.Error())
@@ -454,21 +454,21 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	// Read InsertTs from the calculation before the simulated restart
 	startTaskId := (*d.Root).Task.Id()
 	startInsertTsBefore, startStatusUpdateTsBefore := readDagRunTaskInsertAndUpdateTs(
-		ts.DbClient, ctx, dagId, t0Str, startTaskId, t,
+		ts.dbClient, ctx, dagId, t0Str, startTaskId, t,
 	)
 
 	// Asserts before scheduling tasks
 	statusSuccess := fmt.Sprintf("Status='%s'", success)
-	drc := ts.DbClient.Count("dagruns")
+	drc := ts.dbClient.Count("dagruns")
 	if drc != 1 {
 		t.Errorf("Expected 1 DAG run in the database, got: %d", drc)
 	}
-	drcSuccess := ts.DbClient.CountWhere("dagruns", statusSuccess)
+	drcSuccess := ts.dbClient.CountWhere("dagruns", statusSuccess)
 	if drcSuccess != 0 {
 		t.Errorf("Expected 0 successful DAG run in the database before running scheduler, got: %d",
 			drcSuccess)
 	}
-	drtc := ts.DbClient.Count("dagruntasks")
+	drtc := ts.dbClient.Count("dagruntasks")
 	if drtc != llSize/2 {
 		t.Errorf("Expected %d DAG run tasks in the database after running scheduler, but got: %d",
 			llSize/2, drtc)
@@ -481,19 +481,19 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	t.Log("Dag run is done!")
 
 	// Asserts after scheduleDagTasks is done.
-	drcAfter := ts.DbClient.CountWhere("dagruns", statusSuccess)
+	drcAfter := ts.dbClient.CountWhere("dagruns", statusSuccess)
 	if drcAfter != 1 {
 		t.Errorf("Expected 1 successful DAG run in the database, got: %d",
 			drcAfter)
 	}
-	drtcAfter := ts.DbClient.CountWhere("dagruntasks", statusSuccess)
+	drtcAfter := ts.dbClient.CountWhere("dagruntasks", statusSuccess)
 	if drtcAfter != llSize {
 		t.Errorf("Expected %d successful DAG run tasks in the database after running scheduler, but got: %d",
 			llSize, drtcAfter)
 	}
 
 	startInsertTsAfter, startStatusUpdateTsAfter := readDagRunTaskInsertAndUpdateTs(
-		ts.DbClient, ctx, dagId, t0Str, startTaskId, t,
+		ts.dbClient, ctx, dagId, t0Str, startTaskId, t,
 	)
 	if !startInsertTsBefore.Equal(startInsertTsAfter) {
 		t.Errorf("Expected the same InsertTs value for task <Start> before and "+
@@ -527,13 +527,13 @@ func testScheduleDagTasksSingleDagrun(
 	t *testing.T,
 ) {
 	ts := defaultTaskScheduler(t, queueLength)
-	ts.DagRegistry.Add(d)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	ts.dagRegistry.Add(d)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	taskNum := len(d.Flatten())
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	_, iErr := ts.DbClient.InsertDagRun(
+	_, iErr := ts.dbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
 	)
 	if iErr != nil {
@@ -547,12 +547,12 @@ func testScheduleDagTasksSingleDagrun(
 
 	// Asssertions after the dag run is done
 	statusValue := fmt.Sprintf("Status='%s'", dag.TaskSuccess)
-	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
+	cnt := ts.dbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != taskNum {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
 			taskNum, dag.TaskSuccess, cnt)
 	}
-	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
+	cnt = ts.dbClient.CountWhere("dagruns", statusValue)
 	if cnt != 1 {
 		t.Errorf("Expected 1 successful dagrun %v, got: %d",
 			dagrun, cnt)
@@ -568,13 +568,13 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 	t *testing.T,
 ) {
 	ts := defaultTaskScheduler(t, queueLength)
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFunc()
-	_, iErr := ts.DbClient.InsertDagRun(
+	_, iErr := ts.dbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun.AtTime),
 	)
 	if iErr != nil {
@@ -588,12 +588,12 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 
 	// Asssertions after the dag run is done
 	statusValue := fmt.Sprintf("Status='%s'", dag.TaskFailed)
-	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
+	cnt := ts.dbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != len(taskIdsToFail) {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
 			len(taskIdsToFail), dag.TaskFailed, cnt)
 	}
-	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
+	cnt = ts.dbClient.CountWhere("dagruns", statusValue)
 	if cnt != 1 {
 		t.Errorf("Expected 1 failed dagrun %v, got: %d",
 			dagrun, cnt)
@@ -604,27 +604,27 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 	// Setup
 	const delay = 50 * time.Millisecond
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_131_two").
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
 		Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	taskNum := len(d.Flatten())
 	dagrun1 := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	dagrun2 := DagRun{DagId: d.Id, AtTime: schedule.Next(dagrun1.AtTime, &dagrun1.AtTime)}
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
-	_, iErr := ts.DbClient.InsertDagRun(
+	_, iErr := ts.dbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun1.AtTime),
 	)
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run %v: %s", dagrun1, iErr.Error())
 	}
-	_, iErr = ts.DbClient.InsertDagRun(
+	_, iErr = ts.dbClient.InsertDagRun(
 		ctx, string(d.Id), timeutils.ToString(dagrun2.AtTime),
 	)
 	if iErr != nil {
@@ -649,12 +649,12 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 
 	// Asssertions after the dag run is done
 	statusValue := fmt.Sprintf("Status='%s'", dag.TaskSuccess)
-	cnt := ts.DbClient.CountWhere("dagruntasks", statusValue)
+	cnt := ts.dbClient.CountWhere("dagruntasks", statusValue)
 	if cnt != 2*taskNum {
 		t.Errorf("Expected %d tasks with %s status, got: %d",
 			2*taskNum, dag.TaskSuccess, cnt)
 	}
-	cnt = ts.DbClient.CountWhere("dagruns", statusValue)
+	cnt = ts.dbClient.CountWhere("dagruns", statusValue)
 	if cnt != 2 {
 		t.Errorf("Expected 2 successful dagruns, got: %d", cnt)
 	}
@@ -662,11 +662,11 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 
 func TestAllTasksAreDoneSimple(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
@@ -721,11 +721,11 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 
 func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	ts := defaultTaskScheduler(t, 100) // cache and DB is empty at this point
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
-	ts.DagRegistry.Add(d)
+	ts.dagRegistry.Add(d)
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
@@ -766,14 +766,14 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 
 	// Insert drt n3 status into database but not cache
 	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3", 0}
-	iErr := ts.DbClient.InsertDagRunTask(
+	iErr := ts.dbClient.InsertDagRunTask(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
 		0, db.DagRunTaskStatusScheduled,
 	)
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run task %v: %s", drtn3, iErr.Error())
 	}
-	uErr = ts.DbClient.UpdateDagRunTaskStatus(
+	uErr = ts.dbClient.UpdateDagRunTaskStatus(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
 		0, dag.TaskSuccess.String(),
 	)
@@ -791,7 +791,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 
 func TestCheckIfAlreadyFinishedNoTask(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
 	taskId := "mock_task_id"
 	expectedStatus := dag.TaskNoStatus
@@ -804,7 +804,7 @@ func TestCheckIfAlreadyFinishedNoTask(t *testing.T) {
 
 func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	dagId := "mock_dag"
 	dagrun := DagRun{dag.Id(dagId), time.Now()}
 
@@ -824,7 +824,7 @@ func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 	for _, d := range data {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, d.taskId, 0}
 		status := DagRunTaskState{d.expectedStatus, dagrun.AtTime.Add(1 * time.Second)}
-		ts.TaskCache.Put(drt.WithNoRetry(), status)
+		ts.taskCache.Put(drt.WithNoRetry(), status)
 
 		isFinished, tStatus := ts.checkIfAlreadyFinished(dagrun, d.taskId)
 		testAlreadyFinishedTaskExpectedStatus(
@@ -835,7 +835,7 @@ func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 
 func TestCheckIfAlreadyFinishedInDb(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	ctx := context.Background()
 	dagId := "mock_dag"
 	dagrun := DagRun{dag.Id(dagId), time.Now()}
@@ -855,7 +855,7 @@ func TestCheckIfAlreadyFinishedInDb(t *testing.T) {
 	}
 
 	for _, d := range data {
-		iErr := ts.DbClient.InsertDagRunTask(
+		iErr := ts.dbClient.InsertDagRunTask(
 			ctx, dagId, execTs, d.taskId, 0, d.expectedStatus.String(),
 		)
 		if iErr != nil {
@@ -886,14 +886,14 @@ func testAlreadyFinishedTaskExpectedStatus(
 
 func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 
 	// Add entry to the cache
 	taskId := "task_1"
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
-	ts.TaskCache.Put(drt.WithNoRetry(), status)
+	ts.taskCache.Put(drt.WithNoRetry(), status)
 
 	// Get dag run task status
 	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
@@ -909,7 +909,7 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 
 func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 
 	// Add entry to the database and left task cache empty on purpose
 	taskId := "task_1"
@@ -920,7 +920,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 
 	ctx := context.Background()
-	iErr := ts.DbClient.InsertDagRunTask(
+	iErr := ts.dbClient.InsertDagRunTask(
 		ctx, string(dagrun.DagId), execTsStr, taskId, 0,
 		dag.TaskSuccess.String(),
 	)
@@ -941,7 +941,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	}
 
 	// Check if this dag run task is also in the cache
-	drts, exists := ts.TaskCache.Get(drt.WithNoRetry())
+	drts, exists := ts.taskCache.Get(drt.WithNoRetry())
 	if !exists {
 		t.Errorf("Expected %v to exist in the task cache, but it's not",
 			drt)
@@ -954,7 +954,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 
 func TestGetDagRunTaskStatusNoCacheNoDatabase(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
-	defer db.CleanUpSqliteTmp(ts.DbClient, t)
+	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 
 	// In this case we don't add entry either to the cache nor to database
 	taskId := "task_1"
@@ -978,7 +978,7 @@ func markSuccessAllTasks(
 	taskExecutionDuration time.Duration,
 	t *testing.T,
 ) {
-	delay := ts.Config.CheckDependenciesStatusWait
+	delay := ts.config.CheckDependenciesStatusWait
 	for {
 		select {
 		case <-ctx.Done():
@@ -986,7 +986,7 @@ func markSuccessAllTasks(
 			return
 		default:
 		}
-		drt, popErr := ts.TaskQueue.Pop()
+		drt, popErr := ts.taskQueue.Pop()
 		if popErr == ds.ErrQueueIsEmpty {
 			time.Sleep(delay)
 			continue
@@ -1013,7 +1013,7 @@ func markSuccessAllTasksExceptFew(
 	taskExecutionDuration time.Duration,
 	t *testing.T,
 ) {
-	delay := ts.Config.CheckDependenciesStatusWait
+	delay := ts.config.CheckDependenciesStatusWait
 	for {
 		select {
 		case <-ctx.Done():
@@ -1021,7 +1021,7 @@ func markSuccessAllTasksExceptFew(
 			return
 		default:
 		}
-		drt, popErr := ts.TaskQueue.Pop()
+		drt, popErr := ts.taskQueue.Pop()
 		if popErr == ds.ErrQueueIsEmpty {
 			time.Sleep(delay)
 			continue
@@ -1054,7 +1054,7 @@ func testTaskStatusInCache(
 	expectedStatus dag.TaskStatus,
 	t *testing.T,
 ) {
-	drts, exists := ts.TaskCache.Get(drt.WithNoRetry())
+	drts, exists := ts.taskCache.Get(drt.WithNoRetry())
 	if !exists {
 		t.Errorf("Cannot get %+v from the TaskCache", drt)
 	}
@@ -1071,7 +1071,7 @@ func testTaskStatusInDB(
 	t *testing.T,
 ) {
 	ctx := context.Background()
-	drtDb, dbErr := ts.DbClient.ReadDagRunTaskLatest(
+	drtDb, dbErr := ts.dbClient.ReadDagRunTaskLatest(
 		ctx, string(drt.DagId), timeutils.ToString(drt.AtTime), drt.TaskId,
 	)
 	if dbErr == sql.ErrNoRows {
