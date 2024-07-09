@@ -6,6 +6,7 @@ package e2etests
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -66,5 +67,27 @@ func (ret runtimeErrTask) Execute(tc dag.TaskContext) error {
 	one := 1
 	zero := 1 - one
 	tc.Logger.Info("Test", "number", 42/zero)
+	return nil
+}
+
+// Task which fails n times and succeed on n+1 run.
+type failNTimesTask struct {
+	taskId     string
+	n          int
+	currentRun int
+}
+
+func (fnt *failNTimesTask) Id() string { return fnt.taskId }
+
+func (fnt *failNTimesTask) Execute(tc dag.TaskContext) error {
+	fnt.currentRun += 1
+	if fnt.currentRun <= fnt.n {
+		tc.Logger.Error("this is failing run", "currentRun", fnt.currentRun,
+			"n", fnt.n)
+		return fmt.Errorf("this is failing run %d (<=%d)", fnt.currentRun,
+			fnt.n)
+	}
+	tc.Logger.Info("this run is fine", "currentRun", fnt.currentRun, "n",
+		fnt.n)
 	return nil
 }

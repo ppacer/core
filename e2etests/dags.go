@@ -75,6 +75,43 @@ func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *schedule.Schedule) dag.Dag
 	return d.Done()
 }
 
+func simpleDAGWithRetries(
+	dagId dag.Id, sched *schedule.Schedule, failedRuns int, retries int,
+) dag.Dag {
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(
+		&failNTimesTask{taskId: "task1", n: failedRuns},
+		dag.WithTaskRetries(retries),
+	)
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
+
+	d := dag.New(dagId).AddRoot(n1)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
+func simpleDAGWithRetriesAndAlerts(
+	dagId dag.Id, sched *schedule.Schedule, failedRuns int, retries int,
+) dag.Dag {
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(
+		&failNTimesTask{taskId: "task1", n: failedRuns},
+		dag.WithTaskRetries(retries),
+		dag.WithTaskSendAlertOnRetries,
+	)
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
+
+	d := dag.New(dagId).AddRoot(n1)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
 func simpleLoggingDAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(logTask{taskId: "n1"})
 	n21 := dag.NewNode(logTask{taskId: "n21"})

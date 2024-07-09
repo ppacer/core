@@ -158,6 +158,51 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	}
 }
 
+func TestSchedulerE2eSimpleDagWithRetries(t *testing.T) {
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
+	dagId := dag.Id("mock_failing_dag")
+	dags.Add(simpleDAGWithRetries(dagId, &schedule, 3, 5))
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+	notifications := make([]string, 0)
+
+	testSchedulerE2eSingleDagRun(
+		dags, dr, 3*time.Second, false, &notifications, t,
+	)
+}
+
+func TestSchedulerE2eSimpleDagWithRetriesAndAlerts(t *testing.T) {
+	const failedRuns = 3
+	const maxRetries = 5
+
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
+	dagId := dag.Id("mock_failing_dag")
+	dags.Add(
+		simpleDAGWithRetriesAndAlerts(dagId, &schedule, failedRuns, maxRetries),
+	)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+	notifications := make([]string, 0)
+
+	testSchedulerE2eSingleDagRun(
+		dags, dr, 3*time.Second, false, &notifications, t,
+	)
+
+	if len(notifications) != failedRuns {
+		t.Errorf("Expected %d notification on task retries, got: %d",
+			failedRuns, len(notifications))
+
+		t.Log("notifications:")
+		for _, msg := range notifications {
+			t.Logf("  -%s\n", msg)
+		}
+	}
+}
+
 func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 	dags := dag.Registry{}
 	notifications := make([]string, 0)
@@ -223,7 +268,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 	// Test logs
 	ctx := context.Background()
 	tlrs, dbErr := logsDbClient.ReadDagRunLogs(
-		ctx, string(dagId), timeutils.ToString(ts),
+		ctx, string(dagId), timeutils.ToString(ts), 0,
 	)
 	if dbErr != nil {
 		t.Errorf("Error while reading logs from database: %s", dbErr.Error())
