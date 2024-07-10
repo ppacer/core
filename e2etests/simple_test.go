@@ -159,11 +159,38 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 }
 
 func TestSchedulerE2eSimpleDagWithRetries(t *testing.T) {
+	const failedRuns = 3
+	const maxRetries = 3
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_failing_dag")
-	dags.Add(simpleDAGWithRetries(dagId, &schedule, 3, 5))
+	d := simpleDAGWithTaskConfigFuncs(
+		dagId, &schedule, failedRuns, dag.WithTaskRetries(maxRetries),
+	)
+	dags.Add(d)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+	notifications := make([]string, 0)
+
+	testSchedulerE2eSingleDagRun(
+		dags, dr, 3*time.Second, true, &notifications, t,
+	)
+}
+
+func TestSchedulerE2eSimpleDagWithFailureAfterRetries(t *testing.T) {
+	const failedRuns = 10
+	const maxRetries = 3
+
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
+	dagId := dag.Id("mock_failing_dag")
+	d := simpleDAGWithTaskConfigFuncs(
+		dagId, &schedule, failedRuns, dag.WithTaskRetries(maxRetries),
+	)
+	dags.Add(d)
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
@@ -181,15 +208,18 @@ func TestSchedulerE2eSimpleDagWithRetriesAndAlerts(t *testing.T) {
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
 	dagId := dag.Id("mock_failing_dag")
-	dags.Add(
-		simpleDAGWithRetriesAndAlerts(dagId, &schedule, failedRuns, maxRetries),
+	d := simpleDAGWithTaskConfigFuncs(
+		dagId, &schedule, failedRuns,
+		dag.WithTaskRetries(maxRetries),
+		dag.WithTaskSendAlertOnRetries,
 	)
+	dags.Add(d)
 	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+		dags, dr, 3*time.Second, true, &notifications, t,
 	)
 
 	if len(notifications) != failedRuns {
