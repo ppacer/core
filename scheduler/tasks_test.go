@@ -90,7 +90,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	}
 
 	// Task's status should be cached
-	cacheStatus, existInCache := ts.taskCache.Get(drt.WithNoRetry())
+	cacheStatus, existInCache := ts.taskCache.Get(drt.Base())
 	if !existInCache {
 		t.Errorf("Scheduled task %v does not exist in TaskCache", drt)
 	}
@@ -193,7 +193,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	// be Scheduled.
 	testTaskCacheQueueTableSize(ts, 4, t)
 	testTaskStatusInCache(ts, drtN21, dag.TaskScheduled, t)
-	if _, n3Exists := ts.taskCache.Get(drtN3.WithNoRetry()); n3Exists {
+	if _, n3Exists := ts.taskCache.Get(drtN3.Base()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -211,7 +211,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	testTaskStatusInDB(ts, drtN21, dag.TaskScheduled, t)
 	testTaskStatusInCache(ts, drtN22, dag.TaskSuccess, t)
 	testTaskStatusInDB(ts, drtN22, dag.TaskSuccess, t)
-	if _, n3Exists := ts.taskCache.Get(drtN3.WithNoRetry()); n3Exists {
+	if _, n3Exists := ts.taskCache.Get(drtN3.Base()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -824,7 +824,7 @@ func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 	for _, d := range data {
 		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, d.taskId, 0}
 		status := DagRunTaskState{d.expectedStatus, dagrun.AtTime.Add(1 * time.Second)}
-		ts.taskCache.Put(drt.WithNoRetry(), status)
+		ts.taskCache.Put(drt.Base(), status)
 
 		isFinished, tStatus := ts.checkIfAlreadyFinished(dagrun, d.taskId)
 		testAlreadyFinishedTaskExpectedStatus(
@@ -893,7 +893,7 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
-	ts.taskCache.Put(drt.WithNoRetry(), status)
+	ts.taskCache.Put(drt.Base(), status)
 
 	// Get dag run task status
 	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
@@ -941,7 +941,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	}
 
 	// Check if this dag run task is also in the cache
-	drts, exists := ts.taskCache.Get(drt.WithNoRetry())
+	drts, exists := ts.taskCache.Get(drt.Base())
 	if !exists {
 		t.Errorf("Expected %v to exist in the task cache, but it's not",
 			drt)
@@ -1054,7 +1054,7 @@ func testTaskStatusInCache(
 	expectedStatus dag.TaskStatus,
 	t *testing.T,
 ) {
-	drts, exists := ts.taskCache.Get(drt.WithNoRetry())
+	drts, exists := ts.taskCache.Get(drt.Base())
 	if !exists {
 		t.Errorf("Cannot get %+v from the TaskCache", drt)
 	}
@@ -1103,7 +1103,7 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 		DagRuns:     &drQueue,
 		DagRunTasks: &taskQueue,
 	}
-	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](10)
+	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](10)
 	getStateFunc := func() State {
 		return StateRunning
 	}

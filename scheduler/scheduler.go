@@ -89,7 +89,7 @@ func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
 // executors. TODO(dskrzypiec): more docs
 func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
-	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
+	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
 	s.setState(StateSynchronizing)

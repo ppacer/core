@@ -83,7 +83,7 @@ func newFailedTaskManagerForTests(t *testing.T) *failedTaskManager {
 	}
 	dags := dag.Registry{}
 	taskQueue := ds.NewSimpleQueue[DagRunTask](100)
-	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](100)
+	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](100)
 	return newFailedTaskManager(
 		dags, dbClient, &taskQueue, taskCache, DefaultTaskSchedulerConfig,
 		simpleLogger(),

@@ -21,7 +21,7 @@ type failedTaskManager struct {
 	dags      dag.Registry
 	dbClient  *db.Client
 	taskQueue ds.Queue[DagRunTask]
-	taskCache ds.Cache[DagRunTask, DagRunTaskState]
+	taskCache ds.Cache[DRTBase, DagRunTaskState]
 	config    TaskSchedulerConfig
 	logger    *slog.Logger
 }
@@ -31,7 +31,7 @@ func newFailedTaskManager(
 	dags dag.Registry,
 	dbClient *db.Client,
 	taskQueue ds.Queue[DagRunTask],
-	taskCache ds.Cache[DagRunTask, DagRunTaskState],
+	taskCache ds.Cache[DRTBase, DagRunTaskState],
 	config TaskSchedulerConfig,
 	logger *slog.Logger,
 ) *failedTaskManager {
