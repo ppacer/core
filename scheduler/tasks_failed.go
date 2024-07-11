@@ -93,6 +93,10 @@ func (ftm *failedTaskManager) CheckAndSendAlerts(
 		taskErr = fmt.Errorf("%s", *taskErrStr)
 	}
 
+	if drtNode.Config.Notifier != nil {
+		notifier = drtNode.Config.Notifier
+	}
+
 	ctx := context.TODO()
 	msg := notify.MsgData{
 		DagId:        string(drt.DagId),
