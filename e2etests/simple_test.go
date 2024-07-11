@@ -103,15 +103,14 @@ func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 	if len(notifications) == 0 {
 		t.Error("Expected at least one error notification, but got zero")
 	}
-	/*
-		t.Log("Notifications:")
-		for _, n := range notifications {
-			t.Log(n)
-		}
-	*/
+	t.Log("Notifications:")
+	for _, n := range notifications {
+		t.Log(n)
+	}
 }
 
 func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -124,7 +123,7 @@ func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+		dags, dr, 3*time.Second, false, &notifications, dbClient, t,
 	)
 
 	if len(notifications) == 0 {
@@ -136,12 +135,6 @@ func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
 				idx, notification, notifierPhrase)
 		}
 	}
-	/*
-		t.Log("Notifications:")
-		for _, n := range notifications {
-			t.Log(n)
-		}
-	*/
 }
 
 func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {

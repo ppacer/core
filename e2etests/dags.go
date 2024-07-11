@@ -51,7 +51,10 @@ func simpleDAGWithErrTaskCustomNotifier(
 	dagId dag.Id, sched *schedule.Schedule, notifier notify.Sender,
 ) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "start"})
-	n2 := dag.NewNode(errTask{taskId: "task1"}, dag.WithCustomNotifier(notifier))
+	n2 := dag.NewNode(
+		errTask{taskId: "task1"},
+		dag.WithCustomNotifier(notifier),
+	)
 	n3 := dag.NewNode(emptyTask{taskId: "end"})
 	n1.Next(n2).Next(n3)
 
