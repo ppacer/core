@@ -1,5 +1,5 @@
 // Copyright 2023 The ppacer Authors.
-// Licensed under the Apach.WithNoRetry()e License, Version 2.0.
+// Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
 package scheduler
