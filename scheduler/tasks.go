@@ -179,7 +179,9 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 	if status.IsTerminal() {
 		ts.taskRetriesExecuted.Add(drt.Base(), drt.Retry)
 	}
-	shouldBeRetried, rErr := ts.failedTaskManager.ShouldBeRetried(drt, status)
+	shouldBeRetried, delay, rErr := ts.failedTaskManager.ShouldBeRetried(
+		drt, status,
+	)
 	if rErr != nil {
 		return rErr
 	}
@@ -195,7 +197,14 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 	}
 
 	if shouldBeRetried {
-		ts.scheduleRetry(drt)
+		go func() {
+			// Let's remember that when we would restart Scheduler between
+			// particular DAG run task retries we might wait somewhere in
+			// [delay, 2 * delay) interval. For now it's fine, but let's make
+			// it resilient to Scheduler restarts.
+			time.Sleep(delay)
+			ts.scheduleRetry(drt)
+		}()
 	}
 
 	if status != dag.TaskFailed {
@@ -266,15 +275,10 @@ func (ts *TaskScheduler) upsertTaskStatusDb(
 
 // Schedules new retry for given DAG run task.
 func (ts *TaskScheduler) scheduleRetry(drt DagRunTask) {
-	// TODO: we need to possibly awit here for a bit... time delta between the
-	// next retry
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
 	defer cancel()
 	ds.PutContext(ctx, ts.taskQueue, drt.NextRetry())
-
-	// TODO: check for the case when we got timeout and task hasn't been put on
-	// the queue
 }
 
 // Function scheduleDagTasks is responsible for scheduling tasks of single DAG
@@ -609,7 +613,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 		}
 		isParentTaskDone, status := ts.isTaskDone(dagrun, key)
 		if status == dag.TaskFailed {
-			shouldBeRetried, resErr := ts.failedTaskManager.ShouldBeRetried(
+			shouldBeRetried, _, resErr := ts.failedTaskManager.ShouldBeRetried(
 				key, status,
 			)
 			if resErr != nil {

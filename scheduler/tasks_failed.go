@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
@@ -45,25 +46,28 @@ func newFailedTaskManager(
 	}
 }
 
-// ShouldBeRetried checks
+// ShouldBeRetried checks whenever given DagRunTask should be retried based on
+// its current status and its configuration. Additionally information about how
+// long we should wait before scheduling another retry.
 func (ftm *failedTaskManager) ShouldBeRetried(
 	drt DagRunTask, status dag.TaskStatus,
-) (bool, error) {
+) (bool, time.Duration, error) {
 	if status != dag.TaskFailed {
 		// Non-failed DAG run task shouldn't be retried.
-		return false, nil
+		return false, 0, nil
 	}
 
 	drtNode, nodeErr := ftm.getDrtNode(drt)
 	if nodeErr != nil {
-		return false, nodeErr
+		return false, 0, nodeErr
 	}
 
 	if drtNode.Config.Retries == 0 {
 		// no retries!
-		return false, nil
+		return false, 0, nil
 	}
-	return drt.Retry < drtNode.Config.Retries, nil
+	delay := time.Duration(drtNode.Config.RetriesDelaySeconds * float64(time.Second))
+	return drt.Retry < drtNode.Config.Retries, delay, nil
 }
 
 // CheckAndSendAlerts checks if in given situation external notification should
