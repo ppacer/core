@@ -105,17 +105,10 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 		s.config.DagRunWatcherConfig,
 	)
 
-	taskScheduler := TaskScheduler{
-		DagRegistry:        dags,
-		DbClient:           s.dbClient,
-		DagRunQueue:        s.queues.DagRuns,
-		TaskQueue:          s.queues.DagRunTasks,
-		TaskCache:          taskCache,
-		Config:             s.config.TaskSchedulerConfig,
-		Logger:             s.logger,
-		Notifier:           s.notifier,
-		SchedulerStateFunc: s.getState,
-	}
+	taskScheduler := NewTaskScheduler(
+		dags, s.dbClient, s.queues, taskCache, s.config.TaskSchedulerConfig,
+		s.logger, s.notifier, s.getState,
+	)
 
 	s.setState(StateRunning)
 	go func() {
@@ -129,7 +122,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	}()
 
 	mux := http.NewServeMux()
-	s.registerEndpoints(mux, &taskScheduler)
+	s.registerEndpoints(mux, taskScheduler)
 
 	return mux
 }
@@ -196,6 +189,7 @@ func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 		DagId:  string(drt.DagId),
 		ExecTs: timeutils.ToString(drt.AtTime),
 		TaskId: drt.TaskId,
+		Retry:  drt.Retry,
 	}
 	jsonBytes, jsonErr := json.Marshal(drtmodel)
 	if jsonErr != nil {

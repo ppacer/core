@@ -45,21 +45,26 @@ var DefaultConfig Config = Config{
 	DagRunWatcherConfig:   DefaultDagRunWatcherConfig,
 }
 
-// Configuration for taskScheduler which is responsible for scheduling tasks
+// Configuration for TaskScheduler which is responsible for scheduling tasks
 // for particular DAG run.
 type TaskSchedulerConfig struct {
-	// How long taskScheduler should wait in case when DAG run queue is empty.
+	// How long TaskScheduler should wait in case when DAG run queue is empty.
 	Heartbeat time.Duration
 
-	// How often taskScheduler should check if all dependencies are met before
+	// How often TaskScheduler should check if all dependencies are met before
 	// scheduling new task. Expressed in milliseconds.
 	CheckDependenciesStatusWait time.Duration
+
+	// How long TaskScheduler should try to put new DAG run task onto the task
+	// queue.
+	PutOnTaskQueueTimeout time.Duration
 }
 
 // Default taskScheduler configuration.
 var DefaultTaskSchedulerConfig TaskSchedulerConfig = TaskSchedulerConfig{
 	Heartbeat:                   1 * time.Millisecond,
 	CheckDependenciesStatusWait: 1 * time.Millisecond,
+	PutOnTaskQueueTimeout:       30 * time.Second,
 }
 
 // Configuration for DagRunWatcher which is responsible for scheduling new DAG

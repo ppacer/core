@@ -56,6 +56,7 @@ const (
 	TaskSuccess
 	TaskUpstreamFailed
 	TaskNoStatus
+	TaskRestarting
 )
 
 // String serializes TaskStatus to its upper case string.
@@ -67,6 +68,7 @@ func (s TaskStatus) String() string {
 		"SUCCESS",
 		"UPSTREAM_FAILED",
 		"NO_STATUS",
+		"RESTARTING",
 	}[s]
 }
 

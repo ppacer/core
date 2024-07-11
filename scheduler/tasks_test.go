@@ -16,6 +16,7 @@ import (
 	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
+	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -39,6 +40,7 @@ func TestCheckIfCanBeScheduledFirstTask(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
+	ts.DagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	tasksParents := ds.NewAsyncMapFromMap(d.TaskParents())
 
@@ -66,6 +68,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag_simple").AddSchedule(schedule).AddRoot(start).Done()
+	ts.DagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
 
@@ -87,7 +90,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	}
 
 	// Task's status should be cached
-	cacheStatus, existInCache := ts.TaskCache.Get(drt)
+	cacheStatus, existInCache := ts.TaskCache.Get(drt.WithNoRetry())
 	if !existInCache {
 		t.Errorf("Scheduled task %v does not exist in TaskCache", drt)
 	}
@@ -98,7 +101,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 
 	// Task should be inserted into the database
 	ctx := context.Background()
-	drtDb, dbErr := ts.DbClient.ReadDagRunTask(
+	drtDb, dbErr := ts.DbClient.ReadDagRunTaskLatest(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), taskId,
 	)
 	if dbErr == sql.ErrNoRows {
@@ -120,6 +123,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(start).Done()
+	ts.DagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -127,8 +131,8 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	defer cancelFunc()
 	delay := ts.Config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
-	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start"}
-	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end"}
+	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "start", 0}
+	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end", 0}
 
 	// Execute
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
@@ -162,6 +166,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	ts.DagRegistry.Add(d)
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -169,11 +174,11 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	defer cancelFunc()
 	delay := ts.Config.CheckDependenciesStatusWait
 	sharedState := newDagRunSharedState(d.TaskParents())
-	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
-	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21"}
-	drtN22 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n22"}
-	drtN23 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n23"}
-	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
+	drtStart := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1", 0}
+	drtN21 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n21", 0}
+	drtN22 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n22", 0}
+	drtN23 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n23", 0}
+	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3", 0}
 
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
 	time.Sleep(delay)
@@ -188,7 +193,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	// be Scheduled.
 	testTaskCacheQueueTableSize(ts, 4, t)
 	testTaskStatusInCache(ts, drtN21, dag.TaskScheduled, t)
-	if _, n3Exists := ts.TaskCache.Get(drtN3); n3Exists {
+	if _, n3Exists := ts.TaskCache.Get(drtN3.WithNoRetry()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -206,7 +211,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	testTaskStatusInDB(ts, drtN21, dag.TaskScheduled, t)
 	testTaskStatusInCache(ts, drtN22, dag.TaskSuccess, t)
 	testTaskStatusInDB(ts, drtN22, dag.TaskSuccess, t)
-	if _, n3Exists := ts.TaskCache.Get(drtN3); n3Exists {
+	if _, n3Exists := ts.TaskCache.Get(drtN3.WithNoRetry()); n3Exists {
 		t.Errorf("Unexpectedly %+v exists in TaskCache before n21, n22, n23 finished",
 			drtN3)
 	}
@@ -420,6 +425,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	const llSize = 10
 	d := linkedListDagSchedule1Min(dagId, llSize)
 	ts := defaultTaskScheduler(t, qLen)
+	ts.DagRegistry.Add(d)
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
@@ -439,7 +445,7 @@ func TestScheduleDagTasksLinkedListAfterRestart(t *testing.T) {
 	success := dag.TaskSuccess.String()
 	for i := 0; i < llSize/2; i++ {
 		taskId := tasks[i].Id()
-		iErr = ts.DbClient.InsertDagRunTask(ctx, dagId, t0Str, taskId, success)
+		iErr = ts.DbClient.InsertDagRunTask(ctx, dagId, t0Str, taskId, 0, success)
 		if iErr != nil {
 			t.Errorf("Cannot insert DAG run task %s.%s at %s: %s",
 				dagId, taskId, t0Str, iErr.Error())
@@ -521,6 +527,7 @@ func testScheduleDagTasksSingleDagrun(
 	t *testing.T,
 ) {
 	ts := defaultTaskScheduler(t, queueLength)
+	ts.DagRegistry.Add(d)
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	taskNum := len(d.Flatten())
 	errsChan := make(chan taskSchedulerError)
@@ -561,6 +568,8 @@ func testScheduleDagTasksSingleDagrunWithFailure(
 	t *testing.T,
 ) {
 	ts := defaultTaskScheduler(t, queueLength)
+	ts.DagRegistry.Add(d)
+
 	defer db.CleanUpSqliteTmp(ts.DbClient, t)
 	errsChan := make(chan taskSchedulerError)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
@@ -602,6 +611,7 @@ func TestScheduleDagTasksSimple131TwoDagRuns(t *testing.T) {
 		AddSchedule(schedule).
 		AddRoot(nodes131()).
 		Done()
+	ts.DagRegistry.Add(d)
 	taskNum := len(d.Flatten())
 	dagrun1 := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	dagrun2 := DagRun{DagId: d.Id, AtTime: schedule.Next(dagrun1.AtTime, &dagrun1.AtTime)}
@@ -656,6 +666,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	ts.DagRegistry.Add(d)
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
@@ -666,7 +677,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
 	}
 
-	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
+	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1", 0}
 	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
@@ -680,7 +691,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 	}
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
-		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
@@ -694,7 +705,7 @@ func TestAllTasksAreDoneSimple(t *testing.T) {
 			dagrun)
 	}
 
-	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
+	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3", 0}
 	errStr := "some error"
 	uErr = ts.UpsertTaskStatus(ctx, drtn3, dag.TaskFailed, &errStr)
 	if uErr != nil {
@@ -714,6 +725,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	var startTs = time.Date(2023, time.August, 22, 15, 0, 0, 0, time.UTC)
 	schedule := schedule.NewFixed(startTs, 30*time.Second)
 	d := dag.New("mock_dag").AddSchedule(schedule).AddRoot(nodes131()).Done()
+	ts.DagRegistry.Add(d)
 	tasks := d.Flatten()
 	sharedState := newDagRunSharedState(d.TaskParents())
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
@@ -724,7 +736,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 		t.Errorf("All dag run %v tasks should not yet be finished", dagrun)
 	}
 
-	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1"}
+	drtn1 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n1", 0}
 	uErr := ts.UpsertTaskStatus(ctx, drtn1, dag.TaskSuccess, nil)
 	if uErr != nil {
 		t.Errorf("Cannot upsert task status for %v and %s", drtn1,
@@ -738,7 +750,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 
 	for _, taskId := range []string{"n21", "n22", "n23"} {
-		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 		uErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskSuccess, nil)
 		if uErr != nil {
 			t.Errorf("Cannot upsert task status for %v and %s", drt,
@@ -753,17 +765,17 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 	}
 
 	// Insert drt n3 status into database but not cache
-	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3"}
+	drtn3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3", 0}
 	iErr := ts.DbClient.InsertDagRunTask(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
-		db.DagRunTaskStatusScheduled,
+		0, db.DagRunTaskStatusScheduled,
 	)
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run task %v: %s", drtn3, iErr.Error())
 	}
 	uErr = ts.DbClient.UpdateDagRunTaskStatus(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime), "n3",
-		dag.TaskSuccess.String(),
+		0, dag.TaskSuccess.String(),
 	)
 	if uErr != nil {
 		t.Errorf("Cannot update dag run task %v status %s: %s",
@@ -810,9 +822,9 @@ func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 	}
 
 	for _, d := range data {
-		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, d.taskId}
+		drt := DagRunTask{dagrun.DagId, dagrun.AtTime, d.taskId, 0}
 		status := DagRunTaskState{d.expectedStatus, dagrun.AtTime.Add(1 * time.Second)}
-		ts.TaskCache.Put(drt, status)
+		ts.TaskCache.Put(drt.WithNoRetry(), status)
 
 		isFinished, tStatus := ts.checkIfAlreadyFinished(dagrun, d.taskId)
 		testAlreadyFinishedTaskExpectedStatus(
@@ -844,7 +856,7 @@ func TestCheckIfAlreadyFinishedInDb(t *testing.T) {
 
 	for _, d := range data {
 		iErr := ts.DbClient.InsertDagRunTask(
-			ctx, dagId, execTs, d.taskId, d.expectedStatus.String(),
+			ctx, dagId, execTs, d.taskId, 0, d.expectedStatus.String(),
 		)
 		if iErr != nil {
 			t.Errorf("Cannot insert new DAG run task into DB: %s",
@@ -879,9 +891,9 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 	// Add entry to the cache
 	taskId := "task_1"
 	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
-	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
-	ts.TaskCache.Put(drt, status)
+	ts.TaskCache.Put(drt.WithNoRetry(), status)
 
 	// Get dag run task status
 	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)
@@ -904,12 +916,13 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	execTs := time.Now()
 	execTsStr := timeutils.ToString(execTs)
 	dagrun := DagRun{dag.Id("mock_dag"), execTs}
-	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId}
+	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 
 	ctx := context.Background()
 	iErr := ts.DbClient.InsertDagRunTask(
-		ctx, string(dagrun.DagId), execTsStr, taskId, dag.TaskSuccess.String(),
+		ctx, string(dagrun.DagId), execTsStr, taskId, 0,
+		dag.TaskSuccess.String(),
 	)
 	if iErr != nil {
 		t.Errorf("Cannot insert dag run task (%v) to database: %s",
@@ -928,7 +941,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	}
 
 	// Check if this dag run task is also in the cache
-	drts, exists := ts.TaskCache.Get(drt)
+	drts, exists := ts.TaskCache.Get(drt.WithNoRetry())
 	if !exists {
 		t.Errorf("Expected %v to exist in the task cache, but it's not",
 			drt)
@@ -1041,7 +1054,7 @@ func testTaskStatusInCache(
 	expectedStatus dag.TaskStatus,
 	t *testing.T,
 ) {
-	drts, exists := ts.TaskCache.Get(drt)
+	drts, exists := ts.TaskCache.Get(drt.WithNoRetry())
 	if !exists {
 		t.Errorf("Cannot get %+v from the TaskCache", drt)
 	}
@@ -1058,7 +1071,7 @@ func testTaskStatusInDB(
 	t *testing.T,
 ) {
 	ctx := context.Background()
-	drtDb, dbErr := ts.DbClient.ReadDagRunTask(
+	drtDb, dbErr := ts.DbClient.ReadDagRunTaskLatest(
 		ctx, string(drt.DagId), timeutils.ToString(drt.AtTime), drt.TaskId,
 	)
 	if dbErr == sql.ErrNoRows {
@@ -1083,21 +1096,25 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 	if err != nil {
 		t.Fatal(err)
 	}
+	registry := dag.Registry{}
 	drQueue := ds.NewSimpleQueue[DagRun](100)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](taskQueueCap)
-	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](10)
-	ts := TaskScheduler{
-		DbClient:    c,
-		DagRunQueue: &drQueue,
-		TaskQueue:   &taskQueue,
-		TaskCache:   taskCache,
-		Config:      DefaultTaskSchedulerConfig,
-		Logger:      simpleLogger(),
-		SchedulerStateFunc: func() State {
-			return StateRunning
-		},
+	queues := Queues{
+		DagRuns:     &drQueue,
+		DagRunTasks: &taskQueue,
 	}
-	return &ts
+	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](10)
+	getStateFunc := func() State {
+		return StateRunning
+	}
+	notifications := make([]string, 0)
+	notifier := notify.NewMock(&notifications)
+
+	ts := NewTaskScheduler(
+		registry, c, queues, taskCache, DefaultTaskSchedulerConfig,
+		simpleLogger(), notifier, getStateFunc,
+	)
+	return ts
 }
 
 func readDagRunTaskInsertAndUpdateTs(
@@ -1105,7 +1122,7 @@ func readDagRunTaskInsertAndUpdateTs(
 	t *testing.T,
 ) (time.Time, time.Time) {
 	t.Helper()
-	task, dbErr := c.ReadDagRunTask(
+	task, dbErr := c.ReadDagRunTaskLatest(
 		ctx, dagId, execTs, taskId,
 	)
 	if dbErr != nil {

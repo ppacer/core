@@ -504,7 +504,7 @@ func insertDagRunTask(
 	dagId, execTs, taskId, status string,
 	t *testing.T,
 ) {
-	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, status)
+	iErr := c.InsertDagRunTask(ctx, dagId, execTs, taskId, 0, status)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
 	}
