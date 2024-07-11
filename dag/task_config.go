@@ -2,6 +2,7 @@ package dag
 
 import (
 	"text/template"
+	"time"
 
 	"github.com/ppacer/core/notify"
 )
@@ -10,10 +11,11 @@ import (
 // configuration of a task execution, like a timeout for executing given task
 // or how many times scheduler should retry in case of failures.
 type TaskConfig struct {
-	TimeoutSeconds     int  `json:"timeoutSeconds"`
-	Retries            int  `json:"retries"`
-	SendAlertOnRetry   bool `json:"sendAlertOnRetry"`
-	SendAlertOnFailure bool `json:"sendAlertOnFailure"`
+	TimeoutSeconds      float64 `json:"timeoutSeconds"`
+	Retries             int     `json:"retries"`
+	RetriesDelaySeconds float64 `json:"retriesDelaySeconds"`
+	SendAlertOnRetry    bool    `json:"sendAlertOnRetry"`
+	SendAlertOnFailure  bool    `json:"sendAlertOnFailure"`
 
 	// Notification sender for that task. By default is nil which mean that
 	// notifier set on scheduler or executor level would be used. If we want to
@@ -41,17 +43,17 @@ Error:
 // Default task configuration. If not specified otherwise the following
 // configuration values would be used for Task scheduling and execution.
 var DefaultTaskConfig = TaskConfig{
-	TimeoutSeconds:     10 * 60,
-	Retries:            0,
-	SendAlertOnRetry:   false,
-	SendAlertOnFailure: true,
+	TimeoutSeconds:         10.0 * 60,
+	Retries:                0,
+	RetriesDelaySeconds:    0.0,
+	SendAlertOnRetry:       false,
+	SendAlertOnFailure:     true,
+	AlertOnRetryTemplate:   DefaultAlertTemplate(),
+	AlertOnFailureTemplate: DefaultAlertTemplate(),
 
 	// By default Notifier is inherited from either scheduler or executor
 	// (depending on the context).
 	Notifier: nil,
-
-	AlertOnRetryTemplate:   DefaultAlertTemplate(),
-	AlertOnFailureTemplate: DefaultAlertTemplate(),
 }
 
 // TaskConfigFunc is a family of functions which takes a TaskConfig and
@@ -60,9 +62,9 @@ type TaskConfigFunc func(*TaskConfig)
 
 // WithTaskTimeout returns TaskConfigFunc for setting a timeout for task
 // exection.
-func WithTaskTimeout(timeoutSeconds int) TaskConfigFunc {
+func WithTaskTimeout(timeout time.Duration) TaskConfigFunc {
 	return func(config *TaskConfig) {
-		config.TimeoutSeconds = timeoutSeconds
+		config.TimeoutSeconds = timeout.Seconds()
 	}
 }
 
@@ -79,6 +81,14 @@ func WithTaskRetries(retries int) TaskConfigFunc {
 func WithCustomNotifier(notifier notify.Sender) TaskConfigFunc {
 	return func(config *TaskConfig) {
 		config.Notifier = notifier
+	}
+}
+
+// WithTaskRetriesDelay returns TaskConfigFunc for setting delay duration
+// between next retries of task execution.
+func WithTaskRetriesDelay(delay time.Duration) TaskConfigFunc {
+	return func(config *TaskConfig) {
+		config.RetriesDelaySeconds = delay.Seconds()
 	}
 }
 

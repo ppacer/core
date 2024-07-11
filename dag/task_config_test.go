@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestNewNodeWithConfig(t *testing.T) {
@@ -15,10 +16,10 @@ func TestNewNodeWithConfig(t *testing.T) {
 			n1.Config)
 	}
 
-	newTimeout := 30
+	newTimeout := 30 * time.Second
 	n2 := NewNode(task, WithTaskTimeout(newTimeout))
-	if n2.Config.TimeoutSeconds != newTimeout {
-		t.Errorf("Expected %d timeout, but got: %d timeout seconds",
+	if n2.Config.TimeoutSeconds != 30.0 {
+		t.Errorf("Expected %v timeout, but got: %f.2 timeout seconds",
 			newTimeout, n2.Config.TimeoutSeconds)
 	}
 
@@ -37,6 +38,13 @@ func TestNewNodeWithConfig(t *testing.T) {
 	n5 := NewNode(task, WithTaskNotSendAlertsOnFailures)
 	if n5.Config.SendAlertOnFailure {
 		t.Error("Expected to not send alerts on failures for this node")
+	}
+
+	delay := 100 * time.Millisecond
+	n6 := NewNode(task, WithTaskRetriesDelay(delay))
+	if n6.Config.RetriesDelaySeconds != 0.1 {
+		t.Errorf("Expected 0.1s RetriesDelaySeconds, but got: %f.2",
+			n6.Config.RetriesDelaySeconds)
 	}
 }
 

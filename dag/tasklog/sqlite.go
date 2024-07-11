@@ -66,6 +66,7 @@ type sqliteLogReader struct {
 func (s *sqliteLogReader) ReadAll(ctx context.Context) ([]Record, error) {
 	logs, readErr := s.dbClient.ReadDagRunTaskLogs(
 		ctx, s.ti.DagId, timeutils.ToString(s.ti.ExecTs), s.ti.TaskId,
+		s.ti.Retry,
 	)
 	if readErr != nil {
 		return nil, readErr
@@ -77,7 +78,8 @@ func (s *sqliteLogReader) ReadAll(ctx context.Context) ([]Record, error) {
 // chronological order.
 func (s *sqliteLogReader) ReadLatest(ctx context.Context, n int) ([]Record, error) {
 	logs, readErr := s.dbClient.ReadDagRunTaskLogsLatest(
-		ctx, s.ti.DagId, timeutils.ToString(s.ti.ExecTs), s.ti.TaskId, n,
+		ctx, s.ti.DagId, timeutils.ToString(s.ti.ExecTs), s.ti.TaskId,
+		s.ti.Retry, n,
 	)
 	if readErr != nil {
 		return nil, readErr
@@ -120,6 +122,7 @@ func (s *sqliteLogWriter) Write(p []byte) (int, error) {
 		DagId:      s.ti.DagId,
 		ExecTs:     timeutils.ToString(s.ti.ExecTs),
 		TaskId:     s.ti.TaskId,
+		Retry:      s.ti.Retry,
 		InsertTs:   timeutils.ToString(time.Now()),
 		Level:      lvl,
 		Message:    msg,

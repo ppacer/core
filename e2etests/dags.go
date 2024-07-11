@@ -51,7 +51,10 @@ func simpleDAGWithErrTaskCustomNotifier(
 	dagId dag.Id, sched *schedule.Schedule, notifier notify.Sender,
 ) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "start"})
-	n2 := dag.NewNode(errTask{taskId: "task1"}, dag.WithCustomNotifier(notifier))
+	n2 := dag.NewNode(
+		errTask{taskId: "task1"},
+		dag.WithCustomNotifier(notifier),
+	)
 	n3 := dag.NewNode(emptyTask{taskId: "end"})
 	n1.Next(n2).Next(n3)
 
@@ -65,6 +68,25 @@ func simpleDAGWithErrTaskCustomNotifier(
 func simpleDAGWithRuntimeErrTask(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "start"})
 	n2 := dag.NewNode(runtimeErrTask{taskId: "task1"})
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
+
+	d := dag.New(dagId).AddRoot(n1)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
+func simpleDAGWithTaskConfigFuncs(
+	dagId dag.Id, sched *schedule.Schedule, failedRuns int,
+	taskConfigFuncs ...dag.TaskConfigFunc,
+) dag.Dag {
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(
+		&failNTimesTask{taskId: "task1", n: failedRuns},
+		taskConfigFuncs...,
+	)
 	n3 := dag.NewNode(emptyTask{taskId: "end"})
 	n1.Next(n2).Next(n3)
 

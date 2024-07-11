@@ -24,12 +24,13 @@ CREATE TABLE IF NOT EXISTS tasklogs (
 	DagId TEXT NOT NULL,    -- DAG ID
 	ExecTs TEXT NOT NULL,   -- DAG run execution timestamp
 	TaskId TEXT NOT NULL,   -- Task ID
+	Retry INT NOT NULL,     -- Identifier for task retry. For initial run it's 0
 	InsertTs TEXT NOT NULL, -- Row insertion timestamp
 	Level TEXT NOT NULL,    -- Severity level
 	Message TEXT NULL,      -- Log message
 	Attributes TEXT NULL,   -- Additional log record attributes (key=value)
 
-	PRIMARY KEY (DagId ASC, ExecTs DESC, TaskId ASC, InsertTs ASC)
+	PRIMARY KEY (DagId ASC, ExecTs DESC, TaskId ASC, Retry DESC, InsertTs ASC)
 );
 `
 }

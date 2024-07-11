@@ -16,6 +16,7 @@ type TaskInfo struct {
 	DagId  string
 	ExecTs time.Time
 	TaskId string
+	Retry  int
 }
 
 // Record represents single dag.Task log record. It doesn't contain

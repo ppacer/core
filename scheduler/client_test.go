@@ -49,7 +49,7 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
-	drt := DagRunTask{dag.Id("mock_dag"), time.Now(), "task1"}
+	drt := DagRunTask{dag.Id("mock_dag"), time.Now(), "task1", 0}
 	putErr := queues.DagRunTasks.Put(drt)
 	if putErr != nil {
 		t.Errorf("Cannot put new DAG run task onto the queue: %s",
@@ -92,11 +92,11 @@ func TestClientGetTaskMockMany(t *testing.T) {
 
 	dagId := dag.Id("mock_dag")
 	data := []DagRunTask{
-		{dagId, time.Now(), "task1"},
-		{dagId, time.Now(), "task2"},
-		{dagId, time.Now(), "task3"},
-		{dagId, time.Now(), "task4"},
-		{dagId, time.Now(), "task5"},
+		{dagId, time.Now(), "task1", 0},
+		{dagId, time.Now(), "task2", 0},
+		{dagId, time.Now(), "task3", 0},
+		{dagId, time.Now(), "task4", 0},
+		{dagId, time.Now(), "task5", 0},
 	}
 
 	// Put tasks onto the task queue
@@ -172,7 +172,7 @@ func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
 	// Insert tasks with SCHEDULED status
 	for _, taskId := range taskIds {
 		iErr := scheduler.dbClient.InsertDagRunTask(ctx, dagId, execTs, taskId,
-			initStatus)
+			0, initStatus)
 		if iErr != nil {
 			t.Errorf("Cannot insert DAG run task into DB: %s", iErr.Error())
 		}
@@ -302,7 +302,7 @@ func readDagRunTaskFromDb(
 ) db.DagRunTask {
 	t.Helper()
 	ctx := context.Background()
-	drt, dbErr := dbClient.ReadDagRunTask(ctx, dagId, execTs, taskId)
+	drt, dbErr := dbClient.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if dbErr != nil {
 		t.Errorf("Cannot read DAG run task (%s, %s, %s) from DB: %s",
 			dagId, execTs, taskId, dbErr.Error())

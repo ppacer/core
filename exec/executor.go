@@ -155,7 +155,12 @@ func executeTask(
 
 	// Executing
 	ri := dag.RunInfo{DagId: dag.Id(tte.DagId), ExecTs: execTs}
-	ti := tasklog.TaskInfo{DagId: tte.DagId, ExecTs: execTs, TaskId: task.Id()}
+	ti := tasklog.TaskInfo{
+		DagId:  tte.DagId,
+		ExecTs: execTs,
+		TaskId: task.Id(),
+		Retry:  tte.Retry,
+	}
 
 	taskContext := dag.TaskContext{
 		Context:  context.TODO(),

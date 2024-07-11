@@ -9,12 +9,14 @@ type TaskToExec struct {
 	DagId  string `json:"dagId"`
 	ExecTs string `json:"execTs"`
 	TaskId string `json:"taskId"`
+	Retry  int    `json:"retry"`
 }
 
 type DagRunTaskStatus struct {
 	DagId   string  `json:"dagId"`
 	ExecTs  string  `json:"execTs"`
 	TaskId  string  `json:"taskId"`
+	Retry   int     `json:"retry"`
 	Status  string  `json:"status"`
 	TaskErr *string `json:"taskError"`
 }

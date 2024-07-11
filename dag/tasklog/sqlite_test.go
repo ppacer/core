@@ -76,6 +76,7 @@ func TestSQLiteLoggerSimple(t *testing.T) {
 
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
 	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
@@ -91,7 +92,7 @@ func TestSQLiteLoggerSimple(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if readErr != nil {
 		t.Errorf("Error when reading tasklogs from database: %s", readErr.Error())
 	}
@@ -116,6 +117,7 @@ func TestSQLiteLoggerAttributes(t *testing.T) {
 
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
 	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
@@ -145,7 +147,7 @@ func TestSQLiteLoggerAttributes(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if readErr != nil {
 		t.Errorf("Error when reading tasklogs from database: %s", readErr.Error())
 	}
@@ -185,6 +187,7 @@ func testSQLiteLoggerLevel(t *testing.T, lvl slog.Level, expectedRows int) {
 
 	const dagId = "mock_dag"
 	const taskId = "task_1"
+	const retry = 0
 	ts := time.Now()
 	execTs := timeutils.ToString(ts)
 	ti := TaskInfo{DagId: dagId, ExecTs: ts, TaskId: taskId}
@@ -197,7 +200,7 @@ func testSQLiteLoggerLevel(t *testing.T, lvl slog.Level, expectedRows int) {
 	sqliteLogger.Error("error")
 
 	ctx := context.Background()
-	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId)
+	tlrs, readErr := c.ReadDagRunTaskLogs(ctx, dagId, execTs, taskId, retry)
 	if readErr != nil {
 		t.Errorf("Error when reading tasklogs from database: %s", readErr.Error())
 	}

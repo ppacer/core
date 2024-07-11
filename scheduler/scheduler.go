@@ -89,7 +89,7 @@ func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
 // executors. TODO(dskrzypiec): more docs
 func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
-	taskCache := ds.NewLruCache[DagRunTask, DagRunTaskState](cacheSize)
+	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](cacheSize)
 
 	// Syncing queues with the database in case of program restarts.
 	s.setState(StateSynchronizing)
@@ -105,17 +105,10 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 		s.config.DagRunWatcherConfig,
 	)
 
-	taskScheduler := TaskScheduler{
-		DagRegistry:        dags,
-		DbClient:           s.dbClient,
-		DagRunQueue:        s.queues.DagRuns,
-		TaskQueue:          s.queues.DagRunTasks,
-		TaskCache:          taskCache,
-		Config:             s.config.TaskSchedulerConfig,
-		Logger:             s.logger,
-		Notifier:           s.notifier,
-		SchedulerStateFunc: s.getState,
-	}
+	taskScheduler := NewTaskScheduler(
+		dags, s.dbClient, s.queues, taskCache, s.config.TaskSchedulerConfig,
+		s.logger, s.notifier, s.getState,
+	)
 
 	s.setState(StateRunning)
 	go func() {
@@ -129,7 +122,7 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	}()
 
 	mux := http.NewServeMux()
-	s.registerEndpoints(mux, &taskScheduler)
+	s.registerEndpoints(mux, taskScheduler)
 
 	return mux
 }
@@ -176,11 +169,11 @@ func (s *Scheduler) currentState(w http.ResponseWriter, _ *http.Request) {
 
 // HTTP handler for popping dag run task from the queue.
 func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
-	if ts.TaskQueue.Size() == 0 {
+	if ts.taskQueue.Size() == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	drt, err := ts.TaskQueue.Pop()
+	drt, err := ts.taskQueue.Pop()
 	if err == ds.ErrQueueIsEmpty {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -196,6 +189,7 @@ func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 		DagId:  string(drt.DagId),
 		ExecTs: timeutils.ToString(drt.AtTime),
 		TaskId: drt.TaskId,
+		Retry:  drt.Retry,
 	}
 	jsonBytes, jsonErr := json.Marshal(drtmodel)
 	if jsonErr != nil {
@@ -238,6 +232,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		DagId:  dag.Id(drts.DagId),
 		AtTime: execTs,
 		TaskId: drts.TaskId,
+		Retry:  drts.Retry,
 	}
 
 	ctx := context.TODO()
@@ -248,7 +243,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	ts.Logger.Debug("Updated task status", "dagruntask", drt, "status", status,
+	ts.logger.Debug("Updated task status", "dagruntask", drt, "status", status,
 		"duration", time.Since(start))
 }
 
