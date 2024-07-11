@@ -22,6 +22,7 @@ import (
 )
 
 func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -32,11 +33,12 @@ func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
 	)
 }
 
 func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	dagId := dag.Id("mock_dag_1")
 	dags.Add(simple131DAG(dagId, nil))
@@ -45,11 +47,12 @@ func TestSchedulerE2eSimpleDagEmptyTasksNoSched(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
 	)
 }
 
 func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -61,11 +64,12 @@ func TestSchedulerE2eLinkedListEmptyTask(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
 	)
 }
 
 func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -77,11 +81,12 @@ func TestSchedulerE2eLinkedListWaitTask(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
 	)
 }
 
 func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -92,7 +97,7 @@ func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+		dags, dr, 3*time.Second, false, &notifications, dbClient, t,
 	)
 
 	if len(notifications) == 0 {
@@ -140,6 +145,7 @@ func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
 }
 
 func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -150,7 +156,7 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+		dags, dr, 3*time.Second, false, &notifications, dbClient, t,
 	)
 
 	if len(notifications) == 0 {
@@ -158,82 +164,8 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	}
 }
 
-func TestSchedulerE2eSimpleDagWithRetries(t *testing.T) {
-	const failedRuns = 3
-	const maxRetries = 3
-
-	dags := dag.Registry{}
-	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
-	dagId := dag.Id("mock_failing_dag")
-	d := simpleDAGWithTaskConfigFuncs(
-		dagId, &schedule, failedRuns, dag.WithTaskRetries(maxRetries),
-	)
-	dags.Add(d)
-	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
-	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
-	notifications := make([]string, 0)
-
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
-	)
-}
-
-func TestSchedulerE2eSimpleDagWithFailureAfterRetries(t *testing.T) {
-	const failedRuns = 10
-	const maxRetries = 3
-
-	dags := dag.Registry{}
-	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
-	dagId := dag.Id("mock_failing_dag")
-	d := simpleDAGWithTaskConfigFuncs(
-		dagId, &schedule, failedRuns, dag.WithTaskRetries(maxRetries),
-	)
-	dags.Add(d)
-	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
-	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
-	notifications := make([]string, 0)
-
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
-	)
-}
-
-func TestSchedulerE2eSimpleDagWithRetriesAndAlerts(t *testing.T) {
-	const failedRuns = 3
-	const maxRetries = 5
-
-	dags := dag.Registry{}
-	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
-	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
-	dagId := dag.Id("mock_failing_dag")
-	d := simpleDAGWithTaskConfigFuncs(
-		dagId, &schedule, failedRuns,
-		dag.WithTaskRetries(maxRetries),
-		dag.WithTaskSendAlertOnRetries,
-	)
-	dags.Add(d)
-	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
-	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
-	notifications := make([]string, 0)
-
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
-	)
-
-	if len(notifications) != failedRuns {
-		t.Errorf("Expected %d notification on task retries, got: %d",
-			failedRuns, len(notifications))
-
-		t.Log("notifications:")
-		for _, msg := range notifications {
-			t.Logf("  -%s\n", msg)
-		}
-	}
-}
-
 func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
+	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	notifications := make([]string, 0)
 
@@ -255,7 +187,7 @@ func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 	}
 
 	testSchedulerE2eManyDagRuns(
-		dags, drs, 3*time.Second, true, &notifications, t,
+		dags, drs, 3*time.Second, true, &notifications, dbClient, t,
 	)
 }
 
@@ -275,7 +207,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Start scheduler
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
-		queues, cfg, &notifications, t,
+		queues, cfg, &notifications, nil, t,
 	)
 	testServer := httptest.NewServer(sched.Start(dags))
 	defer testServer.Close()
@@ -310,21 +242,25 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 }
 
 // This test runs end-to-end test (scheduler and executor run in separate
-// goroutines communicating via HTTP) for single DAG run.
+// goroutines communicating via HTTP) for single DAG run. Database client
+// (dbClient) might be nil - in this case standard SqliteTmpClient would be
+// used.
 func testSchedulerE2eSingleDagRun(
 	dags dag.Registry, dr scheduler.DagRun, timeout time.Duration,
-	expectSuccess bool, notifications *[]string, t *testing.T,
+	expectSuccess bool, notifications *[]string, dbClient *db.Client,
+	t *testing.T,
 ) {
 	t.Helper()
 	drs := []scheduler.DagRun{dr}
 	testSchedulerE2eManyDagRuns(
-		dags, drs, timeout, expectSuccess, notifications, t,
+		dags, drs, timeout, expectSuccess, notifications, dbClient, t,
 	)
 }
 
 func testSchedulerE2eManyDagRuns(
 	dags dag.Registry, drs []scheduler.DagRun, timeout time.Duration,
-	expectSuccess bool, notifications *[]string, t *testing.T,
+	expectSuccess bool, notifications *[]string, dbClient *db.Client,
+	t *testing.T,
 ) {
 	t.Helper()
 	cfg := scheduler.DefaultConfig
@@ -333,12 +269,14 @@ func testSchedulerE2eManyDagRuns(
 
 	// Start scheduler
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
-		queues, cfg, notifications, t,
+		queues, cfg, notifications, dbClient, t,
 	)
 	testServer := httptest.NewServer(sched.Start(dags))
 	defer testServer.Close()
-	defer db.CleanUpSqliteTmp(dbClient, t)
-	defer db.CleanUpSqliteTmp(logsDbClient, t)
+	if dbClient == nil {
+		defer db.CleanUpSqliteTmp(dbClient, t)
+		defer db.CleanUpSqliteTmp(logsDbClient, t)
+	}
 
 	// Start executor
 	go func() {
@@ -411,12 +349,15 @@ func scheduleNewDagRun(
 
 func schedulerWithSqlite(
 	queues scheduler.Queues, config scheduler.Config, notifications *[]string,
-	t *testing.T,
+	dbClient *db.Client, t *testing.T,
 ) (*scheduler.Scheduler, *db.Client, *db.Client) {
 	t.Helper()
-	dbClient, err := db.NewSqliteTmpClient(nil)
-	if err != nil {
-		t.Fatal(err)
+	if dbClient == nil {
+		var err error
+		dbClient, err = db.NewSqliteTmpClient(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	logsDbClient, lErr := db.NewSqliteTmpClientForLogs(nil)
 	if lErr != nil {
