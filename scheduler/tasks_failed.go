@@ -17,7 +17,9 @@ import (
 	"github.com/ppacer/core/timeutils"
 )
 
-// TODO
+// FailedTaskManager covers complexity of the logic behind handling failed
+// tasks. That includes a decision whenever a task should be retried and
+// decision about sending external notification.
 type failedTaskManager struct {
 	dags      dag.Registry
 	dbClient  *db.Client
@@ -66,7 +68,9 @@ func (ftm *failedTaskManager) ShouldBeRetried(
 		// no retries!
 		return false, 0, nil
 	}
-	delay := time.Duration(drtNode.Config.RetriesDelaySeconds * float64(time.Second))
+	delay := time.Duration(
+		drtNode.Config.RetriesDelaySeconds * float64(time.Second),
+	)
 	return drt.Retry < drtNode.Config.Retries, delay, nil
 }
 
