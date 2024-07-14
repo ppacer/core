@@ -58,6 +58,9 @@ type TaskSchedulerConfig struct {
 	// How long TaskScheduler should try to put new DAG run task onto the task
 	// queue.
 	PutOnTaskQueueTimeout time.Duration
+
+	// Max number of goroutines spawned by Scheduler.
+	MaxGoroutineCount int
 }
 
 // Default taskScheduler configuration.
@@ -65,6 +68,7 @@ var DefaultTaskSchedulerConfig TaskSchedulerConfig = TaskSchedulerConfig{
 	Heartbeat:                   1 * time.Millisecond,
 	CheckDependenciesStatusWait: 1 * time.Millisecond,
 	PutOnTaskQueueTimeout:       30 * time.Second,
+	MaxGoroutineCount:           10000,
 }
 
 // Configuration for DagRunWatcher which is responsible for scheduling new DAG

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -28,11 +29,12 @@ import (
 // single project - currently model of 1 scheduler and N executors is
 // supported.
 type Scheduler struct {
-	dbClient *db.Client
-	config   Config
-	queues   Queues
-	logger   *slog.Logger
-	notifier notify.Sender
+	dbClient       *db.Client
+	config         Config
+	queues         Queues
+	logger         *slog.Logger
+	notifier       notify.Sender
+	goroutineCount int64
 
 	sync.Mutex
 	state State
@@ -50,12 +52,13 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger,
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
 	}
 	return &Scheduler{
-		dbClient: dbClient,
-		config:   config,
-		queues:   queues,
-		logger:   logger,
-		notifier: notifier,
-		state:    StateStarted,
+		dbClient:       dbClient,
+		config:         config,
+		queues:         queues,
+		logger:         logger,
+		notifier:       notifier,
+		goroutineCount: 0,
+		state:          StateStarted,
 	}
 }
 
@@ -107,16 +110,19 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 
 	taskScheduler := NewTaskScheduler(
 		dags, s.dbClient, s.queues, taskCache, s.config.TaskSchedulerConfig,
-		s.logger, s.notifier, s.getState,
+		s.logger, s.notifier, &s.goroutineCount, s.getState,
 	)
 
 	s.setState(StateRunning)
+	atomic.AddInt64(&s.goroutineCount, 1)
 	go func() {
+		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background dag run watcher
 		dagRunWatcher.Watch(dags)
 	}()
 
 	go func() {
+		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background task scheduler
 		taskScheduler.Start(dags)
 	}()
@@ -139,6 +145,11 @@ func (s *Scheduler) setState(newState State) {
 	s.Lock()
 	defer s.Unlock()
 	s.state = newState
+}
+
+// Gets current number of goroutines spawned by Scheduler.
+func (s *Scheduler) Goroutines() int64 {
+	return atomic.LoadInt64(&s.goroutineCount)
 }
 
 // Register HTTP server endpoints for the Scheduler.

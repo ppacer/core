@@ -133,7 +133,7 @@ type Node struct {
 // custom configuration a set of TaskConfigFunc can be passed. For example:
 //
 //	var t Task = T()
-//	n1 := NewNode(t, WithTaskTimeout(30), WithTaskRetries(3))
+//	n1 := NewNode(t, WithTaskTimeout(30 * time.Second), WithTaskRetries(3))
 //
 //	var t2 Task = T2()
 //	n2 := NewNode(t2, func(config *TaskConfig) {
