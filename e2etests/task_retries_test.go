@@ -20,7 +20,6 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	const failedRuns = 3
 	const maxRetries = 3
 
-	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -34,12 +33,11 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
+		dags, dr, 3*time.Second, true, &notifications, t,
 	)
 }
 
 func TestSimpleDagRunWithZeroRetries(t *testing.T) {
-	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -53,7 +51,7 @@ func TestSimpleDagRunWithZeroRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
+		dags, dr, 3*time.Second, true, &notifications, t,
 	)
 }
 
@@ -61,7 +59,6 @@ func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	const failedRuns = 10
 	const maxRetries = 3
 
-	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -75,7 +72,7 @@ func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, dbClient, t,
+		dags, dr, 3*time.Second, false, &notifications, t,
 	)
 }
 
@@ -83,7 +80,6 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 	const failedRuns = 3
 	const maxRetries = 5
 
-	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -99,7 +95,7 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
+		dags, dr, 3*time.Second, true, &notifications, t,
 	)
 
 	if len(notifications) != failedRuns {
@@ -114,7 +110,6 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 }
 
 func TestDagRunWithParallelRetries(t *testing.T) {
-	var dbClient *db.Client = nil
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -125,7 +120,7 @@ func TestDagRunWithParallelRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
+		dags, dr, 3*time.Second, true, &notifications, t,
 	)
 
 	if len(notifications) == 0 {
@@ -184,8 +179,9 @@ func TestDagRunWithDelayedRetries(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, dbClient, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, dbClient, nil, nil, nil,
+		true, t,
 	)
 
 	ctx := context.Background()
