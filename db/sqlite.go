@@ -142,7 +142,7 @@ func newSqliteTmpClientForSchema(
 func sqliteConnString(dbFilePath string) string {
 	// TODO: probably read from the config not only database file path but also
 	// additional arguments also.
-	options := "journal_mode=WAL&cache=shared"
+	options := "cache=shared&mode=rwc&_journal_mode=WAL"
 	if runtime.GOOS == "windows" {
 		return fmt.Sprintf("%s?%s", dbFilePath, options)
 	}

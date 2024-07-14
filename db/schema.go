@@ -24,6 +24,7 @@ var TableNames []string = []string{
 func SchemaStatements(dbDriver string) ([]string, error) {
 	if dbDriver == "sqlite" || dbDriver == "sqlite3" {
 		return []string{
+			sqliteSetupWAL(),
 			sqliteCreateDagsTable(),
 			sqliteCreateDagtasksTable(),
 			sqliteCreateDagrunsTable(),
@@ -33,6 +34,10 @@ func SchemaStatements(dbDriver string) ([]string, error) {
 
 	return []string{}, fmt.Errorf("there is no schema for %s driver defined",
 		dbDriver)
+}
+
+func sqliteSetupWAL() string {
+	return "PRAGMA journal_mode = WAL;"
 }
 
 func sqliteCreateDagsTable() string {
