@@ -7,12 +7,15 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"runtime/debug"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -29,17 +32,19 @@ import (
 // method is called Executor starts polling ppacer scheduler for new DAG run
 // tasks to be run.
 type Executor struct {
-	schedClient *scheduler.Client
-	config      Config
-	taskLogs    tasklog.Factory
-	logger      *slog.Logger
-	notifier    notify.Sender
+	schedClient    *scheduler.Client
+	config         Config
+	taskLogs       tasklog.Factory
+	logger         *slog.Logger
+	notifier       notify.Sender
+	goroutineCount *int64
 }
 
 // Executor configuration.
 type Config struct {
 	PollInterval       time.Duration
 	HttpRequestTimeout time.Duration
+	MaxGoroutineCount  int64
 }
 
 // Setup default configuration values.
@@ -47,6 +52,7 @@ func defaultConfig() Config {
 	return Config{
 		PollInterval:       10 * time.Millisecond,
 		HttpRequestTimeout: 30 * time.Second,
+		MaxGoroutineCount:  1000,
 	}
 }
 
@@ -71,12 +77,14 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 	httpClient := &http.Client{Timeout: cfg.HttpRequestTimeout}
 	scfg := scheduler.DefaultClientConfig
 	sc := scheduler.NewClient(schedAddr, httpClient, logger, scfg)
+	var goroutineCount int64 = 0
 	return &Executor{
-		schedClient: sc,
-		config:      cfg,
-		taskLogs:    tasklog.NewSQLite(logDbClient, nil),
-		logger:      logger,
-		notifier:    notifier,
+		schedClient:    sc,
+		config:         cfg,
+		taskLogs:       tasklog.NewSQLite(logDbClient, nil),
+		logger:         logger,
+		notifier:       notifier,
+		goroutineCount: &goroutineCount,
 	}
 }
 
@@ -99,7 +107,7 @@ func NewDefault(schedulerUrl, taskLogsDbFile string) *Executor {
 func (e *Executor) Start(dags dag.Registry) {
 	for {
 		tte, err := e.schedClient.GetTask()
-		if err == ds.ErrQueueIsEmpty {
+		if err == ds.ErrQueueIsEmpty || errors.Is(err, syscall.ECONNREFUSED) {
 			time.Sleep(e.config.PollInterval)
 			continue
 		}
@@ -123,14 +131,17 @@ func (e *Executor) Start(dags dag.Registry) {
 		if taskNode.Config.Notifier != nil {
 			notifier = taskNode.Config.Notifier
 		}
+		e.waitIfCannotSpawnNewGoroutine()
+		atomic.AddInt64(e.goroutineCount, 1)
 		go executeTask(tte, taskNode.Task, e.schedClient, e.taskLogs, e.logger,
-			notifier)
+			notifier, e.goroutineCount)
 	}
 }
 
 func executeTask(
 	tte models.TaskToExec, task dag.Task, schedClient *scheduler.Client,
 	taskLogs tasklog.Factory, logger *slog.Logger, notifier notify.Sender,
+	goroutineCount *int64,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -140,6 +151,7 @@ func executeTask(
 				string(debug.Stack()))
 		}
 	}()
+	defer atomic.AddInt64(goroutineCount, -1)
 	uErr := schedClient.UpsertTaskStatus(tte, dag.TaskRunning, nil)
 	if uErr != nil {
 		logger.Error("Error while updating status", "tte", tte, "status",
@@ -181,5 +193,23 @@ func executeTask(
 	if uErr != nil {
 		logger.Error("Error while updating status", "tte", tte, "status",
 			dag.TaskSuccess.String(), "err", uErr.Error())
+	}
+}
+
+// waitIfCannotSpawnNewGoroutine check whenever new goroutine could be started,
+// based on maxGoroutineCount configuration. If that cannot be done, this
+// method would block until number of goroutines is below the limit.
+func (e *Executor) waitIfCannotSpawnNewGoroutine() {
+	prevTs := time.Now()
+	for {
+		if atomic.LoadInt64(e.goroutineCount) < int64(e.config.MaxGoroutineCount) {
+			return
+		}
+		now := time.Now()
+		if now.Sub(prevTs) > 30*time.Second {
+			e.logger.Warn("Cannot yet start new goroutine, Executor hit the limit.",
+				"limit", e.config.MaxGoroutineCount)
+			prevTs = now
+		}
 	}
 }
