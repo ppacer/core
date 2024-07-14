@@ -7,9 +7,11 @@ package scheduler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -77,6 +79,7 @@ type TaskScheduler struct {
 	config             TaskSchedulerConfig
 	logger             *slog.Logger
 	notifier           notify.Sender
+	goroutineCount     *int64
 	schedulerStateFunc GetStateFunc
 
 	failedTaskManager   *failedTaskManager
@@ -87,7 +90,7 @@ type TaskScheduler struct {
 func NewTaskScheduler(
 	dags dag.Registry, db *db.Client, queues Queues,
 	cache ds.Cache[DRTBase, DagRunTaskState], config TaskSchedulerConfig,
-	logger *slog.Logger, notifier notify.Sender,
+	logger *slog.Logger, notifier notify.Sender, goroutineCount *int64,
 	schedulerStateFunc GetStateFunc,
 ) *TaskScheduler {
 	if logger == nil {
@@ -104,6 +107,7 @@ func NewTaskScheduler(
 		config:             config,
 		logger:             logger,
 		notifier:           notifier,
+		goroutineCount:     goroutineCount,
 		schedulerStateFunc: schedulerStateFunc,
 
 		failedTaskManager: newFailedTaskManager(
@@ -165,6 +169,11 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 				"dagId", string(dagrun.DagId))
 			continue
 		}
+
+		ts.waitIfCannotSpawnNewGoroutine(
+			fmt.Sprintf("scheduling dagrun=%v", dagrun),
+		)
+		atomic.AddInt64(ts.goroutineCount, 1)
 		go ts.scheduleDagTasks(context.TODO(), d, dagrun, taskSchedulerErrors)
 	}
 }
@@ -290,6 +299,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	dagrun DagRun,
 	errorsChan chan taskSchedulerError,
 ) {
+	defer atomic.AddInt64(ts.goroutineCount, -1)
 	dagId := string(dagrun.DagId)
 	ts.logger.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
 		dagrun.AtTime)
@@ -424,6 +434,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	defer atomic.AddInt64(ts.goroutineCount, -1)
 	checkDelay := ts.config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
 	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
@@ -478,6 +489,11 @@ func (ts *TaskScheduler) walkAndSchedule(
 		if !alreadyStarted {
 			sharedState.AlreadyMarkedTasks.Add(drt, struct{}{})
 			wg.Add(1)
+
+			ts.waitIfCannotSpawnNewGoroutine(
+				fmt.Sprintf("scheduling walkAndSchedule for drt=%v", drt),
+			)
+			atomic.AddInt64(ts.goroutineCount, 1)
 			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg)
 		}
 	}
@@ -646,8 +662,6 @@ func (ts *TaskScheduler) isTaskDone(
 		return true, statusFromCache.Status
 	}
 	// If there is no entry in the cache, we need to query database
-	ts.logger.Warn("There is no entry in TaskCache, need to query database",
-		"dagId", dagrun.DagId, "execTs", dagrun.AtTime, "taskId", parent.TaskId)
 	ctx := context.TODO()
 	dagruntask, err := ts.dbClient.ReadDagRunTaskLatest(
 		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
@@ -766,6 +780,24 @@ func (ts *TaskScheduler) cleanTaskCache(dagrun DagRun, nodes []dag.NodeInfo) {
 		}
 		ts.taskCache.Remove(drtBase)
 		ts.taskRetriesExecuted.Delete(drtBase)
+	}
+}
+
+// waitIfCannotSpawnNewGoroutine check whenever new goroutine could be started,
+// based on maxGoroutineCount configuration. If that cannot be done, this
+// method would block until number of goroutines is below the limit.
+func (ts *TaskScheduler) waitIfCannotSpawnNewGoroutine(msg string) {
+	prevTs := time.Now()
+	for {
+		if atomic.LoadInt64(ts.goroutineCount) < int64(ts.config.MaxGoroutineCount) {
+			return
+		}
+		now := time.Now()
+		if now.Sub(prevTs) > 30*time.Second {
+			ts.logger.Warn("Cannot yet start new goroutine, Scheduler hit the limit.",
+				"limit", ts.config.MaxGoroutineCount, "msg", msg)
+			prevTs = now
+		}
 	}
 }
 

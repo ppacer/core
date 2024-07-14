@@ -16,6 +16,15 @@ import (
 	"github.com/ppacer/core/notify"
 )
 
+func singleEmptyTaskDag(dagId dag.Id, sched schedule.Schedule) dag.Dag {
+	root := dag.NewNode(emptyTask{taskId: "root"})
+	return dag.New(dagId).
+		AddRoot(root).
+		AddAttributes(dag.Attr{CatchUp: false}).
+		AddSchedule(sched).
+		Done()
+}
+
 func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "n1"})
 	n21 := dag.NewNode(emptyTask{taskId: "n21"})
@@ -24,9 +33,9 @@ func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n3 := dag.NewNode(emptyTask{taskId: "n3"})
 	n1.NextAsyncAndMerge([]*dag.Node{n21, n22, n23}, n3)
 
-	d := dag.New(dagId)
-	d.AddRoot(n1)
-	d.AddAttributes(dag.Attr{CatchUp: false})
+	d := dag.New(dagId).
+		AddRoot(n1).
+		AddAttributes(dag.Attr{CatchUp: false})
 
 	if sched != nil {
 		d.AddSchedule(*sched)
