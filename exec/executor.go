@@ -24,6 +24,7 @@ import (
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/notify"
+	"github.com/ppacer/core/pace"
 	"github.com/ppacer/core/scheduler"
 	"github.com/ppacer/core/timeutils"
 )
@@ -32,17 +33,17 @@ import (
 // method is called Executor starts polling ppacer scheduler for new DAG run
 // tasks to be run.
 type Executor struct {
-	schedClient    *scheduler.Client
-	config         Config
-	taskLogs       tasklog.Factory
-	logger         *slog.Logger
-	notifier       notify.Sender
-	goroutineCount *int64
+	schedClient     *scheduler.Client
+	pollingStrategy pace.Strategy
+	config          Config
+	taskLogs        tasklog.Factory
+	logger          *slog.Logger
+	notifier        notify.Sender
+	goroutineCount  *int64
 }
 
 // Executor configuration.
 type Config struct {
-	PollInterval       time.Duration
 	HttpRequestTimeout time.Duration
 	MaxGoroutineCount  int64
 }
@@ -50,22 +51,30 @@ type Config struct {
 // Setup default configuration values.
 func defaultConfig() Config {
 	return Config{
-		PollInterval:       10 * time.Millisecond,
 		HttpRequestTimeout: 30 * time.Second,
 		MaxGoroutineCount:  1000,
 	}
 }
 
-// New creates new Executor instance. When config is nil, then default
-// configuration values will be used. When logger is nil, then slog for stdout
-// with WARN severity level will be used. When notifier is nil, then
-// notify.NewLogsErr (notifications as logs) will be used.
-func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *Config, notifier notify.Sender) *Executor {
+// New creates new Executor instance. When polling strategy is nil, then linear
+// backoff (min=1ms, max=1s, step=10ms, repeat=10) will be sued. When config is
+// nil, then default configuration values will be used. When logger is nil,
+// then slog for stdout with WARN severity level will be used. When notifier is
+// nil, then notify.NewLogsErr (notifications as logs) will be used.
+func New(schedAddr string, logDbClient *db.Client, polling pace.Strategy, logger *slog.Logger, config *Config, notifier notify.Sender) *Executor {
 	var cfg Config
 	if config != nil {
 		cfg = *config
 	} else {
 		cfg = defaultConfig()
+	}
+	if polling == nil {
+		polling, _ = pace.NewLinearBackoff(
+			1*time.Millisecond,
+			1*time.Second,
+			10*time.Millisecond,
+			10,
+		)
 	}
 	if logger == nil {
 		opts := slog.HandlerOptions{Level: slog.LevelWarn}
@@ -79,12 +88,13 @@ func New(schedAddr string, logDbClient *db.Client, logger *slog.Logger, config *
 	sc := scheduler.NewClient(schedAddr, httpClient, logger, scfg)
 	var goroutineCount int64 = 0
 	return &Executor{
-		schedClient:    sc,
-		config:         cfg,
-		taskLogs:       tasklog.NewSQLite(logDbClient, nil),
-		logger:         logger,
-		notifier:       notifier,
-		goroutineCount: &goroutineCount,
+		schedClient:     sc,
+		pollingStrategy: polling,
+		config:          cfg,
+		taskLogs:        tasklog.NewSQLite(logDbClient, nil),
+		logger:          logger,
+		notifier:        notifier,
+		goroutineCount:  &goroutineCount,
 	}
 }
 
@@ -99,8 +109,7 @@ func NewDefault(schedulerUrl, taskLogsDbFile string) *Executor {
 			logsDbErr.Error())
 		log.Panic(logsDbErr)
 	}
-	notifier := notify.NewLogsErr(logger)
-	return New(schedulerUrl, logsDbClient, nil, nil, notifier)
+	return New(schedulerUrl, logsDbClient, nil, nil, nil, nil)
 }
 
 // Start starts executor. TODO...
@@ -108,13 +117,14 @@ func (e *Executor) Start(dags dag.Registry) {
 	for {
 		tte, err := e.schedClient.GetTask()
 		if err == ds.ErrQueueIsEmpty || errors.Is(err, syscall.ECONNREFUSED) {
-			time.Sleep(e.config.PollInterval)
+			time.Sleep(e.pollingStrategy.NextInterval())
 			continue
 		}
 		if err != nil {
 			e.logger.Error("GetTask error", "err", err)
 			break
 		}
+		e.pollingStrategy.Reset()
 		e.logger.Info("Start executing task", "taskToExec", tte)
 		d, dagExists := dags[dag.Id(tte.DagId)]
 		if !dagExists {
