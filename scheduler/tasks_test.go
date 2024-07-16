@@ -358,7 +358,7 @@ func TestScheduleDagTasksLinkedListShortQueue(t *testing.T) {
 		Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
-		d, dagrun, 10*time.Millisecond, taskQueueSize, t,
+		d, dagrun, 50*time.Millisecond, taskQueueSize, t,
 	)
 }
 
@@ -415,7 +415,7 @@ func testScheduleDagTasksLinkedList(size int, t *testing.T) {
 		Done()
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	testScheduleDagTasksSingleDagrun(
-		d, dagrun, 10*time.Millisecond, size, t,
+		d, dagrun, 50*time.Millisecond, size, t,
 	)
 }
 

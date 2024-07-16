@@ -94,7 +94,6 @@ func TestMaxGoroutineManyParallelTasksLimitedExecutor(t *testing.T) {
 	cfg := scheduler.DefaultConfig
 	cfg.TaskSchedulerConfig.MaxGoroutineCount = maxGoroutines
 	execCfg := exec.Config{
-		PollInterval:       1 * time.Millisecond,
 		HttpRequestTimeout: 30 * time.Second,
 		MaxGoroutineCount:  executorMaxGoroutines,
 	}
@@ -141,7 +140,9 @@ func testMaxGoroutineCount(
 	// Start executor
 	notifier := notify.NewLogsErr(slog.Default())
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
+		executor := exec.New(
+			testServer.URL, logsDbClient, nil, nil, nil, notifier,
+		)
 		executor.Start(dags)
 	}()
 

@@ -202,7 +202,9 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Start executor
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
+		executor := exec.New(
+			testServer.URL, logsDbClient, nil, nil, nil, notifier,
+		)
 		executor.Start(dags)
 	}()
 
@@ -269,7 +271,9 @@ func testSchedulerE2eManyDagRuns(
 	// Start executor
 	notifier := notify.NewLogsErr(slog.Default())
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
+		executor := exec.New(
+			testServer.URL, logsDbClient, nil, nil, nil, notifier,
+		)
 		executor.Start(dags)
 	}()
 
@@ -343,7 +347,9 @@ func testSchedulerE2eManyDagRunsCustom(
 	// Start executor
 	notifier := notify.NewLogsErr(slog.Default())
 	go func() {
-		executor := exec.New(testServer.URL, logsDbClient, nil, nil, notifier)
+		executor := exec.New(
+			testServer.URL, logsDbClient, nil, nil, nil, notifier,
+		)
 		executor.Start(dags)
 	}()
 
