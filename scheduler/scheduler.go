@@ -94,6 +94,17 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
 	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](cacheSize)
 
+	// Setup timezone
+	if s.config.TimezoneName != timeutils.LocalTimezoneName {
+		tzSetErr := timeutils.SetTimezone(s.config.TimezoneName)
+		if tzSetErr != nil {
+			s.logger.Error(
+				"Couldn't setup custom timezone. Local timezone will be used",
+				"timezoneName", s.config.TimezoneName, "err", tzSetErr.Error(),
+			)
+		}
+	}
+
 	// Syncing queues with the database in case of program restarts.
 	s.setState(StateSynchronizing)
 	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.logger, s.config)

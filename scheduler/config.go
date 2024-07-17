@@ -33,6 +33,10 @@ type Config struct {
 
 	// Configuration for dagRunWatcher
 	DagRunWatcherConfig DagRunWatcherConfig
+
+	// Timezone name consistent with IANA Time Zone Database (e.g.
+	// "Europe/Warsaw" or "America/New_York").
+	TimezoneName string
 }
 
 // Default Scheduler configuration.
@@ -43,6 +47,7 @@ var DefaultConfig Config = Config{
 	StartupContextTimeout: 30 * time.Second,
 	TaskSchedulerConfig:   DefaultTaskSchedulerConfig,
 	DagRunWatcherConfig:   DefaultDagRunWatcherConfig,
+	TimezoneName:          "Local",
 }
 
 // Configuration for TaskScheduler which is responsible for scheduling tasks
