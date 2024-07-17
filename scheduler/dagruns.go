@@ -67,13 +67,13 @@ func (drw *DagRunWatcher) Watch(dags dag.Registry) {
 	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
 	defer cancel()
 	nextSchedules := make(map[dag.Id]*time.Time)
-	drw.updateNextSchedules(ctx, dags, time.Now(), nextSchedules)
+	drw.updateNextSchedules(ctx, dags, timeutils.Now(), nextSchedules)
 	for {
 		if drw.schedulerStateFunc() == StateStopping {
 			drw.logger.Warn("Scheduler is stopping. DagRunWatcher will not schedule other runs.")
 			return
 		}
-		now := time.Now()
+		now := timeutils.Now()
 		drw.trySchedule(dags, nextSchedules, now)
 		time.Sleep(drw.config.WatchInterval)
 	}

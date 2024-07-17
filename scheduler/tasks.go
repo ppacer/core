@@ -235,7 +235,7 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 
 //  Insert/update DAG run task info in the cache.
 func (ts *TaskScheduler) upsertTaskStatusCache(drt DagRunTask, status dag.TaskStatus) {
-	drts := DagRunTaskState{Status: status, StatusUpdateTs: time.Now()}
+	drts := DagRunTaskState{Status: status, StatusUpdateTs: timeutils.Now()}
 	drtsCache, entryExists := ts.taskCache.Get(drt.Base())
 	if !entryExists || (entryExists && drtsCache.Status != status) {
 		ts.taskCache.Put(drt.Base(), drts)

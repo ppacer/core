@@ -22,7 +22,7 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 	}
 	ctx := context.Background()
 	dagId := "mock_dag"
-	execTs := timeutils.ToString(time.Now())
+	execTs := timeutils.ToString(timeutils.Now())
 	taskId := "my_task_1"
 	iErr := c.InsertDagRunTask(
 		ctx, dagId, execTs, taskId, 0, DagRunTaskStatusScheduled,
@@ -74,7 +74,7 @@ func TestReadDagRunTasks(t *testing.T) {
 	}
 	ctx := context.Background()
 	dagId := "mock_dag"
-	execTs := timeutils.ToString(time.Now())
+	execTs := timeutils.ToString(timeutils.Now())
 
 	for i := 0; i < N; i++ {
 		taskId := fmt.Sprintf("my_task_%d", i)
@@ -119,7 +119,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 		t.Error(err)
 	}
 	dagId := "test_dag_1"
-	execTs := timeutils.ToString(time.Now())
+	execTs := timeutils.ToString(timeutils.Now())
 	taskId := "my_task_1"
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
@@ -162,7 +162,7 @@ func TestReadDagRunTaskLatestSingleDag(t *testing.T) {
 		taskId = "task1"
 	)
 	ctx := context.Background()
-	now := time.Now()
+	now := timeutils.Now()
 
 	type retryInfo struct {
 		retry  int
@@ -236,7 +236,7 @@ func TestReadDagRunTaskLatestManyDags(t *testing.T) {
 	}
 	defer CleanUpSqliteTmp(c, t)
 	ctx := context.Background()
-	now := time.Now()
+	now := timeutils.Now()
 
 	type retryInfo struct {
 		retry  int
@@ -321,7 +321,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 		t.Error(err)
 	}
 	dagId := "test_dag_1"
-	execTs := timeutils.ToString(time.Now())
+	execTs := timeutils.ToString(timeutils.Now())
 	taskId := "my_task_1"
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
@@ -394,7 +394,7 @@ func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
 	defer CleanUpSqliteTmp(c, t)
 	ctx := context.Background()
 	dId := "mock_dag_1"
-	ts := timeutils.ToString(time.Now())
+	ts := timeutils.ToString(timeutils.Now())
 
 	inputData := []struct {
 		taskId string
@@ -459,7 +459,7 @@ func TestRunningTasksNumAllFinished(t *testing.T) {
 
 	dags := []string{"mock_dag", "mock_dag_2"}
 	ctx := context.Background()
-	ts := timeutils.ToString(time.Now())
+	ts := timeutils.ToString(timeutils.Now())
 
 	data := []struct {
 		dagId  string
@@ -495,7 +495,7 @@ func TestRunningTasksNumWithRunningTasks(t *testing.T) {
 
 	dags := []string{"mock_dag", "mock_dag_2"}
 	ctx := context.Background()
-	ts := timeutils.ToString(time.Now())
+	ts := timeutils.ToString(timeutils.Now())
 
 	data := []struct {
 		dagId  string
@@ -531,7 +531,7 @@ func TestRunningTasksNumWithUpdate(t *testing.T) {
 
 	dagId := "mock_dag"
 	ctx := context.Background()
-	ts := timeutils.ToString(time.Now())
+	ts := timeutils.ToString(timeutils.Now())
 
 	data := []struct {
 		taskId string

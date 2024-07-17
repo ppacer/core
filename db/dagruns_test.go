@@ -20,7 +20,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 	}
 	ctx := context.Background()
 	dagId := "mock_dag"
-	execTs := timeutils.ToString(time.Now())
+	execTs := timeutils.ToString(timeutils.Now())
 	runId, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
@@ -34,7 +34,7 @@ func TestInsertDagRunSimple(t *testing.T) {
 		t.Errorf("Expected 1 row got: %d", c1)
 	}
 
-	execTs = timeutils.ToString(time.Now())
+	execTs = timeutils.ToString(timeutils.Now())
 	runId, iErr = c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
@@ -406,7 +406,9 @@ func TestDagRunUpdateStatusByExecTsNoRun(t *testing.T) {
 	// There is no dagruns rows at all at this point
 	ctx := context.Background()
 	const status = "TEST_STATUS"
-	uErr := c.UpdateDagRunStatusByExecTs(ctx, "test_dag", timeutils.ToString(time.Now()), status)
+	uErr := c.UpdateDagRunStatusByExecTs(
+		ctx, "test_dag", timeutils.ToString(timeutils.Now()), status,
+	)
 	if uErr == nil {
 		t.Error("Expected non-empty error while updating dag run state for non existing runId")
 	}
@@ -504,7 +506,7 @@ func TestDagRunsNotFinishedForTerminalStates(t *testing.T) {
 	const dagId = "mock_dag"
 	const N = 10
 	ctx := context.Background()
-	t0 := time.Now()
+	t0 := timeutils.Now()
 
 	for i := 0; i < N; i++ {
 		ts := timeutils.ToString(t0.Add(time.Duration(i) * time.Hour))
@@ -538,7 +540,7 @@ func TestDagRunsNotFinishedForRunningStates(t *testing.T) {
 	const dagId = "mock_dag"
 	const N = 10
 	ctx := context.Background()
-	t0 := time.Now()
+	t0 := timeutils.Now()
 
 	for i := 0; i < N; i++ {
 		ts := timeutils.ToString(t0.Add(time.Duration(i) * time.Hour))

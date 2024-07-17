@@ -78,7 +78,7 @@ func (c *Client) ReadDagRuns(ctx context.Context, dagId string, topN int) ([]Dag
 // for just inserted dag run is returned or -1 in case when error is not nil.
 func (c *Client) InsertDagRun(ctx context.Context, dagId, execTs string) (int64, error) {
 	start := time.Now()
-	insertTs := timeutils.ToString(time.Now())
+	insertTs := timeutils.ToString(timeutils.Now())
 	c.logger.Debug("Start inserting dag run", "dagId", dagId, "execTs", insertTs)
 	res, err := c.dbConn.ExecContext(
 		ctx, c.insertDagRunQuery(),
@@ -136,7 +136,7 @@ func (c *Client) UpdateDagRunStatus(
 	ctx context.Context, runId int64, status string,
 ) error {
 	start := time.Now()
-	updateTs := timeutils.ToString(time.Now())
+	updateTs := timeutils.ToString(timeutils.Now())
 	c.logger.Debug("Start updating dag run status", "runId", runId)
 	res, err := c.dbConn.ExecContext(
 		ctx, c.updateDagRunStatusQuery(), status, updateTs, runId,
@@ -166,7 +166,7 @@ func (c *Client) UpdateDagRunStatusByExecTs(
 	ctx context.Context, dagId, execTs, status string,
 ) error {
 	start := time.Now()
-	updateTs := timeutils.ToString(time.Now())
+	updateTs := timeutils.ToString(timeutils.Now())
 	c.logger.Debug("Start updating dag run status by execTs", "dagId", dagId,
 		"execTs", execTs, "status", status)
 	res, err := c.dbConn.ExecContext(
