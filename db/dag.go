@@ -47,7 +47,7 @@ func (c *Client) ReadDag(ctx context.Context, dagId string) (Dag, error) {
 // but something to consider in the future.
 func (c *Client) UpsertDag(ctx context.Context, d dag.Dag) error {
 	start := time.Now()
-	insertTs := timeutils.ToString(time.Now())
+	insertTs := timeutils.ToString(timeutils.Now())
 	dagId := string(d.Id)
 	c.logger.Debug("Start upserting dag in dags table...", "dagId", dagId,
 		"insertTs", insertTs)

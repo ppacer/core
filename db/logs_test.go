@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ppacer/core/timeutils"
 )
@@ -15,7 +14,7 @@ func TestInsertTaskLogSimple(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer CleanUpSqliteTmp(c, t)
-	ts := time.Now()
+	ts := timeutils.Now()
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
@@ -68,7 +67,7 @@ func TestReadDagRunTaskLogsAllEmptyTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer CleanUpSqliteTmp(c, t)
-	ts := time.Now()
+	ts := timeutils.Now()
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
@@ -92,7 +91,7 @@ func TestReadDagRunTaskLogsAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer CleanUpSqliteTmp(c, t)
-	ts := time.Now()
+	ts := timeutils.Now()
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
@@ -113,7 +112,7 @@ func TestReadDagRunTaskLogsAll(t *testing.T) {
 			DagId:      dagId,
 			ExecTs:     execTs,
 			TaskId:     taskId,
-			InsertTs:   timeutils.ToString(time.Now()),
+			InsertTs:   timeutils.ToString(timeutils.Now()),
 			Level:      "INFO",
 			Message:    msg.Msg,
 			Attributes: msg.Attr,
@@ -153,7 +152,7 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer CleanUpSqliteTmp(c, t)
-	ts := time.Now()
+	ts := timeutils.Now()
 	execTs := timeutils.ToString(ts)
 	const dagId = "mock_dag"
 	const taskId = "task_1"
@@ -175,7 +174,7 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 			ExecTs:     execTs,
 			TaskId:     taskId,
 			Retry:      retry,
-			InsertTs:   timeutils.ToString(time.Now()),
+			InsertTs:   timeutils.ToString(timeutils.Now()),
 			Level:      "INFO",
 			Message:    msg.Msg,
 			Attributes: msg.Attr,
@@ -236,7 +235,7 @@ func BenchmarkInsertTaskLog(b *testing.B) {
 	}
 	const dagId = "mock_dag"
 	const taskId = "task"
-	ts := time.Now()
+	ts := timeutils.Now()
 	execTs := timeutils.ToString(ts)
 
 	tlr := TaskLogRecord{

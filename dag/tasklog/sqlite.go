@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 	"unsafe"
 
 	"github.com/ppacer/core/db"
@@ -123,7 +122,7 @@ func (s *sqliteLogWriter) Write(p []byte) (int, error) {
 		ExecTs:     timeutils.ToString(s.ti.ExecTs),
 		TaskId:     s.ti.TaskId,
 		Retry:      s.ti.Retry,
-		InsertTs:   timeutils.ToString(time.Now()),
+		InsertTs:   timeutils.ToString(timeutils.Now()),
 		Level:      lvl,
 		Message:    msg,
 		Attributes: string(fieldsJson),
