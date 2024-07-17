@@ -11,6 +11,48 @@ import (
 	"time"
 )
 
+func TestDefaultTimezone(t *testing.T) {
+	if ppacerTimezone != time.Local {
+		t.Errorf("Expected default timezone, to be Local, got: %v",
+			ppacerTimezone)
+	}
+}
+
+func TestSetTimezone(t *testing.T) {
+	for _, tzName := range timezoneNames() {
+		setErr := SetTimezone(tzName)
+		if setErr != nil {
+			t.Errorf("Failed setting up timezone to %s: %s",
+				tzName, setErr.Error())
+			continue
+		}
+		now := Now()
+		if now.Location().String() != tzName {
+			t.Errorf("Expected tiemstamp from %s timezone, got: %v", tzName,
+				now)
+		}
+	}
+	setErr := SetTimezone("Local")
+	if setErr != nil {
+		t.Errorf("Cannot set timezone back to Local: %s", setErr.Error())
+	}
+}
+
+func TestCurrentTz(t *testing.T) {
+	for _, tzName := range timezoneNames() {
+		setErr := SetTimezone(tzName)
+		if setErr != nil {
+			t.Errorf("Failed setting up timezone to %s: %s",
+				tzName, setErr.Error())
+			continue
+		}
+		now := time.Now().In(CurrentTz())
+		if now.Location().String() != tzName {
+			t.Errorf("Expected timestamp in %s timezone, got: %v", tzName, now)
+		}
+	}
+}
+
 func TestToStringBasic(t *testing.T) {
 	warsawTz := warsawTimeZone(t)
 	tss := []time.Time{
@@ -225,4 +267,23 @@ func randomTime(tz *time.Location) time.Time {
 	ns := rand.Intn(10000000) * 1000
 
 	return time.Date(year, time.Month(month), day, hour, minute, second, ns, tz)
+}
+
+func timezoneNames() []string {
+	return []string{
+		"Europe/Warsaw",
+		"Europe/Kiev",
+		"Europe/London",
+		"America/Bogota",
+		"America/Costa_Rica",
+		"America/Denver",
+		"America/Los_Angeles",
+		"America/New_York",
+		"Asia/Kamchatka",
+		"Asia/Kolkata",
+		"Asia/Pyongyang",
+		"Asia/Seoul",
+		"Asia/Vladivostok",
+		"Local",
+	}
 }
