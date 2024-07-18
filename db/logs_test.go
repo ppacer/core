@@ -9,7 +9,7 @@ import (
 )
 
 func TestInsertTaskLogSimple(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestInsertTaskLogSimple(t *testing.T) {
 }
 
 func TestReadDagRunTaskLogsAllEmptyTable(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestReadDagRunTaskLogsAllEmptyTable(t *testing.T) {
 }
 
 func TestReadDagRunTaskLogsAll(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestReadDagRunTaskLogsAll(t *testing.T) {
 }
 
 func TestReadDagRunTaskLatest(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestReadDagRunTaskLatest(t *testing.T) {
 }
 
 func BenchmarkInsertTaskLog(b *testing.B) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		b.Fatal(err)
 	}

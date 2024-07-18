@@ -14,7 +14,7 @@ import (
 )
 
 func TestReadDagFromEmpty(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -26,7 +26,7 @@ func TestReadDagFromEmpty(t *testing.T) {
 }
 
 func TestInsertDagSimple(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -34,7 +34,7 @@ func TestInsertDagSimple(t *testing.T) {
 }
 
 func TestInsertDagAndUpdate(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,7 +73,7 @@ func TestInsertDagAndUpdate(t *testing.T) {
 }
 
 func TestInsertDagTimeout(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}

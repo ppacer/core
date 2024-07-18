@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDagTestReadFromEmptyTable(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -47,7 +47,7 @@ func TestDagTestReadFromEmptyTable(t *testing.T) {
 }
 
 func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -94,7 +94,7 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 
 func TestInsertDagTasks(t *testing.T) {
 	const maxTasks = 25
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 		return
@@ -149,7 +149,7 @@ func TestInsertDagTasks(t *testing.T) {
 }
 
 func TestInsertEmptyDagTasks(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -177,7 +177,7 @@ func TestInsertEmptyDagTasks(t *testing.T) {
 }
 
 func BenchmarkDagTasksInsert(b *testing.B) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		b.Error(err)
 		return

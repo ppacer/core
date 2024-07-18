@@ -8,6 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 )
 
 func TestInsertDagRunTaskSimple(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +54,7 @@ func TestInsertDagRunTaskSimple(t *testing.T) {
 }
 
 func TestReadDagRunTasksFromEmpty(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -68,7 +70,7 @@ func TestReadDagRunTasksFromEmpty(t *testing.T) {
 
 func TestReadDagRunTasks(t *testing.T) {
 	const N = 100
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -102,19 +104,19 @@ func TestReadDagRunTasks(t *testing.T) {
 }
 
 func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task", 0)
+	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task", 0, nil)
 	if rErr != sql.ErrNoRows {
 		t.Errorf("Expected no rows error, got: %s", rErr.Error())
 	}
 }
 
 func TestReadDagRunTaskSingle(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +126,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -140,7 +142,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 }
 
 func TestReadDagRunTaskLatestFromEmpty(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -152,7 +154,7 @@ func TestReadDagRunTaskLatestFromEmpty(t *testing.T) {
 }
 
 func TestReadDagRunTaskLatestSingleDag(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -230,7 +232,7 @@ func TestReadDagRunTaskLatestSingleDag(t *testing.T) {
 }
 
 func TestReadDagRunTaskLatestManyDags(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -316,7 +318,7 @@ func TestReadDagRunTaskLatestManyDags(t *testing.T) {
 }
 
 func TestReadDagRunTaskUpdate(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(nil)
+	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -326,7 +328,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -350,7 +352,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
 
-	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
+	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
 	if rErr2 != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -367,7 +369,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 }
 
 func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -387,7 +389,7 @@ func TestReadDagRunTasksNotFinishedEmpty(t *testing.T) {
 }
 
 func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
@@ -434,7 +436,7 @@ func TestReadDagRunTasksNotFinishedSimple(t *testing.T) {
 }
 
 func TestRunningTasksNumEmpty(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +453,7 @@ func TestRunningTasksNumEmpty(t *testing.T) {
 }
 
 func TestRunningTasksNumAllFinished(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +489,7 @@ func TestRunningTasksNumAllFinished(t *testing.T) {
 }
 
 func TestRunningTasksNumWithRunningTasks(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,7 +525,7 @@ func TestRunningTasksNumWithRunningTasks(t *testing.T) {
 }
 
 func TestRunningTasksNumWithUpdate(t *testing.T) {
-	c, err := NewSqliteTmpClient(nil)
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,4 +592,24 @@ func insertDagRunTaskStatus(
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run task: %s", iErr.Error())
 	}
+}
+
+func testLogger() *slog.Logger {
+	level := os.Getenv("PPACER_LOG_LEVEL")
+	var logLevel slog.Level
+	switch level {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelWarn // Default level
+	}
+
+	opts := slog.HandlerOptions{Level: logLevel}
+	return slog.New(slog.NewTextHandler(os.Stdout, &opts))
 }

@@ -3,7 +3,7 @@ package db
 import "testing"
 
 func TestSqliteTmpClientForLogsCreation(t *testing.T) {
-	c, err := NewSqliteTmpClientForLogs(nil)
+	c, err := NewSqliteTmpClientForLogs(testLogger())
 	if err != nil {
 		t.Fatalf("Cannot create Client for logs: %s", err.Error())
 	}
