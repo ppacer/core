@@ -7,7 +7,6 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -313,11 +312,11 @@ func readDagRunTaskFromDb(
 // Initialize Scheduler for tests.
 func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler {
 	t.Helper()
-	dbClient, err := db.NewSqliteTmpClient(nil)
+	logger := testLogger()
+	dbClient, err := db.NewSqliteTmpClient(logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	logger := slog.Default()
 	notifier := notify.NewLogsErr(logger)
 	return New(dbClient, queues, config, logger, notifier)
 }

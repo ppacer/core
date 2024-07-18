@@ -33,7 +33,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d, simpleLogger())
+	s1Err := syncDag(ctx, c, d, testLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -58,7 +58,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 	}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d, simpleLogger())
+	s2Err := syncDag(ctx, c, d, testLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -101,7 +101,7 @@ func TestSyncOneDagNoChanges(t *testing.T) {
 }
 
 func TestSyncOneDagTimeout(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,14 +114,14 @@ func TestSyncOneDagTimeout(t *testing.T) {
 	defer cancel()
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
-	sErr := syncDag(ctx, c, d, simpleLogger())
+	sErr := syncDag(ctx, c, d, testLogger())
 	if sErr == nil {
 		t.Error("Expected syncDag error due to context timeout, but got nil")
 	}
 }
 
 func TestSyncOneDagChangingAttr(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d, simpleLogger())
+	s1Err := syncDag(ctx, c, d, testLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -154,7 +154,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 	d.Attr.Tags = []string{"test", "test2"}
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d, simpleLogger())
+	s2Err := syncDag(ctx, c, d, testLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -185,7 +185,7 @@ func TestSyncOneDagChangingAttr(t *testing.T) {
 }
 
 func TestSyncOneDagChangingSchedule(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 	// First sync
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
-	s1Err := syncDag(ctx, c, d, simpleLogger())
+	s1Err := syncDag(ctx, c, d, testLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -215,7 +215,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 	d.Schedule = &newSched
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d, simpleLogger())
+	s2Err := syncDag(ctx, c, d, testLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -243,7 +243,7 @@ func TestSyncOneDagChangingSchedule(t *testing.T) {
 }
 
 func TestSyncOneDagChangingTasks(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	dagId := "very_simple_dag"
 	d := verySimpleDag(dagId)
 	tasksNum := len(d.Flatten())
-	s1Err := syncDag(ctx, c, d, simpleLogger())
+	s1Err := syncDag(ctx, c, d, testLogger())
 	if s1Err != nil {
 		t.Fatalf("Unexpected error while syncDag: %s", s1Err.Error())
 		return
@@ -277,7 +277,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 	d.Root.Next(additionalTask)
 
 	// Second sync - should not change anything
-	s2Err := syncDag(ctx, c, d, simpleLogger())
+	s2Err := syncDag(ctx, c, d, testLogger())
 	if s2Err != nil {
 		t.Fatalf("Unexpected error while the second syncDag: %s", s2Err.Error())
 	}
@@ -314,7 +314,7 @@ func TestSyncOneDagChangingTasks(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 
 	const size = 10
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -349,7 +349,7 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 	const size = 10
 	const expected = 3
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -409,7 +409,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 }
 
 func TestSyncDagRunTaskCacheSmall(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 
 	const size = 2
 	ctx := context.Background()
-	ts := timeutils.ToString(time.Now())
+	ts := timeutils.ToString(timeutils.Now())
 	data := []struct {
 		dagId  string
 		taskId string
@@ -436,7 +436,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 	}
 
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, simpleLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -552,15 +552,29 @@ type waitTask struct {
 
 func (wt waitTask) Id() string { return wt.TaskId }
 
-func (wt waitTask) Execute(_ dag.TaskContext) error {
-	l := simpleLogger()
-	l.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
+func (wt waitTask) Execute(tc dag.TaskContext) error {
+	tc.Logger.Info("Start sleeping", "task", wt.Id(), "interval", wt.Interval)
 	time.Sleep(wt.Interval)
-	l.Info("Task is done", "task", wt.Id())
+	tc.Logger.Info("Task is done", "task", wt.Id())
 	return nil
 }
 
-func simpleLogger() *slog.Logger {
-	opts := slog.HandlerOptions{Level: slog.LevelInfo}
+func testLogger() *slog.Logger {
+	level := os.Getenv("PPACER_LOG_LEVEL")
+	var logLevel slog.Level
+	switch level {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelWarn // Default level
+	}
+
+	opts := slog.HandlerOptions{Level: logLevel}
 	return slog.New(slog.NewTextHandler(os.Stdout, &opts))
 }

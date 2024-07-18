@@ -204,6 +204,8 @@ type SqliteDB struct {
 }
 
 func (s *SqliteDB) Begin() (*sql.Tx, error) {
+	s.Lock()
+	defer s.Unlock()
 	return s.dbConn.Begin()
 }
 

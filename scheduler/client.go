@@ -56,13 +56,11 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 	resp, err := c.httpClient.Get(c.getTaskUrl())
 	if err != nil {
-		c.logger.Error("GetTask failed", "err", err)
 		return taskToExec, err
 	}
 
 	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
-		c.logger.Error("Could not read GetTask response body", "err", rErr)
 		return taskToExec, rErr
 	}
 

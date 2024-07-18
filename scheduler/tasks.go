@@ -512,13 +512,14 @@ func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
 	ctx := context.TODO()
 	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
 	defer cancel()
-	ds.PutContext(ctx, ts.taskQueue, drt)
 	usErr := ts.UpsertTaskStatus(ctx, drt, dag.TaskScheduled, nil)
 	if usErr != nil {
 		ts.logger.Error("Cannot update dag run task status", "dagruntask", drt,
 			"status", dag.TaskScheduled.String(), "err", usErr)
 		// Consider putting those on the TaskToRetryQueue
 		// This mechanism will be implemented under "task retries" story.
+	} else {
+		ds.PutContext(ctx, ts.taskQueue, drt)
 	}
 }
 

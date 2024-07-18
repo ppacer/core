@@ -93,7 +93,7 @@ func TestShouldBeRetried(t *testing.T) {
 }
 
 func newFailedTaskManagerForTests(t *testing.T) *failedTaskManager {
-	dbClient, err := db.NewSqliteTmpClient(nil)
+	dbClient, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +102,6 @@ func newFailedTaskManagerForTests(t *testing.T) *failedTaskManager {
 	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](100)
 	return newFailedTaskManager(
 		dags, dbClient, &taskQueue, taskCache, DefaultTaskSchedulerConfig,
-		simpleLogger(),
+		testLogger(),
 	)
 }

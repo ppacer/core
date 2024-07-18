@@ -109,7 +109,7 @@ func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task", 0, nil)
+	_, rErr := c.ReadDagRunTask(ctx, "any_dag", "any_time", "any_task", 0)
 	if rErr != sql.ErrNoRows {
 		t.Errorf("Expected no rows error, got: %s", rErr.Error())
 	}
@@ -126,7 +126,7 @@ func TestReadDagRunTaskSingle(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -328,7 +328,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 	ctx := context.Background()
 	insertDagRunTask(c, ctx, dagId, execTs, taskId, t)
 
-	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
+	drt, rErr := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}
@@ -352,7 +352,7 @@ func TestReadDagRunTaskUpdate(t *testing.T) {
 		t.Errorf("Error while updating dag run task status: %s", uErr.Error())
 	}
 
-	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0, nil)
+	drt2, rErr2 := c.ReadDagRunTask(ctx, dagId, execTs, taskId, 0)
 	if rErr2 != nil {
 		t.Errorf("Unexpected error while reading dagruntask: %s", rErr.Error())
 	}

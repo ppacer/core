@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -437,7 +438,28 @@ func schedulerWithSqlite(
 			t.Fatal(lErr)
 		}
 	}
+	logger := testLogger()
 	notifier := notify.NewMock(notifications)
-	sched := scheduler.New(dbClient, queues, config, nil, notifier)
+	sched := scheduler.New(dbClient, queues, config, logger, notifier)
 	return sched, dbClient, logsDbClient
+}
+
+func testLogger() *slog.Logger {
+	level := os.Getenv("PPACER_LOG_LEVEL")
+	var logLevel slog.Level
+	switch level {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelWarn // Default level
+	}
+
+	opts := slog.HandlerOptions{Level: logLevel}
+	return slog.New(slog.NewTextHandler(os.Stdout, &opts))
 }

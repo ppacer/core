@@ -19,7 +19,7 @@ import (
 )
 
 func TestNextScheduleForDagRunsSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,9 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	attr := dag.Attr{}
 	d := emptyDag(dagId, &sched, attr)
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	for i := 0; i < dagRuns; i++ {
 		_, err := c.InsertDagRun(ctx, dagId,
@@ -65,7 +67,7 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +80,9 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 	attr := dag.Attr{CatchUp: true}
 	d := emptyDag(dagId, &sched, attr)
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	for i := 0; i < dagRuns; i++ {
 		_, err := c.InsertDagRun(ctx, dagId,
@@ -111,7 +115,7 @@ func TestNextScheduleForDagRunsSimpleWithCatchUp(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +132,9 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 	d3 := emptyDag("dag3", &sched3, attr)
 
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	for _, dagId := range []string{"dag1", "dag2", "dag3"} {
 		_, err := c.InsertDagRun(ctx, dagId, timeutils.ToString(start))
@@ -171,7 +177,7 @@ func TestNextScheduleForDagRunsManyDagsSimple(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +186,9 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 	dags := make(dag.Registry)
 	attr := dag.Attr{}
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	for i := 0; i < dagNumber; i++ {
 		start := timeutils.RandomUtcTime(2010)
@@ -214,7 +222,7 @@ func TestNextScheduleForDagRunsBeforeStart(t *testing.T) {
 }
 
 func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +235,9 @@ func TestNextScheduleForDagRunsNoSchedule(t *testing.T) {
 	nextSchedulesMap := make(map[dag.Id]*time.Time)
 	reg := dag.Registry{d1.Id: d1, d2.Id: d2}
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 	drw.updateNextSchedules(ctx, reg, currentTime, nextSchedulesMap)
 
 	if len(nextSchedulesMap) != 2 {
@@ -377,7 +387,7 @@ func TestShouldBeScheduledEmtpyNextMap(t *testing.T) {
 }
 
 func TestTryScheduleDagSimple(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +401,9 @@ func TestTryScheduleDagSimple(t *testing.T) {
 	d1ns := time.Date(2023, time.October, 5, 14, 0, 0, 0, time.UTC)
 	nextSchedules := map[dag.Id]*time.Time{d1.Id: &d1ns}
 	queue := ds.NewSimpleQueue[DagRun](100)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	timePoints := []time.Time{
 		time.Date(2023, time.October, 5, 13, 0, 0, 0, time.UTC),   // no schedule
@@ -457,7 +469,7 @@ func TestTryScheduleDagSimple(t *testing.T) {
 }
 
 func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +484,9 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 	t1 := time.Date(2024, time.January, 7, 8, 0, 0, 0, time.UTC)
 	nextSchedules := map[dag.Id]*time.Time{d.Id: &t1}
 	queue := ds.NewSimpleQueue[DagRun](100)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	// Regular scheduling of a DAG run for d
 	t2 := time.Date(2024, time.January, 7, 8, 0, 10, 0, time.UTC)
@@ -513,7 +527,7 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 }
 
 func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,7 +545,9 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	// nextSchedules up to date).
 	nextSchedules := map[dag.Id]*time.Time{}
 	queue := ds.NewSimpleQueue[DagRun](10)
-	drw := NewDagRunWatcher(&queue, c, nil, nil, DefaultDagRunWatcherConfig)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
 
 	// Insert one DAG run into the database as a state before the restart
 	t0 := time.Date(2023, time.November, 11, 8, 0, 0, 0, time.UTC)

@@ -1092,7 +1092,7 @@ func listenOnSchedulerErrors(errChan chan taskSchedulerError, t *testing.T) {
 
 // Initialize default TaskScheduler with in-memory DB client for testing.
 func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
-	c, err := db.NewSqliteTmpClient(nil)
+	c, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1113,7 +1113,7 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 	var goroutinesCount int64
 	ts := NewTaskScheduler(
 		registry, c, queues, taskCache, DefaultTaskSchedulerConfig,
-		simpleLogger(), notifier, &goroutinesCount, getStateFunc,
+		testLogger(), notifier, &goroutinesCount, getStateFunc,
 	)
 	return ts
 }
