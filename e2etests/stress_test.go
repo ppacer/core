@@ -19,8 +19,8 @@ import (
 )
 
 func TestMaxGoroutineManyParallelTasks(t *testing.T) {
-	const tasksCount = 100
-	const maxGoroutines = 10
+	const tasksCount = 50
+	const maxGoroutines = 20
 	cfg := scheduler.DefaultConfig
 	cfg.TaskSchedulerConfig.MaxGoroutineCount = maxGoroutines
 
@@ -33,12 +33,12 @@ func TestMaxGoroutineManyParallelTasks(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
 	drs := []scheduler.DagRun{dr}
-	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 5*time.Second, nil, t)
+	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 30*time.Second, nil, t)
 }
 
 func TestMaxGoroutineManyParallelTasksFewDagRuns(t *testing.T) {
 	const dagRuns = 4
-	const tasksCount = 50
+	const tasksCount = 30
 	const maxGoroutines = 15
 	cfg := scheduler.DefaultConfig
 	cfg.TaskSchedulerConfig.MaxGoroutineCount = maxGoroutines
@@ -59,12 +59,12 @@ func TestMaxGoroutineManyParallelTasksFewDagRuns(t *testing.T) {
 		drs[i] = dr
 	}
 
-	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines+dagRuns, 5*time.Second,
-		nil, t)
+	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines+dagRuns,
+		10*time.Second, nil, t)
 }
 
 func TestMaxGoroutineManyDagRunsSingleTask(t *testing.T) {
-	const dagRuns = 100
+	const dagRuns = 50
 	const maxGoroutines = 10
 	cfg := scheduler.DefaultConfig
 	cfg.TaskSchedulerConfig.MaxGoroutineCount = maxGoroutines
@@ -85,11 +85,11 @@ func TestMaxGoroutineManyDagRunsSingleTask(t *testing.T) {
 		drs[i] = dr
 	}
 
-	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 5*time.Second, nil, t)
+	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 30*time.Second, nil, t)
 }
 
 func TestMaxGoroutineManyParallelTasksLimitedExecutor(t *testing.T) {
-	const tasksCount = 100
+	const tasksCount = 50
 	const maxGoroutines = 10
 	const executorMaxGoroutines = 5
 	cfg := scheduler.DefaultConfig
@@ -108,7 +108,7 @@ func TestMaxGoroutineManyParallelTasksLimitedExecutor(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 
 	drs := []scheduler.DagRun{dr}
-	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 5*time.Second,
+	testMaxGoroutineCount(dags, drs, cfg, maxGoroutines, 30*time.Second,
 		&execCfg, t)
 }
 

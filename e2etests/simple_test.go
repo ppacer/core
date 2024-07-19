@@ -378,6 +378,7 @@ func waitForDagRunCompletion(
 	dbClient *db.Client, dr scheduler.DagRun, pollInterval, timeout time.Duration,
 	testFailWhenRunFails bool, t *testing.T,
 ) {
+	start := time.Now()
 	t.Helper()
 	ctx := context.TODO()
 	ticker := time.NewTicker(pollInterval)
@@ -404,7 +405,8 @@ func waitForDagRunCompletion(
 				return
 			}
 		case <-timeoutChan:
-			t.Fatal("Time out! DAG run has not finished in time.")
+			t.Fatalf("Time out! DAG run has not finished in time. Elapse: %v",
+				time.Since(start))
 			return
 		}
 	}
