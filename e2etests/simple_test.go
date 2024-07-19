@@ -22,6 +22,8 @@ import (
 	"github.com/ppacer/core/timeutils"
 )
 
+const defaultTimeout time.Duration = 30 * time.Second
+
 func TestSchedulerE2eSimpleDagEmptyTasks(t *testing.T) {
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
@@ -179,6 +181,7 @@ func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
 
 func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 	// TODO: I'm almost sure this test can be simplifed
+	ctx := context.Background()
 	cfg := scheduler.DefaultConfig
 	queues := scheduler.DefaultQueues(cfg)
 	notifications := make([]string, 0)
@@ -196,7 +199,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
 		queues, cfg, &notifications, nil, nil, t,
 	)
-	testServer := httptest.NewServer(sched.Start(dags))
+	testServer := httptest.NewServer(sched.Start(ctx, dags))
 	defer testServer.Close()
 	defer db.CleanUpSqliteTmp(dbClient, t)
 	defer db.CleanUpSqliteTmp(logsDbClient, t)
@@ -217,7 +220,6 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 	waitForDagRunCompletion(dbClient, dr, poll, 5*time.Second, true, t)
 
 	// Test logs
-	ctx := context.Background()
 	tlrs, dbErr := logsDbClient.ReadDagRunLogs(
 		ctx, string(dagId), timeutils.ToString(ts), 0,
 	)
@@ -258,16 +260,18 @@ func testSchedulerE2eManyDagRuns(
 	t *testing.T,
 ) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := scheduler.DefaultConfig
 	queues := scheduler.DefaultQueues(cfg)
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
 		queues, cfg, notifications, nil, nil, t,
 	)
-	testServer := httptest.NewServer(sched.Start(dags))
+	testServer := httptest.NewServer(sched.Start(ctx, dags))
 
 	defer testServer.Close()
 	defer db.CleanUpSqliteTmp(dbClient, t)
 	defer db.CleanUpSqliteTmp(logsDbClient, t)
+	defer cancel()
 
 	// Start executor
 	notifier := notify.NewLogsErr(slog.Default())
@@ -325,6 +329,7 @@ func testSchedulerE2eManyDagRunsCustom(
 	t *testing.T,
 ) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := scheduler.DefaultConfig
 	if queues == nil {
 		q := scheduler.DefaultQueues(cfg)
@@ -335,7 +340,8 @@ func testSchedulerE2eManyDagRunsCustom(
 			*queues, cfg, notifications, dbClient, logsDbClient, t,
 		)
 	}
-	testServer := httptest.NewServer(sched.Start(dags))
+	testServer := httptest.NewServer(sched.Start(ctx, dags))
+	defer cancel()
 
 	defer testServer.Close()
 	if dbClient == nil {

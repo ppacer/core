@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -39,8 +38,7 @@ func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config 
 		httpClient = &http.Client{Timeout: config.HttpClientTimeout}
 	}
 	if logger == nil {
-		opts := slog.HandlerOptions{Level: slog.LevelInfo}
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+		logger = defaultLogger()
 	}
 	return &Client{
 		httpClient:   httpClient,

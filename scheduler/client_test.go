@@ -19,13 +19,17 @@ import (
 	"github.com/ppacer/core/timeutils"
 )
 
+const defaultTimeout time.Duration = 10 * time.Second
+
 func TestClientGetTaskEmptyDb(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
-	defer testServer.Close()
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	_, err := schedClient.GetTask()
@@ -38,13 +42,15 @@ func TestClientGetTaskEmptyDb(t *testing.T) {
 }
 
 func TestClientGetTaskMockSingle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	queues := DefaultQueues(cfg)
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(queues, cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
@@ -80,13 +86,15 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 }
 
 func TestClientGetTaskMockMany(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	queues := DefaultQueues(cfg)
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(queues, cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	dagId := dag.Id("mock_dag")
@@ -123,12 +131,14 @@ func TestClientGetTaskMockMany(t *testing.T) {
 }
 
 func TestClientUpsertTaskEmptyDb(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	tte := models.TaskToExec{
@@ -148,15 +158,16 @@ func TestClientUpsertTaskEmptyDb(t *testing.T) {
 }
 
 func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
-	ctx := context.Background()
 	const dagId = "mock_dag"
 	execTs := timeutils.ToString(time.Now())
 	taskIds := []string{
@@ -197,12 +208,14 @@ func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
 }
 
 func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 
 	const dagId = "mock_dag"
@@ -243,12 +256,14 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 }
 
 func TestClientGetStateSimple(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
 	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
-	testServer := httptest.NewServer(scheduler.Start(dags))
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
+	defer cancel()
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
 	schedState, err := schedClient.GetState()

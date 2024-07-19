@@ -166,14 +166,15 @@ func syncDagRunsQueue(
 // tasks are greater than size of the cache, then older tasks won't fit into
 // the cache. Newer tasks are more relevant.
 func syncDagRunTaskCache(
+	ctx context.Context,
 	cache ds.Cache[DRTBase, DagRunTaskState],
 	dbClient *db.Client,
 	logger *slog.Logger,
 	config Config,
 ) error {
-	ctx, cancel := context.WithTimeout(context.Background(), config.StartupContextTimeout)
+	dbCtx, cancel := context.WithTimeout(ctx, config.StartupContextTimeout)
 	defer cancel()
-	drtNotFinished, dbErr := dbClient.ReadDagRunTasksNotFinished(ctx)
+	drtNotFinished, dbErr := dbClient.ReadDagRunTasksNotFinished(dbCtx)
 	if dbErr != nil {
 		return dbErr
 	}

@@ -339,7 +339,9 @@ func TestSyncDagRunTaskCacheEmpty(t *testing.T) {
 
 	const size = 10
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(
+		ctx, drtCache, c, testLogger(), DefaultConfig,
+	)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -377,7 +379,9 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 	const size = 10
 	const expected = 3
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(
+		ctx, drtCache, c, testLogger(), DefaultConfig,
+	)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -436,7 +440,9 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 	}
 
 	drtCache := ds.NewLruCache[DRTBase, DagRunTaskState](size)
-	syncErr := syncDagRunTaskCache(drtCache, c, testLogger(), DefaultConfig)
+	syncErr := syncDagRunTaskCache(
+		ctx, drtCache, c, testLogger(), DefaultConfig,
+	)
 	if syncErr != nil {
 		t.Errorf("Error while syncing DAG run tasks cache: %s", syncErr.Error())
 	}
@@ -560,7 +566,7 @@ func (wt waitTask) Execute(tc dag.TaskContext) error {
 }
 
 func testLogger() *slog.Logger {
-	level := os.Getenv("PPACER_LOG_LEVEL")
+	level := os.Getenv(PPACER_ENV_LOG_LEVEL)
 	var logLevel slog.Level
 	switch level {
 	case "DEBUG":

@@ -7,7 +7,6 @@ package scheduler
 import (
 	"context"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -43,8 +42,7 @@ type DagRunWatcher struct {
 // TextHandler and INFO severity level.
 func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, logger *slog.Logger, stateFunc GetStateFunc, config DagRunWatcherConfig) *DagRunWatcher {
 	if logger == nil {
-		opts := slog.HandlerOptions{Level: slog.LevelInfo}
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+		logger = defaultLogger()
 	}
 	return &DagRunWatcher{
 		queue:              queue,
@@ -62,15 +60,27 @@ func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, logger *slog.
 // queue would be full for longer then an interval between two next DAG runs,
 // those DAG runs won't be skipped. They will be scheduled in expected order
 // but possibly a bit later.
-func (drw *DagRunWatcher) Watch(dags dag.Registry) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, drw.config.DatabaseContextTimeout)
-	defer cancel()
+func (drw *DagRunWatcher) Watch(ctx context.Context, dags dag.Registry) {
+	queryCtx, queryCancel := context.WithTimeout(
+		ctx, drw.config.DatabaseContextTimeout,
+	)
 	nextSchedules := make(map[dag.Id]*time.Time)
-	drw.updateNextSchedules(ctx, dags, timeutils.Now(), nextSchedules)
+	drw.updateNextSchedules(queryCtx, dags, timeutils.Now(), nextSchedules)
+	queryCancel() // to avoid context leak
+
 	for {
+		select {
+		case <-ctx.Done():
+			drw.logger.Info(
+				"DagRunWatcher is about to stop running. Context is done.",
+				"ctx.Err", ctx.Err().Error())
+			return
+		default:
+		}
 		if drw.schedulerStateFunc() == StateStopping {
-			drw.logger.Warn("Scheduler is stopping. DagRunWatcher will not schedule other runs.")
+			drw.logger.Info(
+				"Scheduler is stopping. DagRunWatcher will not schedule other runs.",
+			)
 			return
 		}
 		now := timeutils.Now()

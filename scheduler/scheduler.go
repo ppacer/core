@@ -11,7 +11,6 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,8 +47,7 @@ type Scheduler struct {
 // is instantiated with TextHandler and INFO severity level.
 func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger, notifier notify.Sender) *Scheduler {
 	if logger == nil {
-		opts := slog.HandlerOptions{Level: slog.LevelInfo}
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+		logger = defaultLogger()
 	}
 	return &Scheduler{
 		dbClient:       dbClient,
@@ -66,8 +64,8 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger,
 // SQLite databases, starts that scheduler and returns HTTP server with
 // Scheduler endpoints. It's mainly to reduce boilerplate in simple examples
 // and tests.
-func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
-	logger := slog.Default()
+func DefaultStarted(ctx context.Context, dags dag.Registry, dbFile string, port int) *http.Server {
+	logger := defaultLogger()
 	dbClient, dbErr := db.NewSqliteClient(dbFile, logger)
 	if dbErr != nil {
 		logger.Error("Cannot create Scheduler database client", "err",
@@ -78,7 +76,7 @@ func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
 	config := DefaultConfig
 	notifier := notify.NewLogsErr(logger)
 	sched := New(dbClient, DefaultQueues(config), config, logger, notifier)
-	schedulerHttpHandler := sched.Start(dags)
+	schedulerHttpHandler := sched.Start(ctx, dags)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: schedulerHttpHandler,
@@ -90,7 +88,7 @@ func DefaultStarted(dags dag.Registry, dbFile string, port int) *http.Server {
 // fires up DAG watcher, task scheduler and finally returns HTTP ServeMux
 // with attached HTTP endpoints for communication between scheduler and
 // executors. TODO(dskrzypiec): more docs
-func (s *Scheduler) Start(dags dag.Registry) http.Handler {
+func (s *Scheduler) Start(ctx context.Context, dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
 	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](cacheSize)
 
@@ -108,7 +106,9 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 	// Syncing queues with the database in case of program restarts.
 	s.setState(StateSynchronizing)
 	syncWithDatabase(dags, s.queues.DagRuns, s.dbClient, s.logger, s.config)
-	cacheSyncErr := syncDagRunTaskCache(taskCache, s.dbClient, s.logger, s.config)
+	cacheSyncErr := syncDagRunTaskCache(
+		ctx, taskCache, s.dbClient, s.logger, s.config,
+	)
 	if cacheSyncErr != nil {
 		s.logger.Error("Cannot sync DAG run task cache", "err", cacheSyncErr)
 		// There is no need to retry, it's just a cache.
@@ -118,24 +118,31 @@ func (s *Scheduler) Start(dags dag.Registry) http.Handler {
 		s.queues.DagRuns, s.dbClient, s.logger, s.getState,
 		s.config.DagRunWatcherConfig,
 	)
-
 	taskScheduler := NewTaskScheduler(
 		dags, s.dbClient, s.queues, taskCache, s.config.TaskSchedulerConfig,
 		s.logger, s.notifier, &s.goroutineCount, s.getState,
 	)
 
 	s.setState(StateRunning)
-	atomic.AddInt64(&s.goroutineCount, 1)
+	atomic.AddInt64(&s.goroutineCount, 3)
 	go func() {
 		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background dag run watcher
-		dagRunWatcher.Watch(dags)
+		dagRunWatcher.Watch(ctx, dags)
 	}()
 
 	go func() {
 		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background task scheduler
-		taskScheduler.Start(dags)
+		taskScheduler.Start(ctx, dags)
+	}()
+
+	go func() {
+		<-ctx.Done()
+		s.logger.Info("Scheduler is about to be shut down. Context is done.",
+			"ctxErr", ctx.Err().Error())
+		s.setState(StateStopping)
+		atomic.AddInt64(&s.goroutineCount, -1)
 	}()
 
 	mux := http.NewServeMux()

@@ -1,6 +1,7 @@
 package e2etests
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -121,6 +122,7 @@ func testMaxGoroutineCount(
 	t *testing.T,
 ) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	queues := scheduler.DefaultQueues(cfg)
 	notifications := make([]string, 0)
 
@@ -134,8 +136,9 @@ func testMaxGoroutineCount(
 		queues, cfg, &notifications, dbClient, nil, t,
 	)
 
-	testServer := httptest.NewServer(sched.Start(dags))
+	testServer := httptest.NewServer(sched.Start(ctx, dags))
 	defer testServer.Close()
+	defer cancel()
 
 	// Start executor
 	notifier := notify.NewLogsErr(slog.Default())

@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,8 +93,7 @@ func NewTaskScheduler(
 	schedulerStateFunc GetStateFunc,
 ) *TaskScheduler {
 	if logger == nil {
-		opts := slog.HandlerOptions{Level: slog.LevelInfo}
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &opts))
+		logger = defaultLogger()
 	}
 
 	return &TaskScheduler{
@@ -128,10 +126,16 @@ type taskSchedulerError struct {
 // the DagRunQueue and if so, it spins up DAG tasks scheduling for that DagRun
 // in a separate goroutine. If DagRunQueue is empty at the moment, then main
 // loop waits Config.HeartbeatMs milliseconds before the next try.
-func (ts *TaskScheduler) Start(dags dag.Registry) {
+func (ts *TaskScheduler) Start(ctx context.Context, dags dag.Registry) {
 	taskSchedulerErrors := make(chan taskSchedulerError, 100)
 	for {
 		select {
+		case <-ctx.Done():
+			ts.logger.Info(
+				"TaskScheduler is about to stop running. Context is done.",
+				"ctx.Err", ctx.Err().Error(),
+			)
+			return
 		case err := <-taskSchedulerErrors:
 			// TODO(dskrzypiec): What do we want to do with those errors?
 			ts.logger.Error("Error while scheduling new tasks", "dagId",
@@ -160,12 +164,10 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 				err)
 			continue
 		}
-		// TODO(dskrzypiec): Think about the context. At least we need to add
-		// timeout for overall DAG run timeout. Start scheduling new DAG run in
-		// a separate goroutine.
 		d, existInRegistry := dags[dagrun.DagId]
 		if !existInRegistry {
-			ts.logger.Error("TaskScheduler got DAG run for DAG which is not in given registry",
+			ts.logger.Error(
+				"TaskScheduler got DAG run for DAG which is not in given registry",
 				"dagId", string(dagrun.DagId))
 			continue
 		}
@@ -174,7 +176,7 @@ func (ts *TaskScheduler) Start(dags dag.Registry) {
 			fmt.Sprintf("scheduling dagrun=%v", dagrun),
 		)
 		atomic.AddInt64(ts.goroutineCount, 1)
-		go ts.scheduleDagTasks(context.TODO(), d, dagrun, taskSchedulerErrors)
+		go ts.scheduleDagTasks(ctx, d, dagrun, taskSchedulerErrors)
 	}
 }
 
