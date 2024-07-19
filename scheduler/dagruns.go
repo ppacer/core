@@ -40,7 +40,13 @@ type DagRunWatcher struct {
 // is usually passed by the main Scheduler, to give access to its state. In
 // case when nil is provided as logger, then slog.Logger is instantiated with
 // TextHandler and INFO severity level.
-func NewDagRunWatcher(queue ds.Queue[DagRun], dbClient *db.Client, logger *slog.Logger, stateFunc GetStateFunc, config DagRunWatcherConfig) *DagRunWatcher {
+func NewDagRunWatcher(
+	queue ds.Queue[DagRun],
+	dbClient *db.Client,
+	logger *slog.Logger,
+	stateFunc GetStateFunc,
+	config DagRunWatcherConfig,
+) *DagRunWatcher {
 	if logger == nil {
 		logger = defaultLogger()
 	}

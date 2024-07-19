@@ -400,7 +400,7 @@ func TestSyncDagRunTaskCacheSimple(t *testing.T) {
 		{"dag3", "T", dag.TaskRunning},
 	}
 	for _, e := range expectedInCache {
-		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId).Base())
+		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId).base())
 		if !exists {
 			t.Errorf("Expected DAG run task %s.%s.%s to be in the cache",
 				e.dagId, ts, e.taskId)
@@ -452,7 +452,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 	}
 
 	// dag1.ts.task3 should not be in the cache in case when cache size is 2.
-	_, d1t3Exists := drtCache.Get(drt("dag1", ts, "task3").Base())
+	_, d1t3Exists := drtCache.Get(drt("dag1", ts, "task3").base())
 	if d1t3Exists {
 		t.Errorf("DAG run task dag1.%s.task3 should not be in the cache, but it is",
 			ts)
@@ -467,7 +467,7 @@ func TestSyncDagRunTaskCacheSmall(t *testing.T) {
 		{"dag3", "T", dag.TaskRunning},
 	}
 	for _, e := range expectedInCache {
-		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId).Base())
+		drts, exists := drtCache.Get(drt(e.dagId, ts, e.taskId).base())
 		if !exists {
 			t.Errorf("Expected DAG run task %s.%s.%s to be in the cache",
 				e.dagId, ts, e.taskId)

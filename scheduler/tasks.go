@@ -29,8 +29,8 @@ type DagRunTask struct {
 	Retry  int       `json:"retry"`
 }
 
-// NextRetry creates new instance of DagRunTask for the next retry.
-func (drt DagRunTask) NextRetry() DagRunTask {
+// nextRetry creates new instance of DagRunTask for the next retry.
+func (drt DagRunTask) nextRetry() DagRunTask {
 	return DagRunTask{
 		DagId:  drt.DagId,
 		AtTime: drt.AtTime,
@@ -39,8 +39,8 @@ func (drt DagRunTask) NextRetry() DagRunTask {
 	}
 }
 
-// Base casts DagRunTask into DRTBase type.
-func (drt DagRunTask) Base() DRTBase {
+// base casts DagRunTask into DRTBase type.
+func (drt DagRunTask) base() DRTBase {
 	return DRTBase{
 		DagId:  drt.DagId,
 		AtTime: drt.AtTime,
@@ -87,9 +87,14 @@ type TaskScheduler struct {
 
 // NewTaskScheduler initialize new instance of *TaskScheduler.
 func NewTaskScheduler(
-	dags dag.Registry, db *db.Client, queues Queues,
-	cache ds.Cache[DRTBase, DagRunTaskState], config TaskSchedulerConfig,
-	logger *slog.Logger, notifier notify.Sender, goroutineCount *int64,
+	dags dag.Registry,
+	db *db.Client,
+	queues Queues,
+	cache ds.Cache[DRTBase, DagRunTaskState],
+	config TaskSchedulerConfig,
+	logger *slog.Logger,
+	notifier notify.Sender,
+	goroutineCount *int64,
 	schedulerStateFunc GetStateFunc,
 ) *TaskScheduler {
 	if logger == nil {
@@ -183,12 +188,17 @@ func (ts *TaskScheduler) Start(ctx context.Context, dags dag.Registry) {
 // UpsertTaskStatus inserts or updates given DAG run task status. That includes
 // caches, queues, database and every place that needs to be included regarding
 // task status update.
-func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, status dag.TaskStatus, taskErrStr *string) error {
+func (ts *TaskScheduler) UpsertTaskStatus(
+	ctx context.Context,
+	drt DagRunTask,
+	status dag.TaskStatus,
+	taskErrStr *string,
+) error {
 	ts.logger.Info("Start upserting dag run task status", "dagruntask", drt,
 		"status", status.String())
 
 	if status.IsTerminal() {
-		ts.taskRetriesExecuted.Add(drt.Base(), drt.Retry)
+		ts.taskRetriesExecuted.Add(drt.base(), drt.Retry)
 	}
 	shouldBeRetried, delay, rErr := ts.failedTaskManager.ShouldBeRetried(
 		drt, status,
@@ -238,9 +248,9 @@ func (ts *TaskScheduler) UpsertTaskStatus(ctx context.Context, drt DagRunTask, s
 //  Insert/update DAG run task info in the cache.
 func (ts *TaskScheduler) upsertTaskStatusCache(drt DagRunTask, status dag.TaskStatus) {
 	drts := DagRunTaskState{Status: status, StatusUpdateTs: timeutils.Now()}
-	drtsCache, entryExists := ts.taskCache.Get(drt.Base())
+	drtsCache, entryExists := ts.taskCache.Get(drt.base())
 	if !entryExists || (entryExists && drtsCache.Status != status) {
-		ts.taskCache.Put(drt.Base(), drts)
+		ts.taskCache.Put(drt.base(), drts)
 	}
 }
 
@@ -289,7 +299,7 @@ func (ts *TaskScheduler) scheduleRetry(drt DagRunTask) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
 	defer cancel()
-	ds.PutContext(ctx, ts.taskQueue, drt.NextRetry())
+	ds.PutContext(ctx, ts.taskQueue, drt.nextRetry())
 }
 
 // Function scheduleDagTasks is responsible for scheduling tasks of single DAG
@@ -657,7 +667,7 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 func (ts *TaskScheduler) isTaskDone(
 	dagrun DagRun, parent DagRunTask,
 ) (bool, dag.TaskStatus) {
-	statusFromCache, exists := ts.taskCache.Get(parent.Base())
+	statusFromCache, exists := ts.taskCache.Get(parent.base())
 	if exists && !statusFromCache.Status.CanProceed() {
 		return false, statusFromCache.Status
 	}
@@ -733,7 +743,7 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 		AtTime: dagrun.AtTime,
 		TaskId: taskId,
 	}
-	drts, exists := ts.taskCache.Get(drt.Base())
+	drts, exists := ts.taskCache.Get(drt.base())
 	if exists {
 		return drts.Status, nil
 	}
@@ -748,7 +758,7 @@ func (ts *TaskScheduler) getDagRunTaskStatus(
 				"from database", "dagruntask", drt, "err", dbErr.Error())
 		return dag.TaskNoStatus, dbErr
 	}
-	ts.taskCache.Put(drt.Base(), drts)
+	ts.taskCache.Put(drt.base(), drts)
 	return drts.Status, nil
 }
 
