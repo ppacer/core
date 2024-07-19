@@ -13,3 +13,26 @@ compiler in version `>= 1.22`, please follow this guide
 [ppacer/intro](https://ppacer.org/start/intro).
 
 
+
+## Development
+
+Developers who use Linux or MacOS can simply run `./build.sh`, to build
+packages, run tests and benchmarks.
+
+Default log severity level is set to `WARN`. In case you need more details, you
+can use `PPACER_LOG_LEVEL` env variable, like in the following examples:
+
+```bash
+PPACER_LOG_LEVEL=INFO go test -v ./...
+```
+
+In case when you need to just debug a single test, you run command similar to
+the following one:
+
+```bash
+PPACER_LOG_LEVEL=DEBUG go test -v ./db -run=TestReadDagRunTaskSingle
+```
+
+
+
+
