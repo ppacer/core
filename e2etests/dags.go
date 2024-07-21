@@ -25,6 +25,28 @@ func singleEmptyTaskDag(dagId dag.Id, sched schedule.Schedule) dag.Dag {
 		Done()
 }
 
+func simpleDAGWithLongRunningTasks(
+	dagId dag.Id, sched schedule.Schedule, execDuration time.Duration,
+	taskTimeoutDuration time.Duration, notifications *[]string,
+) dag.Dag {
+	notifier := notify.NewMock(notifications)
+
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(
+		waitTask{taskId: "task1", interval: execDuration},
+		dag.WithTaskTimeout(taskTimeoutDuration),
+		dag.WithCustomNotifier(notifier),
+	)
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
+
+	d := dag.New(dagId).AddRoot(n1)
+	if sched != nil {
+		d.AddSchedule(sched)
+	}
+	return d.Done()
+}
+
 func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "n1"})
 	n21 := dag.NewNode(emptyTask{taskId: "n21"})
