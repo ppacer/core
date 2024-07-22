@@ -43,9 +43,9 @@ func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 }
 
 // ReadDagRunLogs reads all task logs for given DAG run in chronological order.
-func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string, retry int) ([]TaskLogRecord, error) {
+func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunLogsQuery(), dagId,
-		execTs, retry)
+		execTs)
 	if rErr != nil {
 		c.logger.Error("Error while querying DAG run logs", "dagId", dagId,
 			"execTs", execTs, "err", rErr.Error())
@@ -172,7 +172,6 @@ func (c *Client) readDagRunLogsQuery() string {
 		WHERE
 				DagId = ?
 			AND ExecTs = ?
-			AND Retry = ?
 		ORDER BY
 			InsertTs ASC
 	`
