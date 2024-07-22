@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,10 +102,6 @@ func TestSchedulerE2eSimpleDagWithErrTask(t *testing.T) {
 	if len(notifications) == 0 {
 		t.Error("Expected at least one error notification, but got zero")
 	}
-	t.Log("Notifications:")
-	for _, n := range notifications {
-		t.Log(n)
-	}
 }
 
 func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
@@ -135,6 +132,10 @@ func TestSchedulerE2eSimpleDagWithErrTaskCustomNotifier(t *testing.T) {
 }
 
 func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -144,8 +145,9 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, false, &notifications, nil, nil, nil, nil,
+		logger, true, t,
 	)
 
 	if len(notifications) == 0 {
@@ -197,7 +199,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Start scheduler
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
-		queues, cfg, &notifications, nil, nil, t,
+		queues, cfg, &notifications, nil, nil, nil, t,
 	)
 	testServer := httptest.NewServer(sched.Start(ctx, dags))
 	defer testServer.Close()
@@ -221,7 +223,7 @@ func TestSchedulerE2eWritingLogsToSQLite(t *testing.T) {
 
 	// Test logs
 	tlrs, dbErr := logsDbClient.ReadDagRunLogs(
-		ctx, string(dagId), timeutils.ToString(ts), 0,
+		ctx, string(dagId), timeutils.ToString(ts),
 	)
 	if dbErr != nil {
 		t.Errorf("Error while reading logs from database: %s", dbErr.Error())
@@ -264,7 +266,7 @@ func testSchedulerE2eManyDagRuns(
 	cfg := scheduler.DefaultConfig
 	queues := scheduler.DefaultQueues(cfg)
 	sched, dbClient, logsDbClient := schedulerWithSqlite(
-		queues, cfg, notifications, nil, nil, t,
+		queues, cfg, notifications, nil, nil, nil, t,
 	)
 	testServer := httptest.NewServer(sched.Start(ctx, dags))
 
@@ -304,6 +306,7 @@ func testSchedulerE2eSingleDagRunCustom(
 	logsDbClient *db.Client,
 	sched *scheduler.Scheduler,
 	queues *scheduler.Queues,
+	logger *slog.Logger,
 	waitForDagRun bool,
 	t *testing.T,
 ) {
@@ -311,7 +314,7 @@ func testSchedulerE2eSingleDagRunCustom(
 	drs := []scheduler.DagRun{dr}
 	testSchedulerE2eManyDagRunsCustom(
 		dags, drs, timeout, expectSuccess, notifications, dbClient,
-		logsDbClient, sched, queues, waitForDagRun, t,
+		logsDbClient, sched, queues, logger, waitForDagRun, t,
 	)
 }
 
@@ -325,6 +328,7 @@ func testSchedulerE2eManyDagRunsCustom(
 	logsDbClient *db.Client,
 	sched *scheduler.Scheduler,
 	queues *scheduler.Queues,
+	logger *slog.Logger,
 	waitForDagRun bool,
 	t *testing.T,
 ) {
@@ -337,7 +341,7 @@ func testSchedulerE2eManyDagRunsCustom(
 	}
 	if sched == nil {
 		sched, dbClient, logsDbClient = schedulerWithSqlite(
-			*queues, cfg, notifications, dbClient, logsDbClient, t,
+			*queues, cfg, notifications, dbClient, logsDbClient, logger, t,
 		)
 	}
 	testServer := httptest.NewServer(sched.Start(ctx, dags))
@@ -352,10 +356,10 @@ func testSchedulerE2eManyDagRunsCustom(
 	}
 
 	// Start executor
-	notifier := notify.NewLogsErr(slog.Default())
+	notifier := notify.NewMock(notifications)
 	go func() {
 		executor := exec.New(
-			testServer.URL, logsDbClient, nil, nil, nil, notifier,
+			testServer.URL, logsDbClient, nil, logger, nil, notifier,
 		)
 		executor.Start(dags)
 	}()
@@ -429,7 +433,8 @@ func scheduleNewDagRun(
 
 func schedulerWithSqlite(
 	queues scheduler.Queues, config scheduler.Config, notifications *[]string,
-	dbClient *db.Client, logsDbClient *db.Client, t *testing.T,
+	dbClient *db.Client, logsDbClient *db.Client, logger *slog.Logger,
+	t *testing.T,
 ) (*scheduler.Scheduler, *db.Client, *db.Client) {
 	t.Helper()
 	if dbClient == nil {
@@ -446,7 +451,9 @@ func schedulerWithSqlite(
 			t.Fatal(lErr)
 		}
 	}
-	logger := testLogger()
+	if logger == nil {
+		logger = testLogger()
+	}
 	notifier := notify.NewMock(notifications)
 	sched := scheduler.New(dbClient, queues, config, logger, notifier)
 	return sched, dbClient, logsDbClient
@@ -470,4 +477,48 @@ func testLogger() *slog.Logger {
 
 	opts := slog.HandlerOptions{Level: logLevel}
 	return slog.New(slog.NewTextHandler(os.Stdout, &opts))
+}
+
+type sliceWriter struct {
+	mu   sync.Mutex
+	logs *[]string
+}
+
+func newSliceWriter(logs *[]string) *sliceWriter {
+	return &sliceWriter{
+		logs: logs,
+	}
+}
+
+func (w *sliceWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	*w.logs = append(*w.logs, string(p))
+	return len(p), nil
+}
+
+func (w *sliceWriter) Logs() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), *w.logs...) // Return a copy of the logs slice
+}
+
+func sliceLogger(sw *sliceWriter) *slog.Logger {
+	level := os.Getenv("PPACER_LOG_LEVEL")
+	var logLevel slog.Level
+	switch level {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelWarn // Default level
+	}
+
+	opts := slog.HandlerOptions{Level: logLevel}
+	return slog.New(slog.NewTextHandler(sw, &opts))
 }

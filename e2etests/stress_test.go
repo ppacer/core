@@ -133,7 +133,7 @@ func testMaxGoroutineCount(
 	defer db.CleanUpSqliteTmp(dbClient, t)
 
 	sched, _, logsDbClient := schedulerWithSqlite(
-		queues, cfg, &notifications, dbClient, nil, t,
+		queues, cfg, &notifications, dbClient, nil, nil, t,
 	)
 
 	testServer := httptest.NewServer(sched.Start(ctx, dags))

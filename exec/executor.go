@@ -201,7 +201,6 @@ func executeTask(
 	done := make(chan error, 1)
 	atomic.AddInt64(goroutineCount, 1)
 	go func() {
-		taskLogger := taskLogs.GetLogger(ti)
 		defer recoverTaskRuntimeErr(schedClient, logger, tte, taskLogger)
 		defer atomic.AddInt64(goroutineCount, -1)
 		done <- node.Task.Execute(taskContext)

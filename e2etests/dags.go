@@ -47,6 +47,32 @@ func simpleDAGWithLongRunningTasks(
 	return d.Done()
 }
 
+func manyParallelLongRunningsTasksDag(
+	n int, dagId dag.Id, sched schedule.Schedule, execDuration time.Duration,
+	taskTimeoutDuration time.Duration, notifications *[]string,
+) dag.Dag {
+	notifier := notify.NewMock(notifications)
+	start := dag.NewNode(emptyTask{taskId: "start"})
+	finish := dag.NewNode(emptyTask{taskId: "finish"})
+
+	asyncNodes := make([]*dag.Node, 0, n)
+	for i := 0; i < n; i++ {
+		taskId := fmt.Sprintf("task_%d", i+1)
+		tmp := dag.NewNode(
+			waitTask{taskId: taskId, interval: execDuration},
+			dag.WithTaskTimeout(taskTimeoutDuration),
+			dag.WithCustomNotifier(notifier),
+		)
+		asyncNodes = append(asyncNodes, tmp)
+	}
+	start.NextAsyncAndMerge(asyncNodes, finish)
+
+	return dag.New(dagId).
+		AddRoot(start).
+		AddSchedule(sched).
+		Done()
+}
+
 func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "n1"})
 	n21 := dag.NewNode(emptyTask{taskId: "n21"})

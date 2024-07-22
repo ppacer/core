@@ -20,6 +20,10 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	const failedRuns = 3
 	const maxRetries = 3
 
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -32,12 +36,18 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		logger, true, t,
 	)
+
 }
 
 func TestSimpleDagRunWithZeroRetries(t *testing.T) {
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -50,14 +60,19 @@ func TestSimpleDagRunWithZeroRetries(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		logger, true, t,
 	)
 }
 
 func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	const failedRuns = 10
 	const maxRetries = 3
+
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
 
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
@@ -71,14 +86,19 @@ func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, false, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		logger, false, t,
 	)
 }
 
 func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 	const failedRuns = 3
 	const maxRetries = 5
+
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
 
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
@@ -94,8 +114,9 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		logger, true, t,
 	)
 
 	if len(notifications) != failedRuns {
@@ -110,6 +131,10 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 }
 
 func TestDagRunWithParallelRetries(t *testing.T) {
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -119,8 +144,9 @@ func TestDagRunWithParallelRetries(t *testing.T) {
 	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
 	notifications := make([]string, 0)
 
-	testSchedulerE2eSingleDagRun(
-		dags, dr, 3*time.Second, true, &notifications, t,
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		logger, true, t,
 	)
 
 	if len(notifications) == 0 {
@@ -159,7 +185,11 @@ func TestDagRunWithDelayedRetries(t *testing.T) {
 	const taskIdWithRetries = "task1"
 	delayBeforeRetry := 256 * time.Millisecond
 
-	dbClient, err := db.NewSqliteTmpClient(nil)
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
+	dbClient, err := db.NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +211,7 @@ func TestDagRunWithDelayedRetries(t *testing.T) {
 
 	testSchedulerE2eSingleDagRunCustom(
 		dags, dr, 3*time.Second, true, &notifications, dbClient, nil, nil, nil,
-		true, t,
+		logger, true, t,
 	)
 
 	ctx := context.Background()
