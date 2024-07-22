@@ -185,13 +185,14 @@ func executeTask(
 		TaskId: node.Task.Id(),
 		Retry:  tte.Retry,
 	}
+	taskLogger := taskLogs.GetLogger(ti)
 
 	timeout := time.Duration(node.Config.TimeoutSeconds) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	taskContext := dag.TaskContext{
 		Context:  ctx,
-		Logger:   taskLogs.GetLogger(ti),
+		Logger:   taskLogger,
 		DagRun:   ri,
 		Notifier: notifier,
 	}
@@ -200,20 +201,15 @@ func executeTask(
 	done := make(chan error, 1)
 	atomic.AddInt64(goroutineCount, 1)
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				stackAsErr := fmt.Errorf("%s", string(debug.Stack()))
-				schedClient.UpsertTaskStatus(tte, dag.TaskFailed, stackAsErr)
-				logger.Error("Recovered from panic:", "err", r, "stack",
-					string(debug.Stack()))
-			}
-		}()
+		taskLogger := taskLogs.GetLogger(ti)
+		defer recoverTaskRuntimeErr(schedClient, logger, tte, taskLogger)
 		defer atomic.AddInt64(goroutineCount, -1)
 		done <- node.Task.Execute(taskContext)
 	}()
 
 	select {
 	case <-ctx.Done():
+		taskLogger.Error("Task execution exceeded timeout", "timeout", timeout)
 		logger.Error("Task execution exceeded timeout", "tte", tte, "timeout",
 			timeout)
 		tuErr := schedClient.UpsertTaskStatus(
@@ -244,6 +240,23 @@ func executeTask(
 			logger.Error("Error while updating status", "tte", tte, "status",
 				dag.TaskSuccess.String(), "err", uErr.Error())
 		}
+	}
+}
+
+func recoverTaskRuntimeErr(
+	schedClient *scheduler.Client, logger *slog.Logger, tte models.TaskToExec,
+	taskLogger *slog.Logger,
+) {
+	if r := recover(); r != nil {
+		stackStr := string(debug.Stack())
+		stackAsErr := fmt.Errorf("%s", stackStr)
+		schedClient.UpsertTaskStatus(tte, dag.TaskFailed, stackAsErr)
+		logger.Error("Recovered from panic", "tte", tte, "err", r, "stack",
+			string(debug.Stack()))
+
+		taskLogger.Error(
+			"Runtime error for taks execution", "taskToExec", tte, "stackTrace",
+			stackStr)
 	}
 }
 
