@@ -5,11 +5,14 @@
 package e2etests
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"text/template"
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/notify"
 )
 
 // Empty task with no action.
@@ -28,9 +31,17 @@ type waitTask struct {
 
 func (wt waitTask) Id() string { return wt.taskId }
 
-func (wt waitTask) Execute(_ dag.TaskContext) error {
-	time.Sleep(wt.interval)
-	return nil
+func (wt waitTask) Execute(tc dag.TaskContext) error {
+	waitChan := time.After(wt.interval)
+	select {
+	case <-tc.Context.Done():
+		ctx := context.TODO()
+		tmpl, _ := template.New("tmp").Parse("CONTEXT IS DONE")
+		sErr := tc.Notifier.Send(ctx, tmpl, notify.MsgData{})
+		return sErr
+	case <-waitChan:
+		return nil
+	}
 }
 
 // Task which logs.

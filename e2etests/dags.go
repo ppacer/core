@@ -25,6 +25,54 @@ func singleEmptyTaskDag(dagId dag.Id, sched schedule.Schedule) dag.Dag {
 		Done()
 }
 
+func simpleDAGWithLongRunningTasks(
+	dagId dag.Id, sched schedule.Schedule, execDuration time.Duration,
+	taskTimeoutDuration time.Duration, notifications *[]string,
+) dag.Dag {
+	notifier := notify.NewMock(notifications)
+
+	n1 := dag.NewNode(emptyTask{taskId: "start"})
+	n2 := dag.NewNode(
+		waitTask{taskId: "task1", interval: execDuration},
+		dag.WithTaskTimeout(taskTimeoutDuration),
+		dag.WithCustomNotifier(notifier),
+	)
+	n3 := dag.NewNode(emptyTask{taskId: "end"})
+	n1.Next(n2).Next(n3)
+
+	d := dag.New(dagId).AddRoot(n1)
+	if sched != nil {
+		d.AddSchedule(sched)
+	}
+	return d.Done()
+}
+
+func manyParallelLongRunningsTasksDag(
+	n int, dagId dag.Id, sched schedule.Schedule, execDuration time.Duration,
+	taskTimeoutDuration time.Duration, notifications *[]string,
+) dag.Dag {
+	notifier := notify.NewMock(notifications)
+	start := dag.NewNode(emptyTask{taskId: "start"})
+	finish := dag.NewNode(emptyTask{taskId: "finish"})
+
+	asyncNodes := make([]*dag.Node, 0, n)
+	for i := 0; i < n; i++ {
+		taskId := fmt.Sprintf("task_%d", i+1)
+		tmp := dag.NewNode(
+			waitTask{taskId: taskId, interval: execDuration},
+			dag.WithTaskTimeout(taskTimeoutDuration),
+			dag.WithCustomNotifier(notifier),
+		)
+		asyncNodes = append(asyncNodes, tmp)
+	}
+	start.NextAsyncAndMerge(asyncNodes, finish)
+
+	return dag.New(dagId).
+		AddRoot(start).
+		AddSchedule(sched).
+		Done()
+}
+
 func simple131DAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(emptyTask{taskId: "n1"})
 	n21 := dag.NewNode(emptyTask{taskId: "n21"})
