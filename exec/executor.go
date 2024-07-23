@@ -63,7 +63,7 @@ func defaultConfig() Config {
 // nil, then notify.NewLogsErr (notifications as logs) will be used.
 func New(
 	schedAddr string,
-	logDbClient *db.Client,
+	logDbClient *db.LogsClient,
 	polling pace.Strategy,
 	logger *slog.Logger,
 	config *Config,

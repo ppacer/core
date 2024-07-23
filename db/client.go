@@ -39,11 +39,28 @@ type DB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+// DBClient defines abstraction class for database clients.
+type DBClient interface {
+	DBConn() DB
+}
+
 // Client represents the main database client.
 type Client struct {
 	dbConn DB
 	logger *slog.Logger
 }
+
+// Client is a DBClient.
+func (c *Client) DBConn() DB { return c.dbConn }
+
+// LogsClient represents ppacer task logs database client.
+type LogsClient struct {
+	dbConn DB
+	logger *slog.Logger
+}
+
+// LogsClient is a DBClient.
+func (lc *LogsClient) DBConn() DB { return lc.dbConn }
 
 // Produces new Client using in-memory SQLite database with schema created
 // based on given script.
@@ -76,18 +93,18 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 // enable futher debugging. Even though this function takes generic *Client,
 // it's mainly meant for SQLite-based database clients which are used in
 // testing.
-func CleanUpSqliteTmp(c *Client, t *testing.T) {
-	if closeErr := c.dbConn.Close(); closeErr != nil {
+func CleanUpSqliteTmp(c DBClient, t *testing.T) {
+	if closeErr := c.DBConn().Close(); closeErr != nil {
 		t.Errorf("Error while closing connection to DB: %s", closeErr.Error())
 	}
 	if t.Failed() {
 		t.Logf("Database was not deleted. Please check: sqlite3 %s",
-			c.dbConn.DataSource())
+			c.DBConn().DataSource())
 		return
 	}
 	// tests passed, we can proceed to remove DB file
-	if err := os.Remove(c.dbConn.DataSource()); err != nil {
+	if err := os.Remove(c.DBConn().DataSource()); err != nil {
 		t.Errorf("Cannot remove database source file %s: %s",
-			c.dbConn.DataSource(), err.Error())
+			c.DBConn().DataSource(), err.Error())
 	}
 }

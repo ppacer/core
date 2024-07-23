@@ -7,24 +7,35 @@ package db
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
 // Count returns count of rows for given table. If case of errors -1 is
 // returned and error is logged.
 func (c *Client) Count(table string) int {
+	return count(c.dbConn, c.logger, table)
+}
+
+// Count returns count of rows for given table. If case of errors -1 is
+// returned and error is logged.
+func (lc *LogsClient) Count(table string) int {
+	return count(lc.dbConn, lc.logger, table)
+}
+
+func count(dbConn DB, logger *slog.Logger, table string) int {
 	start := time.Now()
-	c.logger.Debug("Start COUNT query", "table", table)
+	logger.Debug("Start COUNT query", "table", table)
 
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
-	row := c.dbConn.QueryRow(query)
+	row := dbConn.QueryRow(query)
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
-		c.logger.Error("Cannot execute COUNT(*)", "table", table, "err", err)
+		logger.Error("Cannot execute COUNT(*)", "table", table, "err", err)
 		return -1
 	}
-	c.logger.Debug("Finished COUNT(*) query", "table", table, "duration",
+	logger.Debug("Finished COUNT(*) query", "table", table, "duration",
 		time.Since(start))
 	return count
 }

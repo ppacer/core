@@ -303,7 +303,7 @@ func testSchedulerE2eSingleDagRunCustom(
 	expectSuccess bool,
 	notifications *[]string,
 	dbClient *db.Client,
-	logsDbClient *db.Client,
+	logsDbClient *db.LogsClient,
 	sched *scheduler.Scheduler,
 	queues *scheduler.Queues,
 	logger *slog.Logger,
@@ -325,7 +325,7 @@ func testSchedulerE2eManyDagRunsCustom(
 	expectSuccess bool,
 	notifications *[]string,
 	dbClient *db.Client,
-	logsDbClient *db.Client,
+	logsDbClient *db.LogsClient,
 	sched *scheduler.Scheduler,
 	queues *scheduler.Queues,
 	logger *slog.Logger,
@@ -433,26 +433,26 @@ func scheduleNewDagRun(
 
 func schedulerWithSqlite(
 	queues scheduler.Queues, config scheduler.Config, notifications *[]string,
-	dbClient *db.Client, logsDbClient *db.Client, logger *slog.Logger,
+	dbClient *db.Client, logsDbClient *db.LogsClient, logger *slog.Logger,
 	t *testing.T,
-) (*scheduler.Scheduler, *db.Client, *db.Client) {
+) (*scheduler.Scheduler, *db.Client, *db.LogsClient) {
 	t.Helper()
+	if logger == nil {
+		logger = testLogger()
+	}
 	if dbClient == nil {
 		var err error
-		dbClient, err = db.NewSqliteTmpClient(nil)
+		dbClient, err = db.NewSqliteTmpClient(logger)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	if logsDbClient == nil {
 		var lErr error
-		logsDbClient, lErr = db.NewSqliteTmpClientForLogs(nil)
+		logsDbClient, lErr = db.NewSqliteTmpClientForLogs(logger)
 		if lErr != nil {
 			t.Fatal(lErr)
 		}
-	}
-	if logger == nil {
-		logger = testLogger()
 	}
 	notifier := notify.NewMock(notifications)
 	sched := scheduler.New(dbClient, queues, config, logger, notifier)

@@ -24,14 +24,14 @@ const (
 
 // SQLite implements Factory using SQLite database as a target for task logs.
 type SQLite struct {
-	dbClient   *db.Client
+	dbClient   *db.LogsClient
 	loggerOpts *slog.HandlerOptions
 }
 
 // NewSQLite instantiate new SQLite object. Given database client should be
 // setup to use SQLite. Optionally provided loggerOpts would be used in the
 // logger for task logs.
-func NewSQLite(dbClient *db.Client, loggerOpts *slog.HandlerOptions) *SQLite {
+func NewSQLite(dbClient *db.LogsClient, loggerOpts *slog.HandlerOptions) *SQLite {
 	return &SQLite{
 		dbClient:   dbClient,
 		loggerOpts: loggerOpts,
@@ -57,7 +57,7 @@ func (s *SQLite) GetLogReader(ti TaskInfo) Reader {
 
 type sqliteLogReader struct {
 	ti       TaskInfo
-	dbClient *db.Client
+	dbClient *db.LogsClient
 }
 
 // ReadAll reads all log records for the DAG run task context in chronological
@@ -88,7 +88,7 @@ func (s *sqliteLogReader) ReadLatest(ctx context.Context, n int) ([]Record, erro
 
 type sqliteLogWriter struct {
 	ti       TaskInfo
-	dbClient *db.Client
+	dbClient *db.LogsClient
 }
 
 // Write parse and writes given input to SQLite database tasklogs table.

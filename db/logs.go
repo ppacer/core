@@ -21,7 +21,7 @@ type TaskLogRecord struct {
 }
 
 // InsertTaskLog inserts single log record into tasklogs table.
-func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
+func (c *LogsClient) InsertTaskLog(tlr TaskLogRecord) error {
 	res, iErr := c.dbConn.Exec(c.insertTaskLogQuery(),
 		tlr.DagId, tlr.ExecTs, tlr.TaskId, tlr.Retry, tlr.InsertTs, tlr.Level,
 		tlr.Message, tlr.Attributes,
@@ -43,7 +43,7 @@ func (c *Client) InsertTaskLog(tlr TaskLogRecord) error {
 }
 
 // ReadDagRunLogs reads all task logs for given DAG run in chronological order.
-func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]TaskLogRecord, error) {
+func (c *LogsClient) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunLogsQuery(), dagId,
 		execTs)
 	if rErr != nil {
@@ -63,7 +63,7 @@ func (c *Client) ReadDagRunLogs(ctx context.Context, dagId, execTs string) ([]Ta
 
 // ReadDagRunTaskLogs reads all logs for given DAG run task in chronological
 // order.
-func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId string, retry int) ([]TaskLogRecord, error) {
+func (c *LogsClient) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId string, retry int) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, c.readDagRunTaskLogsQuery(),
 		dagId, execTs, taskId, retry)
 	if rErr != nil {
@@ -84,7 +84,7 @@ func (c *Client) ReadDagRunTaskLogs(ctx context.Context, dagId, execTs, taskId s
 
 // ReadDagRunTaskLogsLatest reads given number of latest DAG run task logs in
 // chronological order.
-func (c *Client) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, taskId string, retry, latest int) ([]TaskLogRecord, error) {
+func (c *LogsClient) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, taskId string, retry, latest int) ([]TaskLogRecord, error) {
 	records, rErr := c.readTaskLogsQuery(
 		ctx, c.readDagRunTaskLogsLatestQuery(), dagId, execTs, taskId, retry,
 		latest,
@@ -96,7 +96,7 @@ func (c *Client) ReadDagRunTaskLogsLatest(ctx context.Context, dagId, execTs, ta
 	return records, nil
 }
 
-func (c *Client) readTaskLogsQuery(ctx context.Context, query string, args ...any) ([]TaskLogRecord, error) {
+func (c *LogsClient) readTaskLogsQuery(ctx context.Context, query string, args ...any) ([]TaskLogRecord, error) {
 	rows, rErr := c.dbConn.QueryContext(ctx, query, args...)
 	if rErr != nil {
 		c.logger.Error("Error while querying DAG run task logs", "query", query,
@@ -115,7 +115,7 @@ func (c *Client) readTaskLogsQuery(ctx context.Context, query string, args ...an
 
 // For given *sql.Rows reads and parse TaskLogRecord from presumably tasklogs
 // table. Given rows should be close by the parent function.
-func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRecord, error) {
+func (c *LogsClient) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRecord, error) {
 	start := time.Now()
 	c.logger.Debug("Start reading tasklogs records")
 	tlrs := make([]TaskLogRecord, 0, 10)
@@ -154,7 +154,7 @@ func (c *Client) readTaskLogs(ctx context.Context, rows *sql.Rows) ([]TaskLogRec
 	return tlrs, nil
 }
 
-func (c *Client) insertTaskLogQuery() string {
+func (c *LogsClient) insertTaskLogQuery() string {
 	return `
 		INSERT INTO tasklogs (
 			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
@@ -163,7 +163,7 @@ func (c *Client) insertTaskLogQuery() string {
 	`
 }
 
-func (c *Client) readDagRunLogsQuery() string {
+func (c *LogsClient) readDagRunLogsQuery() string {
 	return `
 		SELECT
 			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
@@ -177,7 +177,7 @@ func (c *Client) readDagRunLogsQuery() string {
 	`
 }
 
-func (c *Client) readDagRunTaskLogsLatestQuery() string {
+func (c *LogsClient) readDagRunTaskLogsLatestQuery() string {
 	return `
 		SELECT
 			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
@@ -195,7 +195,7 @@ func (c *Client) readDagRunTaskLogsLatestQuery() string {
 	`
 }
 
-func (c *Client) readDagRunTaskLogsQuery() string {
+func (c *LogsClient) readDagRunTaskLogsQuery() string {
 	return `
 		SELECT
 			DagId, ExecTs, TaskId, Retry, InsertTs, Level, Message, Attributes
