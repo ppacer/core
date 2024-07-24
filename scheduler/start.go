@@ -2,10 +2,44 @@
 // Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
-// Package scheduler provides functions for creating and starting new
-// Scheduler.
-//
-// TODO more docs and examples.
+/*
+Package scheduler provides functionality for creating and starting new Scheduler.
+
+# Introduction
+
+Scheduler type is the hearth of ppacer. Once initialized and started it does
+the following steps:
+  - Setup internal caches and configuration (eg timezone).
+  - Synchronize metadata on current dag.Registry with the database.
+  - Setup new DagRunWatcher, to listen on schedules and starts new DAG runs.
+  - Setup new TaskScheduler, to listen on new DAG runs and start scheduling its
+    tasks.
+  - Register Scheduler endpoints in form of http.Handler.
+
+It's meant to have single instance of Scheduler per program. Types
+DagRunWatcher and TaskScheduler are public primarily due to exposing
+documentation and they usually shouldn't be accessed directly. It's enough, to
+have an instance of Scheduler.
+
+# Default Scheduler
+
+The simplest way, to start new Scheduler is using DefaultStarted function.
+Let's take a look on the following example:
+
+	ctx := context.TODO()
+	dags := dag.Registry{} // add your dags or use existing Registry
+	schedulerHandler := DefaultStarted(ctx, dags, "scheduler.db", 9191)
+	lasErr := schedulerHandler.ListenAndServe()
+	if lasErr != nil {
+		log.Panicf("Cannot start the server: %s\n", lasErr.Error())
+	}
+
+Function DefaultStarted starts Scheduler with default configuration, including
+notifier in form of log ERR messages, SQLite database and default slog.Logger.
+
+To get full example of ppacer "hello world", please refer to:
+https://ppacer.org/start/intro/
+*/
 package scheduler
 
 import (

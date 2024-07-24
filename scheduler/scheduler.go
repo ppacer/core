@@ -44,7 +44,8 @@ type Scheduler struct {
 // are by default available in db package (e.g. db.NewSqliteClient). Default
 // configuration is set in DefaultConfig and default fixed-size buffer queues
 // in DefaultQueues. In case when nil is provided as logger, then slog.Logger
-// is instantiated with TextHandler and INFO severity level.
+// is instantiated with TextHandler and INFO severity level (unless
+// PPACER_LOG_LEVEL env viariable is set).
 func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger, notifier notify.Sender) *Scheduler {
 	if logger == nil {
 		logger = defaultLogger()
