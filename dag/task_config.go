@@ -61,7 +61,7 @@ var DefaultTaskConfig = TaskConfig{
 type TaskConfigFunc func(*TaskConfig)
 
 // WithTaskTimeout returns TaskConfigFunc for setting a timeout for task
-// exection.
+// execution.
 func WithTaskTimeout(timeout time.Duration) TaskConfigFunc {
 	return func(config *TaskConfig) {
 		config.TimeoutSeconds = timeout.Seconds()

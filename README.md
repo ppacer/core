@@ -1,5 +1,7 @@
 # ppacer
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/ppacer/core)](https://goreportcard.com/report/github.com/ppacer/core)
+
 [Ppacer](https://ppacer.org) is a DAG scheduler aiming to provide high
 reliability, high performance and minimal resource overhead.
 
