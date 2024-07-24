@@ -90,7 +90,7 @@ func NewInMemoryClient(schemaScriptPath string) (*Client, error) {
 
 // CleanUpSqliteTmp deletes SQLite database source file if all tests in the
 // scope passed. In at least one test failed, database will not be deleted, to
-// enable futher debugging. Even though this function takes generic *Client,
+// enable further debugging. Even though this function takes generic *Client,
 // it's mainly meant for SQLite-based database clients which are used in
 // testing.
 func CleanUpSqliteTmp(c DBClient, t *testing.T) {

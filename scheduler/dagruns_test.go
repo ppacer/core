@@ -540,7 +540,7 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	d := emptyDag("sample_dag", &sched, attr)
 
 	// we simulate empty nextSchedules after the scheduler restart (actually we
-	// sync intentionally on scheduler.Start, but we also should have saftey
+	// sync intentionally on scheduler.Start, but we also should have safety
 	// mechanism on trySchedule level to ensure that we always have
 	// nextSchedules up to date).
 	nextSchedules := map[dag.Id]*time.Time{}

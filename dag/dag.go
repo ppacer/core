@@ -39,7 +39,7 @@ var ErrDagAlreadyInRegistry = errors.New("given DAG ID is already in the Registr
 // Recommended way to create new Dag is to use provided fluent API:
 //
 //	myDag := New(Id("sample_dag")).
-//	  AddSchedule(FixedInterval{...}).
+//	  AddSchedule(schedule.NewFixed(startTs, 60 * time.Second)).
 //	  AddRoot(&root).
 //	  AddAttributes(Attr{CatchUp: True}).
 //	  Done()
