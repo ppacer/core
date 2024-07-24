@@ -2,7 +2,19 @@
 // Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
-// Package exec defines ppacer Executor and related functionalities.
+/*
+Package exec defines ppacer Executor and related functionalities.
+
+Executor on start up (Start method) spins endless loop in which it polls
+Scheduler (via HTTP), to check if there are new tasks, to be executed. Polling
+is performed according to provided strategy (pace.Strategy). New tasks are
+executed in separate goroutines. When executed task receive runtime error,
+Executor will recover and will mark task execution as failed.
+
+Executor might be used in the same program as Scheduler (in a separate
+goroutine) or can be put in a separate binary. Also there can be many
+executors, potentially on multiple machines.
+*/
 package exec
 
 import (
@@ -119,7 +131,12 @@ func NewDefault(schedulerUrl, taskLogsDbFile string) *Executor {
 	return New(schedulerUrl, logsDbClient, nil, nil, nil, nil)
 }
 
-// Start starts executor. TODO...
+// Start starts executor main loop. It polls, according to the polling
+// strategy, Scheduler for new tasks to be executed. Tasks are executed in
+// separate goroutines. There's a limit for number of goroutines running at the
+// same time (default is 1000). If that limit is hit, Executor would wait with
+// starting execution new task, until number of currently running goroutines
+// would go below the limit.
 func (e *Executor) Start(dags dag.Registry) {
 	for {
 		tte, err := e.schedClient.GetTask()
