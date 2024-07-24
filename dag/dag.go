@@ -7,14 +7,77 @@ Package dag provides DAG definition and related functionalities.
 
 # Introduction
 
-Package dag provides functionalities for creating new Dag which includes
-definition for Schedule and Task interfaces. Moreover this package provides
-global registry for Dags behind simple API containing Add, Get and List
-functions.
+Package dag provides a way to express your business process in form of a DAG
+(directed acyclic graph) using type Dag. Dag contains information about the
+process schedule, attributes and actual graph of tasks.
 
 # Creating new DAG
 
-*TODO*: Example in here
+Recommended way to define a DAG is via fluent API provided by the package.
+For example:
+
+	task1 := NewNode(emptyTask{taskId: "task1"})
+	task2 := NewNode(emptyTask{taskId: "task2"}, WithTaskRetries(3))
+	task1.Next(task2)
+
+	everyHour := schedule.NewCron().AtMinute(5)
+	myDag := New(Id("sample_dag")).
+		AddRoot(&task1).
+		AddSchedule(everyHour).
+		Done()
+
+DAGs are usually stored in a single Registry (Id -> Dag mapping).
+
+	dags := Registry{}
+	addErr := dags.Add(myDag)
+
+# Task configuration
+
+Task configuration is kept on the Node level. This is because Task is all about
+implementing Execute method and information about DAG structure and
+configuration is kept on Node level. It’s a implementation detail though.
+Node type contains Config field of type TaskConfig. The most
+convenient way to setup custom task configuration is by creating a new node
+using NewNode function.
+
+	var task dag.Task = createSomeTask()
+
+	// task with default config
+	n1 := dag.NewNode(task)
+
+	// task with 3 retries
+	n2 := dag.NewNode(task, dag.WithTaskRetries(3))
+
+	// task with 3 retries and 5 minutes delay between those retries
+	n3 := dag.NewNode(
+
+		task,
+		dag.WithTaskRetries(3),
+		dag.WithTaskRetriesDelay(5 * 60 * time.Second),
+
+	)
+
+	// when the following task would fail, then email notification would be sent
+	var emailNotifier notify.Sender = setupEmailNotifier() // mock
+	n4 := dag.NewNode(task, dag.WithCustomNotifier(emailNotifier))
+
+	// setting up the same config for few tasks
+
+		myTaskConfig := func(tc *TaskConfig) {
+			tc.TimeoutSeconds = 60
+			tc.Retries = 3
+			tc.RetriesDelaySeconds = (1800 * time.Milliseconds).Seconds()
+		}
+
+	m1 := dag.NewNode(task1, myTaskConfig)
+	m2 := dag.NewNode(task2, myTaskConfig)
+	// ...
+	mN := dag.NewNode(taskN, myTaskConfig)
+
+# Reference
+
+For more examples and high-level description, please visit:
+https://ppacer.org/internals/dags/.
 */
 package dag
 
