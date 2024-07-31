@@ -6,6 +6,7 @@ package e2etests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
 		logger, true, t,
 	)
-
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestSimpleDagRunWithZeroRetries(t *testing.T) {
@@ -64,6 +65,7 @@ func TestSimpleDagRunWithZeroRetries(t *testing.T) {
 		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
 		logger, true, t,
 	)
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
@@ -73,6 +75,12 @@ func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	logs := make([]string, 0, 100)
 	sw := newSliceWriter(&logs)
 	logger := sliceLogger(sw)
+
+	dbClient, err := db.NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(dbClient, t)
 
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
@@ -87,9 +95,32 @@ func TestSimpleDagRunWithFailureAfterRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRunCustom(
-		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
-		logger, false, t,
+		dags, dr, 3*time.Second, false, &notifications, dbClient, nil, nil, nil,
+		logger, true, t,
 	)
+
+	drs, dbErr := dbClient.ReadLatestDagRuns(context.Background())
+	if dbErr != nil {
+		t.Errorf("Could not read DAG run from the DB: %s", dbErr.Error())
+	}
+	latestDr, exist := drs[string(dagId)]
+	if !exist {
+		t.Errorf("Expected at least 1 DAG run for DAG %s, got nothing", string(dagId))
+	}
+	if latestDr.Status != dag.RunFailed.String() {
+		t.Errorf("Expected failed dag run (%v), but it's not failed", latestDr)
+	}
+
+	if len(notifications) != 1 {
+		t.Errorf("Expected single notification on task failure, got: %d",
+			len(notifications))
+
+		t.Log("notifications:")
+		for _, msg := range notifications {
+			t.Logf("  -%s\n", msg)
+		}
+	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
@@ -128,6 +159,7 @@ func TestSimpleDagRunWithRetriesAndAlerts(t *testing.T) {
 			t.Logf("  -%s\n", msg)
 		}
 	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestDagRunWithParallelRetries(t *testing.T) {
@@ -152,6 +184,7 @@ func TestDagRunWithParallelRetries(t *testing.T) {
 	if len(notifications) == 0 {
 		t.Error("Expected at least 1 notification on task retries, got: 0")
 	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func simple131DagWithRetries(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
@@ -228,6 +261,7 @@ func TestDagRunWithDelayedRetries(t *testing.T) {
 			expectedNumOfTasks, len(drts))
 	}
 	testGapDurationBetweenTasks(drts, taskIdWithRetries, delayBeforeRetry, t)
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func testGapDurationBetweenTasks(
@@ -264,5 +298,14 @@ func testGapDurationBetweenTasks(
 				expectedDelay, timeDiff, prevTs, ts)
 		}
 		prevTs = ts
+	}
+}
+
+func exposeSliceLoggerOnTestFailure(logs []string, t *testing.T) {
+	if t.Failed() {
+		fmt.Printf("Logs captured by sliceLogger (%d lines):\n", len(logs))
+		for _, logLine := range logs {
+			fmt.Print(logLine)
+		}
 	}
 }

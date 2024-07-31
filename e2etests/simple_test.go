@@ -153,6 +153,7 @@ func TestSchedulerE2eSimpleDagWithRuntimeErrTask(t *testing.T) {
 	if len(notifications) == 0 {
 		t.Error("Expected at least one error notification, but got zero")
 	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestSchedulerE2eTwoDagRunsSameTimeSameSchedule(t *testing.T) {
@@ -333,6 +334,8 @@ func testSchedulerE2eManyDagRunsCustom(
 	t *testing.T,
 ) {
 	t.Helper()
+	dbClientNotPassed := dbClient == nil
+	logsDbClientNotPassed := logsDbClient == nil
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := scheduler.DefaultConfig
 	if queues == nil {
@@ -348,10 +351,10 @@ func testSchedulerE2eManyDagRunsCustom(
 	defer cancel()
 
 	defer testServer.Close()
-	if dbClient == nil {
+	if dbClientNotPassed {
 		defer db.CleanUpSqliteTmp(dbClient, t)
 	}
-	if logsDbClient == nil {
+	if logsDbClientNotPassed {
 		defer db.CleanUpSqliteTmp(logsDbClient, t)
 	}
 

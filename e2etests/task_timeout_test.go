@@ -80,6 +80,7 @@ func TestSimpleDagRunWithTaskTimeout(t *testing.T) {
 			t.Logf("  -%s: %s\n", dbl.InsertTs, dbl.Message)
 		}
 	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }
 
 func TestSimpleDagRunWithManyTaskTimeouts(t *testing.T) {
@@ -163,4 +164,5 @@ func TestSimpleDagRunWithManyTaskTimeouts(t *testing.T) {
 			t.Logf("  -%s: %s\n", dbl.InsertTs, dbl.Message)
 		}
 	}
+	exposeSliceLoggerOnTestFailure(logs, t)
 }

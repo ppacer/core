@@ -82,6 +82,7 @@ func (ftm *failedTaskManager) CheckAndSendAlerts(
 ) error {
 	drtNode, nodeErr := ftm.getDrtNode(drt)
 	if nodeErr != nil {
+		ftm.logger.Error("Cannot get a node from the DAG", "drt", drt)
 		return nodeErr
 	}
 
@@ -94,6 +95,7 @@ func (ftm *failedTaskManager) CheckAndSendAlerts(
 	}
 
 	if drtNode.Config.Notifier != nil {
+		ftm.logger.Debug("Custom notifier will be used for the task", "drt", drt)
 		notifier = drtNode.Config.Notifier
 	}
 
@@ -109,7 +111,7 @@ func (ftm *failedTaskManager) CheckAndSendAlerts(
 		return notifier.Send(ctx, drtNode.Config.AlertOnRetryTemplate, msg)
 	}
 
-	if drtNode.Config.SendAlertOnFailure {
+	if !shouldBeRetried && drtNode.Config.SendAlertOnFailure {
 		return notifier.Send(ctx, drtNode.Config.AlertOnFailureTemplate, msg)
 	}
 	return nil
