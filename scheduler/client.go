@@ -13,15 +13,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/models"
-)
-
-const (
-	getTaskEndpoint          = "/dag/task/pop"
-	getStateEndpoint         = "/state"
-	upsertTaskStatusEndpoint = "/dag/task/update"
 )
 
 // Client provides API for interacting with Scheduler.
@@ -29,6 +24,7 @@ type Client struct {
 	httpClient   *http.Client
 	schedulerUrl string
 	logger       *slog.Logger
+	routes       map[api.EndpointID]api.Endpoint
 }
 
 // NewClient instantiate new Client. In case when HTTP client or logger are
@@ -44,6 +40,7 @@ func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config 
 		httpClient:   httpClient,
 		schedulerUrl: url,
 		logger:       logger,
+		routes:       api.Routes(),
 	}
 }
 
@@ -115,17 +112,18 @@ func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus, 
 	)
 	if postErr != nil {
 		return fmt.Errorf("could not do POST %s request: %s",
-			upsertTaskStatusEndpoint, postErr)
+			c.routes[api.EndpointDagTaskUpdate].UrlSuffix, postErr)
 	}
 	defer resp.Body.Close()
 	body, rErr := io.ReadAll(resp.Body)
 	if rErr != nil {
 		return fmt.Errorf("cannot read POST %s response body: %s",
-			upsertTaskStatusEndpoint, rErr.Error())
+			c.routes[api.EndpointDagTaskUpdate].UrlSuffix, rErr.Error())
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("error with status %s for POST %s: %s",
-			resp.Status, upsertTaskStatusEndpoint, string(body))
+			resp.Status, c.routes[api.EndpointDagTaskUpdate].UrlSuffix,
+			string(body))
 	}
 	c.logger.Debug("Updated task status", "taskToExec", tte, "status", status,
 		"duration", time.Since(start))
@@ -162,13 +160,16 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) getTaskUrl() string {
-	return fmt.Sprintf("%s%s", c.schedulerUrl, getTaskEndpoint)
+	suffix := c.routes[api.EndpointDagTaskPop].UrlSuffix
+	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
 }
 
 func (c *Client) getStateUrl() string {
-	return fmt.Sprintf("%s%s", c.schedulerUrl, getStateEndpoint)
+	suffix := c.routes[api.EndpointState].UrlSuffix
+	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
 }
 
 func (c *Client) getUpdateTaskStatusUrl() string {
-	return fmt.Sprintf("%s%s", c.schedulerUrl, upsertTaskStatusEndpoint)
+	suffix := c.routes[api.EndpointDagTaskUpdate].UrlSuffix
+	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
 }
