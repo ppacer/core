@@ -18,6 +18,15 @@ const (
 
 	// Endpoint return current status of Scheduler.
 	EndpointState
+
+	// Endpoint returns statistics on DAG runs and scheduler queues.
+	EndpointUiDagrunStats
+
+	// Endpoint returns data on N latest DAG runs.
+	EndpointUiDagrunLatest
+
+	// Endpoint returns status for given DAG run ID.
+	EndpointUiDagrunStatus
 )
 
 // Endpoint contains information about an HTTP endpoint.
@@ -29,11 +38,16 @@ type Endpoint struct {
 // Routes for all Scheduler server endpoints.
 func Routes() map[EndpointID]Endpoint {
 	return map[EndpointID]Endpoint{
-		// /dag/task
+		// /dag/task/*
 		EndpointDagTaskPop:    {"GET /dag/task/pop", "/dag/task/pop"},
 		EndpointDagTaskUpdate: {"POST /dag/task/update", "/dag/task/update"},
 
 		// /state
 		EndpointState: {"GET /state", "/state"},
+
+		// /ui/dagrun/*
+		EndpointUiDagrunStats:  {"GET /ui/dagrun/stats", "/ui/dagrun/stats"},
+		EndpointUiDagrunLatest: {"GET /ui/dagrun/latest", "/ui/dagrun/latest"},
+		EndpointUiDagrunStatus: {"GET /ui/dagrun/status/{runId}", "/ui/dagrun/status/"},
 	}
 }

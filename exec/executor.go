@@ -30,11 +30,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
-	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/pace"
 	"github.com/ppacer/core/scheduler"
@@ -177,7 +177,7 @@ func (e *Executor) Start(dags dag.Registry) {
 }
 
 func executeTask(
-	tte models.TaskToExec, node *dag.Node, schedClient *scheduler.Client,
+	tte api.TaskToExec, node *dag.Node, schedClient *scheduler.Client,
 	taskLogs tasklog.Factory, logger *slog.Logger, notifier notify.Sender,
 	goroutineCount *int64,
 ) {
@@ -260,7 +260,7 @@ func executeTask(
 }
 
 func recoverTaskRuntimeErr(
-	schedClient *scheduler.Client, logger *slog.Logger, tte models.TaskToExec,
+	schedClient *scheduler.Client, logger *slog.Logger, tte api.TaskToExec,
 	taskLogger *slog.Logger,
 ) {
 	if r := recover(); r != nil {

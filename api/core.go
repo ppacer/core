@@ -2,9 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 // See LICENSE file in the project root for full license information.
 
-// Package models contains types used for communication between executors and the scheduler.
-package models
+package api
 
+// TaskToExec contains information about a task which is scheduled to be
+// executed. Primarily to communicate between Scheduler and Executors.
 type TaskToExec struct {
 	DagId  string `json:"dagId"`
 	ExecTs string `json:"execTs"`
@@ -12,6 +13,8 @@ type TaskToExec struct {
 	Retry  int    `json:"retry"`
 }
 
+// DagRunTaskStatus contains information about DAG run task status and
+// potential execution error.
 type DagRunTaskStatus struct {
 	DagId   string  `json:"dagId"`
 	ExecTs  string  `json:"execTs"`

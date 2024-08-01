@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/ds"
-	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -31,7 +31,7 @@ func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	drtmodel := models.TaskToExec{
+	drtmodel := api.TaskToExec{
 		DagId:  string(drt.DagId),
 		ExecTs: timeutils.ToString(drt.AtTime),
 		TaskId: drt.TaskId,
@@ -54,7 +54,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var drts models.DagRunTaskStatus
+	var drts api.DagRunTaskStatus
 	err := json.NewDecoder(r.Body).Decode(&drts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

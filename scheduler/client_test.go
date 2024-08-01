@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
-	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
@@ -141,7 +141,7 @@ func TestClientUpsertTaskEmptyDb(t *testing.T) {
 	defer cancel()
 
 	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
-	tte := models.TaskToExec{
+	tte := api.TaskToExec{
 		DagId:  "mock_dag",
 		ExecTs: timeutils.ToString(time.Now()),
 		TaskId: "task1",
@@ -287,7 +287,7 @@ func TestClientGetStateSimple(t *testing.T) {
 }
 
 func taskToExecEqualsDRT(
-	task models.TaskToExec, expectedDrt DagRunTask, t *testing.T,
+	task api.TaskToExec, expectedDrt DagRunTask, t *testing.T,
 ) {
 	t.Helper()
 	if task.DagId != string(expectedDrt.DagId) {
@@ -303,8 +303,8 @@ func taskToExecEqualsDRT(
 	}
 }
 
-func newTaskToExec(dagId, execTs, taskId string) models.TaskToExec {
-	return models.TaskToExec{
+func newTaskToExec(dagId, execTs, taskId string) api.TaskToExec {
+	return api.TaskToExec{
 		DagId:  dagId,
 		ExecTs: execTs,
 		TaskId: taskId,

@@ -7,6 +7,7 @@ package scheduler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,7 +17,6 @@ import (
 	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/ds"
-	"github.com/ppacer/core/models"
 )
 
 // Client provides API for interacting with Scheduler.
@@ -45,9 +45,9 @@ func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config 
 }
 
 // GetTask gets new task from scheduler to be executed by executor.
-func (c *Client) GetTask() (models.TaskToExec, error) {
+func (c *Client) GetTask() (api.TaskToExec, error) {
 	startTs := time.Now()
-	var taskToExec models.TaskToExec
+	var taskToExec api.TaskToExec
 
 	resp, err := c.httpClient.Get(c.getTaskUrl())
 	if err != nil {
@@ -74,7 +74,7 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 	if jErr != nil {
 		c.logger.Error("Unmarshal into APIResponse failed", "body", string(body),
 			"err", jErr)
-		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram models.TaskToExec: %s",
+		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram api.TaskToExec: %s",
 			jErr.Error())
 	}
 	c.logger.Debug("GetTask finished", "duration", time.Since(startTs))
@@ -83,7 +83,7 @@ func (c *Client) GetTask() (models.TaskToExec, error) {
 
 // UpsertTaskStatus either updates existing DAG run task status or inserts new
 // one.
-func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus, taskErr error) error {
+func (c *Client) UpsertTaskStatus(tte api.TaskToExec, status dag.TaskStatus, taskErr error) error {
 	start := time.Now()
 	statusStr := status.String()
 	c.logger.Debug("Start updating task status", "taskToExec", tte, "status",
@@ -93,7 +93,7 @@ func (c *Client) UpsertTaskStatus(tte models.TaskToExec, status dag.TaskStatus, 
 		tmp := taskErr.Error()
 		taskErrStr = &tmp
 	}
-	drts := models.DagRunTaskStatus{
+	drts := api.DagRunTaskStatus{
 		DagId:   tte.DagId,
 		ExecTs:  tte.ExecTs,
 		TaskId:  tte.TaskId,
@@ -151,6 +151,11 @@ func (c *Client) GetState() (State, error) {
 		return 0, fmt.Errorf("error while decoding JSON response: %w", err)
 	}
 	return ParseState(stateJson.State)
+}
+
+func (c *Client) UiDagrunStats() (api.UiDagrunStats, error) {
+	// TODO
+	return api.UiDagrunStats{}, errors.New("NOT IMPLEMENTED")
 }
 
 // Stop stops the Scheduler.
