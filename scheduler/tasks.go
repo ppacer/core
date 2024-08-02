@@ -180,7 +180,6 @@ func (ts *TaskScheduler) Start(ctx context.Context, dags dag.Registry) {
 		ts.waitIfCannotSpawnNewGoroutine(
 			fmt.Sprintf("scheduling dagrun=%v", dagrun),
 		)
-		atomic.AddInt64(ts.goroutineCount, 1)
 		go ts.scheduleDagTasks(ctx, d, dagrun, taskSchedulerErrors)
 	}
 }
@@ -218,11 +217,13 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 	}
 
 	if shouldBeRetried {
+		atomic.AddInt64(ts.goroutineCount, 1)
 		go func() {
 			// Let's remember that when we would restart Scheduler between
 			// particular DAG run task retries we might wait somewhere in
 			// [delay, 2 * delay) interval. For now it's fine, but let's make
 			// it resilient to Scheduler restarts.
+			defer atomic.AddInt64(ts.goroutineCount, -1)
 			time.Sleep(delay)
 			ts.scheduleRetry(drt)
 		}()
@@ -311,6 +312,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	dagrun DagRun,
 	errorsChan chan taskSchedulerError,
 ) {
+	atomic.AddInt64(ts.goroutineCount, 1)
 	defer atomic.AddInt64(ts.goroutineCount, -1)
 	dagId := string(dagrun.DagId)
 	ts.logger.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
@@ -445,6 +447,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 	sharedState *dagRunSharedState,
 	wg *sync.WaitGroup,
 ) {
+	atomic.AddInt64(ts.goroutineCount, 1)
 	defer wg.Done()
 	defer atomic.AddInt64(ts.goroutineCount, -1)
 	checkDelay := ts.config.CheckDependenciesStatusWait
@@ -505,7 +508,6 @@ func (ts *TaskScheduler) walkAndSchedule(
 			ts.waitIfCannotSpawnNewGoroutine(
 				fmt.Sprintf("scheduling walkAndSchedule for drt=%v", drt),
 			)
-			atomic.AddInt64(ts.goroutineCount, 1)
 			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg)
 		}
 	}
