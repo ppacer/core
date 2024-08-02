@@ -562,6 +562,56 @@ func TestDagRunsNotFinishedForRunningStates(t *testing.T) {
 	}
 }
 
+func TestReadDagRunsAggByStatus(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag"
+	timestamps := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+	}
+	for idx, ts := range timestamps {
+		insertDagRun(c, ctx, dagId, ts, t)
+		if idx != 2 {
+			c.UpdateDagRunStatus(ctx, int64(idx+1), statusSuccess)
+		}
+	}
+
+	cntByStatus, err := c.ReadDagRunsAggByStatus(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(cntByStatus) != 2 {
+		t.Errorf("Expected 2 dag run statuses, got: %d", len(cntByStatus))
+	}
+
+	expected := []struct {
+		status  string
+		dagRuns int
+	}{
+		{statusScheduled, 1},
+		{statusSuccess, len(timestamps) - 1},
+	}
+
+	for _, input := range expected {
+		cnt, exist := cntByStatus[input.status]
+		if !exist {
+			t.Errorf("Expected status %s in the map, but it's not there: %v",
+				input.status, cntByStatus)
+		}
+		if input.dagRuns != cnt {
+			t.Errorf("Expected %d DAG run with status %s, got: %d",
+				input.dagRuns, input.status, cnt)
+		}
+	}
+}
+
 func insertDagRun(c *Client, ctx context.Context, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {

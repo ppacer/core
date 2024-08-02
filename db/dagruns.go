@@ -251,6 +251,22 @@ func (c *Client) ReadDagRunsNotFinished(ctx context.Context) ([]DagRun, error) {
 	return dagruns, nil
 }
 
+// Reads aggregation of all DAG run by its status.
+func (c *Client) ReadDagRunsAggByStatus(ctx context.Context) (map[string]int, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading dag runs aggregation by status")
+	result, err := groupBy2[string, int](
+		ctx, c.dbConn, c.logger, c.readDagRunsAggByStatus(),
+	)
+	if err != nil {
+		return result, err
+	}
+	c.logger.Debug("Finished reading dag runs aggregation by status",
+		"duration", time.Since(start))
+	return result, nil
+
+}
+
 func parseDagRun(rows *sql.Rows) (DagRun, error) {
 	var runId int64
 	var dagId, execTs, insertTs, status, statusTs, version string
@@ -385,5 +401,17 @@ func (c *Client) readDagRunNotFinishedQuery() string {
 			Status NOT IN (?, ?)
 		ORDER BY
 			RunId ASC
+	`
+}
+
+func (c *Client) readDagRunsAggByStatus() string {
+	return `
+		SELECT
+			Status,
+			COUNT(*) AS CNT
+		FROM
+			dagruns
+		GROUP BY
+			Status
 	`
 }
