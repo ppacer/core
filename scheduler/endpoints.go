@@ -9,11 +9,17 @@ import (
 // Register HTTP server endpoints for the Scheduler.
 func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	r := api.Routes()
+	rp := func(e api.EndpointID) string {
+		return r[e].RoutePattern
+	}
 
-	// /dag/task
-	mux.HandleFunc(r[api.EndpointDagTaskPop].RoutePattern, ts.popTask)
-	mux.HandleFunc(r[api.EndpointDagTaskUpdate].RoutePattern, ts.upsertTaskStatus)
+	// /dag/task/*
+	mux.HandleFunc(rp(api.EndpointDagTaskPop), ts.popTask)
+	mux.HandleFunc(rp(api.EndpointDagTaskUpdate), ts.upsertTaskStatus)
 
 	// /state
-	mux.HandleFunc(r[api.EndpointState].RoutePattern, s.currentState)
+	mux.HandleFunc(rp(api.EndpointState), s.currentState)
+
+	// /ui/dagrun/*
+	mux.HandleFunc(rp(api.EndpointUiDagrunStats), s.uiDagrunStatsHandler)
 }

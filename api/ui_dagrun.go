@@ -4,13 +4,21 @@
 
 package api
 
+// StatusCounts keeps mapping between statuses (of dagruns, task execution,
+// etc) and their frequencies.
+type StatusCounts struct {
+	Success   int `json:"success"`
+	Failed    int `json:"failed"`
+	Scheduled int `json:"scheduled"`
+	Running   int `json:"running"`
+}
+
 // UiDagrunStats is a struct for statistics on DAG runs and related metrics for
 // the main UI page.
 type UiDagrunStats struct {
-	DagrunsRunning        int `json:"dagrunsRunning"`
-	DagrunsFailed         int `json:"dagrunsFailed"`
-	DagrunQueueLen        int `json:"dagrunQueueLen"`
-	TaskSchedulerQueueLen int `json:"taskSchedulerQueueLen"`
-	TaskRunningNum        int `json:"taskRunningNum"`
-	GoroutinesNum         int `json:"goroutinesNum"`
+	Dagruns               StatusCounts `json:"dagruns"`
+	DagrunTasks           StatusCounts `json:"dagrunTasks"`
+	DagrunQueueLen        int          `json:"dagrunQueueLen"`
+	TaskSchedulerQueueLen int          `json:"taskSchedulerQueueLen"`
+	GoroutinesNum         int64        `json:"goroutinesNum"`
 }
