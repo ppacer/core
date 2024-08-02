@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -30,19 +29,20 @@ func (ts *TaskScheduler) popTask(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+
 	drtmodel := api.TaskToExec{
 		DagId:  string(drt.DagId),
 		ExecTs: timeutils.ToString(drt.AtTime),
 		TaskId: drt.TaskId,
 		Retry:  drt.Retry,
 	}
-	jsonBytes, jsonErr := json.Marshal(drtmodel)
-	if jsonErr != nil {
-		http.Error(w, jsonErr.Error(), http.StatusInternalServerError)
+	encodeErr := encode(w, http.StatusOK, drtmodel)
+	if encodeErr != nil {
+		ts.logger.Error("Cannot encode TaskToExec", "obj", drtmodel, "err",
+			encodeErr.Error())
+		http.Error(w, encodeErr.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(jsonBytes)
 }
 
 // Updates task status in the task cache and the database.
@@ -54,8 +54,7 @@ func (ts *TaskScheduler) upsertTaskStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var drts api.DagRunTaskStatus
-	err := json.NewDecoder(r.Body).Decode(&drts)
+	drts, err := decode[api.DagRunTaskStatus](r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
