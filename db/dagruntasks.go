@@ -210,8 +210,8 @@ func (c *Client) ReadDagRunTasksNotFinished(ctx context.Context) ([]DagRunTask, 
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
-			c.logger.Warn("Context done while processing dag run tasks", "dagId",
-				"err", ctx.Err())
+			c.logger.Warn("Context done while processing dag run tasks", "err",
+				ctx.Err())
 			return nil, ctx.Err()
 		default:
 		}
@@ -236,6 +236,21 @@ func (c *Client) RunningTasksNum(ctx context.Context) (int, error) {
 		return -1, err
 	}
 	return int(rows), nil
+}
+
+// Reads aggregation of all DAG run tasks by its status.
+func (c *Client) ReadDagRunTasksAggByStatus(ctx context.Context) (map[string]int, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading dag run tasks aggregation by status")
+	result, err := groupBy2[string, int](
+		ctx, c.dbConn, c.logger, c.readDagRunTasksAggByStatus(),
+	)
+	if err != nil {
+		return result, err
+	}
+	c.logger.Debug("Finished reading dag run tasks aggregation by status",
+		"duration", time.Since(start))
+	return result, nil
 }
 
 func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
@@ -359,4 +374,15 @@ func (c *Client) readNotFinishedDagRunTasksQuery() string {
 		ExecTs ASC,
 		InsertTs ASC
 	`
+}
+func (c *Client) readDagRunTasksAggByStatus() string {
+	return `
+	SELECT
+		Status,
+		COUNT(*) AS CNT
+	FROM
+		dagruntasks
+	GROUP BY
+		Status
+`
 }

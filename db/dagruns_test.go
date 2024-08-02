@@ -567,6 +567,7 @@ func TestReadDagRunsAggByStatus(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer CleanUpSqliteTmp(c, t)
 	ctx := context.Background()
 	dagId := "mock_dag"
 	timestamps := []string{
