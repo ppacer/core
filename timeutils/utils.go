@@ -21,6 +21,18 @@ const (
 
 	// String identifier for local time zone in standard time package.
 	LocalTimezoneName = "Local"
+
+	// Time format used on the UI.
+	UiTimeFormat = "15:04:05"
+
+	// As UiTimeFormat but including sub-second information.
+	UiTimeDetailedFormat = "15:04:05.999999"
+
+	// Date format used on the UI.
+	UiDateFormat = "2006-01-02"
+
+	// Timestamp format used on the UI for non-today timestamps.
+	UiTimestampFormat = "2006-01-02 15:04:05"
 )
 
 var (
@@ -54,9 +66,19 @@ func Now() time.Time {
 	return timeNow().In(ppacerTimezone)
 }
 
-// ToString serialize give time.Time to string based on TimestampFormat format.
+// ToString serialize given time.Time to string based on TimestampFormat format.
 func ToString(t time.Time) string {
 	return t.Format(TimestampFormat)
+}
+
+// ToStringUI serialize given time.Time to string based on Ui* formats. That
+// string is meant to be placed on the UI.
+func ToStringUI(t time.Time) string {
+	now := time.Now()
+	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+		return t.Format(UiTimeFormat)
+	}
+	return t.Format(UiTimestampFormat)
 }
 
 // ToDateUTCString move given time.Time to UTC location and serialize it to
