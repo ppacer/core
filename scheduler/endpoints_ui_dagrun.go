@@ -52,7 +52,7 @@ func (s *Scheduler) uiDagrunStatsHandler(w http.ResponseWriter, _ *http.Request)
 		return
 	}
 
-	stats := api.UiDagrunStats{
+	stats := api.UIDagrunStats{
 		Dagruns:               dagrunStats,
 		DagrunTasks:           tasksStats,
 		DagrunQueueLen:        s.queues.DagRuns.Size(),
@@ -141,15 +141,15 @@ func parseDagRunsListLen(r *http.Request, logger *slog.Logger) int {
 	return value
 }
 
-func prepDagrunList(dagruns []db.DagRunWithTaskInfo) api.UiDagrunList {
+func prepDagrunList(dagruns []db.DagRunWithTaskInfo) api.UIDagrunList {
 	tsTransform := func(tsStr string) api.Timestamp {
 		return api.ToTimestamp(timeutils.FromStringMust(tsStr))
 	}
-	res := make(api.UiDagrunList, len(dagruns))
+	res := make(api.UIDagrunList, len(dagruns))
 	for idx, dr := range dagruns {
 		updateTs := timeutils.FromStringMust(dr.DagRun.StatusUpdateTs)
 		duration := updateTs.Sub(timeutils.FromStringMust(dr.DagRun.InsertTs))
-		res[idx] = api.UiDagrunRow{
+		res[idx] = api.UIDagrunRow{
 			RunId:            dr.DagRun.RunId,
 			DagId:            dr.DagRun.DagId,
 			ExecTs:           tsTransform(dr.DagRun.ExecTs),

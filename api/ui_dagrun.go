@@ -13,9 +13,9 @@ type StatusCounts struct {
 	Running   int `json:"running"`
 }
 
-// UiDagrunStats is a struct for statistics on DAG runs and related metrics for
+// UIDagrunStats is a struct for statistics on DAG runs and related metrics for
 // the main UI page.
-type UiDagrunStats struct {
+type UIDagrunStats struct {
 	Dagruns               StatusCounts `json:"dagruns"`
 	DagrunTasks           StatusCounts `json:"dagrunTasks"`
 	DagrunQueueLen        int          `json:"dagrunQueueLen"`
@@ -23,8 +23,8 @@ type UiDagrunStats struct {
 	GoroutinesNum         int64        `json:"goroutinesNum"`
 }
 
-// UiDagrunRow represents information on a single DAG run on the main UI page.
-type UiDagrunRow struct {
+// UIDagrunRow represents information on a single DAG run on the main UI page.
+type UIDagrunRow struct {
 	RunId            int64     `json:"runId"`
 	DagId            string    `json:"dagId"`
 	ExecTs           Timestamp `json:"execTs"`
@@ -36,5 +36,5 @@ type UiDagrunRow struct {
 	TaskCompletedNum int       `json:"taskCompletedNum"`
 }
 
-// UiDagrunList is a slice of UiDagrunRow.
-type UiDagrunList []UiDagrunRow
+// UIDagrunList is a slice of UiDagrunRow.
+type UIDagrunList []UIDagrunRow

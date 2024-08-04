@@ -7,7 +7,6 @@ package scheduler
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,7 +28,10 @@ type Client struct {
 
 // NewClient instantiate new Client. In case when HTTP client or logger are
 // nil, those would be initialized with default parameters.
-func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config ClientConfig) *Client {
+func NewClient(
+	url string, httpClient *http.Client, logger *slog.Logger,
+	config ClientConfig,
+) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: config.HttpClientTimeout}
 	}
@@ -47,43 +49,29 @@ func NewClient(url string, httpClient *http.Client, logger *slog.Logger, config 
 // GetTask gets new task from scheduler to be executed by executor.
 func (c *Client) GetTask() (api.TaskToExec, error) {
 	startTs := time.Now()
-	var taskToExec api.TaskToExec
-
-	resp, err := c.httpClient.Get(c.getTaskUrl())
+	tte, code, err := httpGetJSON[api.TaskToExec](c.httpClient, c.getTaskUrl())
+	if code == http.StatusNoContent {
+		return api.TaskToExec{}, ds.ErrQueueIsEmpty
+	}
 	if err != nil {
-		return taskToExec, err
+		c.logger.Error("Error while getting UI DAG runs stats", "err",
+			err.Error())
+		return api.TaskToExec{}, err
 	}
-
-	body, rErr := io.ReadAll(resp.Body)
-	if rErr != nil {
-		return taskToExec, rErr
-	}
-
-	if resp.StatusCode == http.StatusNoContent {
-		return taskToExec, ds.ErrQueueIsEmpty
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		c.logger.Error("Got status code != 200 on GetTask response", "statuscode",
-			resp.StatusCode, "body", string(body))
-		return taskToExec, fmt.Errorf("got %d status code in GetTask response",
-			resp.StatusCode)
-	}
-
-	jErr := json.Unmarshal(body, &taskToExec)
-	if jErr != nil {
-		c.logger.Error("Unmarshal into APIResponse failed", "body", string(body),
-			"err", jErr)
-		return taskToExec, fmt.Errorf("couldn't unmarshal into telegram api.TaskToExec: %s",
-			jErr.Error())
+	if code != http.StatusOK {
+		err := fmt.Errorf("unexpected status code in UIDagrunStats request: %d",
+			code)
+		return api.TaskToExec{}, err
 	}
 	c.logger.Debug("GetTask finished", "duration", time.Since(startTs))
-	return taskToExec, nil
+	return *tte, nil
 }
 
 // UpsertTaskStatus either updates existing DAG run task status or inserts new
 // one.
-func (c *Client) UpsertTaskStatus(tte api.TaskToExec, status dag.TaskStatus, taskErr error) error {
+func (c *Client) UpsertTaskStatus(
+	tte api.TaskToExec, status dag.TaskStatus, taskErr error,
+) error {
 	start := time.Now()
 	statusStr := status.String()
 	c.logger.Debug("Start updating task status", "taskToExec", tte, "status",
@@ -153,9 +141,50 @@ func (c *Client) GetState() (State, error) {
 	return ParseState(stateJson.State)
 }
 
-func (c *Client) UiDagrunStats() (api.UiDagrunStats, error) {
-	// TODO
-	return api.UiDagrunStats{}, errors.New("NOT IMPLEMENTED")
+// UIDagrunStats returns the current statistics on DAG runs, its tasks and
+// goroutines.
+func (c *Client) UIDagrunStats() (api.UIDagrunStats, error) {
+	startTs := time.Now()
+	c.logger.Debug("Start UIDagrunStats request...")
+	stats, code, err := httpGetJSON[api.UIDagrunStats](
+		c.httpClient, c.uiDagrunStatsUrl(),
+	)
+	if err != nil {
+		c.logger.Error("Error while getting UI DAG runs stats", "err",
+			err.Error())
+		return api.UIDagrunStats{}, err
+	}
+	if code != http.StatusOK {
+		err := fmt.Errorf("unexpected status code in UIDagrunStats request: %d",
+			code)
+		return api.UIDagrunStats{}, err
+	}
+	c.logger.Debug("UIDagrunStats request finished", "duration",
+		time.Since(startTs))
+	return *stats, nil
+}
+
+// UIDagrunLatest returns information on latest n DAG runs and its tasks
+// completion.
+func (c *Client) UIDagrunLatest(n int) (api.UIDagrunList, error) {
+	startTs := time.Now()
+	c.logger.Debug("Start UIDagrunStats request...")
+	dagruns, code, err := httpGetJSON[api.UIDagrunList](
+		c.httpClient, c.uiDagrunLatestUrl(n),
+	)
+	if err != nil {
+		c.logger.Error("Error while getting latest DAG runs", "err",
+			err.Error())
+		return api.UIDagrunList{}, err
+	}
+	if code != http.StatusOK {
+		err := fmt.Errorf("unexpected status code in UIDagrunList request: %d",
+			code)
+		return api.UIDagrunList{}, err
+	}
+	c.logger.Debug("UIDagrunList request finished", "duration",
+		time.Since(startTs))
+	return *dagruns, nil
 }
 
 // Stop stops the Scheduler.
@@ -177,4 +206,44 @@ func (c *Client) getStateUrl() string {
 func (c *Client) getUpdateTaskStatusUrl() string {
 	suffix := c.routes[api.EndpointDagTaskUpdate].UrlSuffix
 	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
+}
+
+func (c *Client) uiDagrunStatsUrl() string {
+	suffix := c.routes[api.EndpointUiDagrunStats]
+	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
+}
+
+func (c *Client) uiDagrunLatestUrl(n int) string {
+	suffix := c.routes[api.EndpointUiDagrunLatest]
+	return fmt.Sprintf("%s%s/%d", c.schedulerUrl, suffix, n)
+}
+
+// Generic HTTP GET request with resp body deserialization from JSON into given
+// type.
+func httpGetJSON[T any](client *http.Client, url string) (*T, int, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, http.StatusBadRequest,
+			fmt.Errorf("failed to perform GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode,
+			fmt.Errorf("received non-200 response: %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode,
+			fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var result T
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, resp.StatusCode,
+			fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return &result, resp.StatusCode, nil
 }
