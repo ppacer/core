@@ -47,7 +47,7 @@ func Routes() map[EndpointID]Endpoint {
 
 		// /ui/dagrun/*
 		EndpointUiDagrunStats:  {"GET /ui/dagrun/stats", "/ui/dagrun/stats"},
-		EndpointUiDagrunLatest: {"GET /ui/dagrun/latest", "/ui/dagrun/latest"},
+		EndpointUiDagrunLatest: {"GET /ui/dagrun/latest/{n}", "/ui/dagrun/latest"},
 		EndpointUiDagrunStatus: {"GET /ui/dagrun/status/{runId}", "/ui/dagrun/status/"},
 	}
 }

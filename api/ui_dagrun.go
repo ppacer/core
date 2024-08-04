@@ -22,3 +22,19 @@ type UiDagrunStats struct {
 	TaskSchedulerQueueLen int          `json:"taskSchedulerQueueLen"`
 	GoroutinesNum         int64        `json:"goroutinesNum"`
 }
+
+// UiDagrunRow represents information on a single DAG run on the main UI page.
+type UiDagrunRow struct {
+	RunId            int64     `json:"runId"`
+	DagId            string    `json:"dagId"`
+	ExecTs           Timestamp `json:"execTs"`
+	InsertTs         Timestamp `json:"insertTs"`
+	Status           string    `json:"status"`
+	StatusUpdateTs   Timestamp `json:"statusUpdateTs"`
+	Duration         string    `json:"duration"`
+	TaskNum          int       `json:"taskNum"`
+	TaskCompletedNum int       `json:"taskCompletedNum"`
+}
+
+// UiDagrunList is a slice of UiDagrunRow.
+type UiDagrunList []UiDagrunRow

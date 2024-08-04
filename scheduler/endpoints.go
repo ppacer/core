@@ -22,4 +22,5 @@ func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 
 	// /ui/dagrun/*
 	mux.HandleFunc(rp(api.EndpointUiDagrunStats), s.uiDagrunStatsHandler)
+	mux.HandleFunc(rp(api.EndpointUiDagrunLatest), s.uiDagrunListHandler)
 }
