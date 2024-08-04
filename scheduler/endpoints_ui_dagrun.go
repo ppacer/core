@@ -71,6 +71,7 @@ func (s *Scheduler) uiDagrunStatsHandler(w http.ResponseWriter, _ *http.Request)
 		time.Since(start))
 }
 
+// HTTP handler for listing latest DAG runs and information about their tasks.
 func (s *Scheduler) uiDagrunListHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	s.logger.Debug("Start uiDagrunLatest...")
