@@ -248,6 +248,48 @@ func TestFromStringMustFailed(t *testing.T) {
 	}
 }
 
+func TestToStringUI(t *testing.T) {
+	t0 := time.Now()
+	t1 := time.Date(t0.Year(), t0.Month(), t0.Day(), 8, 59, 48, 987000000,
+		time.UTC)
+	dayBefore := t1.Add(-24 * time.Hour)
+	dateBefore := dayBefore.Format(UiDateFormat)
+
+	tests := []struct {
+		input    time.Time
+		expected string
+	}{
+		{t1, "08:59:48"},
+		{dayBefore, dateBefore + " 08:59:48"},
+	}
+
+	for _, test := range tests {
+		res := ToStringUI(test.input)
+		if res != test.expected {
+			t.Errorf("Expected ToStringUI(%v) = %s, got: %s", test.input,
+				test.expected, res)
+		}
+	}
+}
+
+func BenchmarkStringToStringUI(b *testing.B) {
+	x := time.Now()
+	xStr := ToString(x)
+
+	for i := 0; i < b.N; i++ {
+		ToStringUI(FromStringMust(xStr))
+	}
+}
+
+func BenchmarkFromStringMust(b *testing.B) {
+	x := time.Now()
+	xStr := ToString(x)
+
+	for i := 0; i < b.N; i++ {
+		FromStringMust(xStr)
+	}
+}
+
 func warsawTimeZone(t *testing.T) *time.Location {
 	location, err := time.LoadLocation("Europe/Warsaw")
 	if err != nil {

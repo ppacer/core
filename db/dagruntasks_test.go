@@ -570,6 +570,64 @@ func TestRunningTasksNumWithUpdate(t *testing.T) {
 	}
 }
 
+func TestDagRunTaskAggByStatus(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	data := []struct {
+		taskId string
+		status string
+	}{
+		{"task_1", statusSuccess},
+		{"task_2", statusSuccess},
+		{"task_3", statusRunning},
+		{"task_4", statusScheduled},
+		{"task_5", statusRunning},
+	}
+
+	for _, d := range data {
+		insertDagRunTaskStatus(c, ctx, dagId, ts, d.taskId, 0, d.status, t)
+	}
+
+	cntByStatus, rErr := c.ReadDagRunTasksAggByStatus(ctx)
+	if rErr != nil {
+		t.Errorf("Cannot query aggregated DAG run tasks by Status: %s",
+			rErr.Error())
+	}
+	if len(cntByStatus) != 3 {
+		t.Errorf("Expected 3 statuses in the map, got: %d (%v)",
+			len(cntByStatus), cntByStatus)
+	}
+
+	expected := []struct {
+		status string
+		tasks  int
+	}{
+		{statusScheduled, 1},
+		{statusSuccess, 2},
+		{statusRunning, 2},
+	}
+
+	for _, input := range expected {
+		cnt, exist := cntByStatus[input.status]
+		if !exist {
+			t.Errorf("Expected status %s in the map, but it's not there: %v",
+				input.status, cntByStatus)
+		}
+		if input.tasks != cnt {
+			t.Errorf("Expected %d DAG run tasks with status %s, got: %d",
+				input.tasks, input.status, cnt)
+		}
+	}
+}
+
 func insertDagRunTask(
 	c *Client,
 	ctx context.Context,

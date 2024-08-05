@@ -14,6 +14,7 @@ import (
 	"github.com/ppacer/core/version"
 )
 
+// DagRun represent a row of data in dagruns table.
 type DagRun struct {
 	RunId          int64
 	DagId          string
@@ -22,6 +23,14 @@ type DagRun struct {
 	Status         string
 	StatusUpdateTs string
 	Version        string
+}
+
+// DagRunWithTaskInfo contains information about a DAG run and additionally
+// information about that DAG tasks.
+type DagRunWithTaskInfo struct {
+	DagRun           DagRun
+	TaskNum          int
+	TaskCompletedNum int
 }
 
 // Those should be consistent with dag.RunStatus string values. We cannot use
@@ -251,6 +260,57 @@ func (c *Client) ReadDagRunsNotFinished(ctx context.Context) ([]DagRun, error) {
 	return dagruns, nil
 }
 
+// Reads aggregation of all DAG run by its status.
+func (c *Client) ReadDagRunsAggByStatus(ctx context.Context) (map[string]int, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading dag runs aggregation by status")
+	result, err := groupBy2[string, int](
+		ctx, c.dbConn, c.logger, c.readDagRunsAggByStatus(),
+	)
+	if err != nil {
+		return result, err
+	}
+	c.logger.Debug("Finished reading dag runs aggregation by status",
+		"duration", time.Since(start))
+	return result, nil
+
+}
+
+// Reads latest N DAG runs with information about number of tasks completed and
+// tasks overall.
+func (c *Client) ReadDagRunsWithTaskInfo(ctx context.Context, latest int) ([]DagRunWithTaskInfo, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading latest dag runs with task info", "latest", latest)
+	result := make([]DagRunWithTaskInfo, 0, latest)
+
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunWithTaskInfoQuery(),
+		statusSuccess, latest)
+	if qErr != nil {
+		c.logger.Error("Failed querying dag run to be scheduled", "err", qErr)
+		return nil, qErr
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			c.logger.Warn("Context done while processing latest dag runs with task info",
+				"err", ctx.Err())
+			return nil, ctx.Err()
+		default:
+		}
+		drti, scanErr := parseDagRunWithTaskInfo(rows)
+		if scanErr != nil {
+			c.logger.Error("Failed scanning a dagrun with task info record", "err", scanErr)
+			return nil, scanErr
+		}
+		result = append(result, drti)
+	}
+	c.logger.Debug("Finished reading dag runs with task info", "latest", latest, "duration",
+		time.Since(start))
+	return result, nil
+}
+
 func parseDagRun(rows *sql.Rows) (DagRun, error) {
 	var runId int64
 	var dagId, execTs, insertTs, status, statusTs, version string
@@ -270,6 +330,33 @@ func parseDagRun(rows *sql.Rows) (DagRun, error) {
 		Version:        version,
 	}
 	return dagrun, nil
+}
+
+func parseDagRunWithTaskInfo(rows *sql.Rows) (DagRunWithTaskInfo, error) {
+	var runId int64
+	var taskNum, taskCompleted int
+	var dagId, execTs, insertTs, status, statusTs, version string
+
+	scanErr := rows.Scan(&runId, &dagId, &execTs, &insertTs, &status,
+		&statusTs, &version, &taskNum, &taskCompleted)
+	if scanErr != nil {
+		return DagRunWithTaskInfo{}, scanErr
+	}
+	dagrun := DagRun{
+		RunId:          runId,
+		DagId:          dagId,
+		ExecTs:         execTs,
+		InsertTs:       insertTs,
+		Status:         status,
+		StatusUpdateTs: statusTs,
+		Version:        version,
+	}
+	dagrunWithTaskInfo := DagRunWithTaskInfo{
+		DagRun:           dagrun,
+		TaskNum:          taskNum,
+		TaskCompletedNum: taskCompleted,
+	}
+	return dagrunWithTaskInfo, nil
 }
 
 func (c *Client) readDagRunsQuery(topN int) string {
@@ -385,5 +472,48 @@ func (c *Client) readDagRunNotFinishedQuery() string {
 			Status NOT IN (?, ?)
 		ORDER BY
 			RunId ASC
+	`
+}
+
+func (c *Client) readDagRunsAggByStatus() string {
+	return `
+		SELECT
+			Status,
+			COUNT(*) AS CNT
+		FROM
+			dagruns
+		GROUP BY
+			Status
+	`
+}
+
+func (c *Client) readDagRunWithTaskInfoQuery() string {
+	return `
+		SELECT
+			dr.RunId,
+			MAX(dr.DagId) AS DagId,
+			MAX(dr.ExecTs) AS ExecTs,
+			MAX(dr.InsertTs) AS InsertTs,
+			MAX(dr.Status) AS Status,
+			MAX(dr.StatusUpdateTs) AS StatusUpdateTs,
+			MAX(dr.Version) AS Version,
+			COUNT(dt.TaskId) AS TaskNum,
+			COUNT(DISTINCT drt.TaskId) AS TaskCompletedNum
+		FROM
+			dagruns dr
+		LEFT JOIN
+			dagtasks dt ON dr.DagId = dt.DagId AND dt.IsCurrent = 1
+		LEFT JOIN
+			dagruntasks drt ON
+					drt.DagId = dr.DagId
+				AND drt.ExecTs = dr.ExecTs
+				AND drt.TaskId = dt.TaskId
+				AND drt.Status = ?
+		WHERE
+			dr.RunId > (SELECT MAX(RunId) As LatestRunId FROM dagruns) - ?
+		GROUP BY
+			dr.RunId
+		ORDER BY
+			dr.RunId DESC
 	`
 }

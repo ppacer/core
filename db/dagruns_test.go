@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/timeutils"
 )
 
@@ -562,9 +563,168 @@ func TestDagRunsNotFinishedForRunningStates(t *testing.T) {
 	}
 }
 
+func TestReadDagRunsAggByStatus(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	ctx := context.Background()
+	dagId := "mock_dag"
+	timestamps := []string{
+		"2023-09-23T10:10:00",
+		"2023-09-23T10:20:00",
+		"2023-09-23T10:30:00",
+		"2023-09-23T10:40:00",
+		"2023-09-23T10:50:00",
+	}
+	for idx, ts := range timestamps {
+		insertDagRun(c, ctx, dagId, ts, t)
+		if idx != 2 {
+			c.UpdateDagRunStatus(ctx, int64(idx+1), statusSuccess)
+		}
+	}
+
+	cntByStatus, err := c.ReadDagRunsAggByStatus(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(cntByStatus) != 2 {
+		t.Errorf("Expected 2 dag run statuses, got: %d", len(cntByStatus))
+	}
+
+	expected := []struct {
+		status  string
+		dagRuns int
+	}{
+		{statusScheduled, 1},
+		{statusSuccess, len(timestamps) - 1},
+	}
+
+	for _, input := range expected {
+		cnt, exist := cntByStatus[input.status]
+		if !exist {
+			t.Errorf("Expected status %s in the map, but it's not there: %v",
+				input.status, cntByStatus)
+		}
+		if input.dagRuns != cnt {
+			t.Errorf("Expected %d DAG run with status %s, got: %d",
+				input.dagRuns, input.status, cnt)
+		}
+	}
+}
+
+func TestReadDagRunsWithTaskInfo(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	ctx := context.Background()
+	const dagId = "mock_dag"
+	now := time.Now()
+	execTss := []string{
+		timeutils.ToString(now.Add(13 * 3 * time.Second)),
+		timeutils.ToString(now.Add(13 * 3 * 2 * time.Second)),
+		timeutils.ToString(now.Add(13 * 3 * 3 * time.Second)),
+	}
+	tasks := []string{"start", "t1", "t2", "finish"}
+
+	// prepare dagtasks, dagruns and dagruntasks tables
+	insertDagTasks(c, ctx, dagId, tasks, t)
+
+	for idx, execTs := range execTss {
+		insertDagRun(c, ctx, dagId, execTs, t)
+
+		if idx == 2 {
+			// we want to simulate no dag run tasks for DAG run [2].
+			continue
+		}
+		for _, task := range tasks {
+			insertDagRunTask(c, ctx, dagId, execTs, task, t)
+		}
+	}
+
+	// Update some DAG run tasks statuses:
+	//	DAG run [0] - all tasks are not yet done
+	//	DAG run [1] - 2 out of 4 tasks are done
+	//	DAG run [2] - no DAG run tasks yet at all
+	uErr1 := c.UpdateDagRunTaskStatus(
+		ctx, dagId, execTss[1], tasks[0], 0, statusSuccess,
+	)
+	if uErr1 != nil {
+		t.Errorf("Cannot update DAG run task status: %s", uErr1.Error())
+	}
+	uErr2 := c.UpdateDagRunTaskStatus(
+		ctx, dagId, execTss[1], tasks[1], 0, statusSuccess,
+	)
+	if uErr2 != nil {
+		t.Errorf("Cannot update DAG run task status: %s", uErr2.Error())
+	}
+
+	// query and assert
+	dagruns, rErr := c.ReadDagRunsWithTaskInfo(ctx, 5)
+	if rErr != nil {
+		t.Errorf("Error while reading DAG runs with Task info: %s",
+			rErr.Error())
+	}
+
+	if len(dagruns) != len(execTss) {
+		t.Errorf("Expected %d DAG runs with Task info, got: %d", len(execTss),
+			len(dagruns))
+	}
+
+	expected := []struct {
+		Idx              int
+		TaskNum          int
+		TaskCompletedNum int
+	}{
+		{2, 4, 0},
+		{1, 4, 2},
+		{0, 4, 0},
+	}
+
+	for id, e := range expected {
+		dr := dagruns[id]
+		if dr.DagRun.ExecTs != execTss[e.Idx] {
+			t.Errorf("For DAG run [%d] (row %d) expected execTs=%s, got: %s",
+				e.Idx, id, execTss[e.Idx], dr.DagRun.ExecTs)
+		}
+		if dr.TaskNum != e.TaskNum {
+			t.Errorf("Expected %d TaskNum for DAG run [%d], got: %d",
+				e.TaskNum, e.Idx, dr.TaskNum)
+		}
+		if dr.TaskCompletedNum != e.TaskCompletedNum {
+			t.Errorf("Expected %d completed task for DAG run [%d], got: %d",
+				e.TaskCompletedNum, e.Idx, dr.TaskCompletedNum)
+		}
+	}
+
+}
+
 func insertDagRun(c *Client, ctx context.Context, dagId, execTs string, t *testing.T) {
 	_, iErr := c.InsertDagRun(ctx, dagId, execTs)
 	if iErr != nil {
 		t.Errorf("Error while inserting dag run: %s", iErr.Error())
+	}
+}
+
+func insertDagTasks(c *Client, ctx context.Context, dagId string, tasks []string, t *testing.T) {
+	tx, txErr := c.dbConn.Begin()
+	if txErr != nil {
+		t.Fatalf("Cannot start SQL transaction: %s", txErr.Error())
+	}
+	for _, task := range tasks {
+		iErr := c.insertDagTask(
+			ctx, tx, dagId, dag.NewNode(PrintTask{Name: task}),
+			timeutils.ToString(time.Now()),
+		)
+		if iErr != nil {
+			t.Errorf("Cannot insert DAG task: %s", iErr.Error())
+		}
+	}
+	commErr := tx.Commit()
+	if commErr != nil {
+		t.Errorf("Cannot commit SQL transaction: %s", commErr.Error())
 	}
 }

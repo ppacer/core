@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
-	"github.com/ppacer/core/models"
 	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
@@ -31,7 +31,9 @@ func TestClientGetTaskEmptyDb(t *testing.T) {
 	defer testServer.Close()
 	defer cancel()
 
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 	_, err := schedClient.GetTask()
 	if err == nil {
 		t.Error("Expected non-nil error for GetTask on empty database")
@@ -52,7 +54,9 @@ func TestClientGetTaskMockSingle(t *testing.T) {
 	defer testServer.Close()
 	defer cancel()
 
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 
 	drt := DagRunTask{dag.Id("mock_dag"), time.Now(), "task1", 0}
 	putErr := queues.DagRunTasks.Put(drt)
@@ -95,7 +99,9 @@ func TestClientGetTaskMockMany(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 	defer cancel()
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 
 	dagId := dag.Id("mock_dag")
 	data := []DagRunTask{
@@ -140,8 +146,10 @@ func TestClientUpsertTaskEmptyDb(t *testing.T) {
 	defer testServer.Close()
 	defer cancel()
 
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
-	tte := models.TaskToExec{
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	tte := api.TaskToExec{
 		DagId:  "mock_dag",
 		ExecTs: timeutils.ToString(time.Now()),
 		TaskId: "task1",
@@ -166,7 +174,9 @@ func TestClientUpsertTaskSimpleUpdate(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 	defer cancel()
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 
 	const dagId = "mock_dag"
 	execTs := timeutils.ToString(time.Now())
@@ -216,7 +226,9 @@ func TestClientUpsertSingleTaskFewStatuses(t *testing.T) {
 	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
 	defer testServer.Close()
 	defer cancel()
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 
 	const dagId = "mock_dag"
 	execTs := time.Now()
@@ -265,12 +277,15 @@ func TestClientGetStateSimple(t *testing.T) {
 	defer testServer.Close()
 	defer cancel()
 
-	schedClient := NewClient(testServer.URL, nil, nil, DefaultClientConfig)
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
 	schedState, err := schedClient.GetState()
 	if err != nil {
 		t.Errorf("Error when getting scheduler state: %s", err.Error())
 	}
-	if schedState != StateStarted && schedState != StateSynchronizing && schedState != StateRunning {
+	if schedState != StateStarted && schedState != StateSynchronizing &&
+		schedState != StateRunning {
 		t.Errorf("Got unexpected Scheduler State: %s", schedState.String())
 	}
 
@@ -281,13 +296,214 @@ func TestClientGetStateSimple(t *testing.T) {
 			err2.Error())
 	}
 	if schedState2 != StateStopping {
-		t.Errorf("Expected Scheduled State %s, got: %s", StateStopping.String(),
-			schedState2.String())
+		t.Errorf("Expected Scheduled State %s, got: %s",
+			StateStopping.String(), schedState2.String())
+	}
+}
+
+func TestClientUIDagrunStatsEmpty(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	stats, err := schedClient.UIDagrunStats()
+	if err != nil {
+		t.Errorf("Expected non-nil error for UIDagrunStats on empty database, got: %s",
+			err.Error())
+	}
+	var emptyStats api.StatusCounts
+	if stats.Dagruns != emptyStats {
+		t.Errorf("Expected empty api.UIDagrunStats.Dagruns, got: %v",
+			stats.Dagruns)
+	}
+	if stats.DagrunTasks != emptyStats {
+		t.Errorf("Expected empty api.UIDagrunStats.DagrunTasks, got: %v",
+			stats.DagrunTasks)
+	}
+}
+
+func TestClientUIDagrunStats(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+
+	// prep data
+	const dagId = "sample_dag"
+	now := time.Now()
+
+	dagruns := []struct {
+		execTs string
+		status dag.RunStatus
+	}{
+		{timeutils.ToString(now), dag.RunScheduled},
+		{timeutils.ToString(now.Add(13 * time.Hour)), dag.RunRunning},
+	}
+
+	tasks := []struct {
+		execTs string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{dagruns[1].execTs, "t1", dag.TaskSuccess},
+		{dagruns[1].execTs, "t2", dag.TaskSuccess},
+		{dagruns[1].execTs, "t3", dag.TaskRunning},
+	}
+
+	for _, dr := range dagruns {
+		insertDagRun(
+			scheduler.dbClient, ctx, dagId, dr.execTs, dr.status.String(), t,
+		)
+	}
+
+	for _, task := range tasks {
+		insertDagRunTask(
+			scheduler.dbClient, ctx, dagId, task.execTs, task.taskId,
+			task.status.String(), t,
+		)
+	}
+
+	// query stats
+	stats, err := schedClient.UIDagrunStats()
+	if err != nil {
+		t.Errorf("Unexpected error for UIDagrunStats: %s", err.Error())
+	}
+
+	expectedDagruns := api.StatusCounts{Scheduled: 1, Running: 1}
+	if stats.Dagruns != expectedDagruns {
+		t.Errorf("Expected stats for DAG runs %+v, but got: %+v",
+			expectedDagruns, stats.Dagruns)
+	}
+
+	expectedDagrunTasks := api.StatusCounts{Success: 2, Running: 1}
+	if stats.DagrunTasks != expectedDagrunTasks {
+		t.Errorf("Expected stats for DAG run tasks %+v, but got: %+v",
+			expectedDagrunTasks, stats.DagrunTasks)
+	}
+}
+
+func TestClientUIDagrunLatestEmpty(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	dagruns1, err1 := schedClient.UIDagrunLatest(10)
+	if err1 != nil {
+		t.Errorf("Expected non-nil error for UIDagrunLatest on empty database, got: %s",
+			err1.Error())
+	}
+	dagruns2, err2 := schedClient.UIDagrunLatest(1)
+	if err2 != nil {
+		t.Errorf("Expected non-nil error for UIDagrunLatest on empty database, got: %s",
+			err2.Error())
+	}
+	if len(dagruns1) != 0 {
+		t.Errorf("Expected 0 dagruns on empty DB, got: %d", len(dagruns1))
+	}
+	if len(dagruns2) != 0 {
+		t.Errorf("Expected 0 dagruns on empty DB, got: %d", len(dagruns2))
+	}
+}
+
+func TestClientUIDagrunLatest(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+
+	// prep data
+	const dagId = "sample_dag"
+	now := time.Now()
+
+	dagruns := []struct {
+		execTs string
+		status dag.RunStatus
+	}{
+		{timeutils.ToString(now), dag.RunScheduled},
+		{timeutils.ToString(now.Add(13 * time.Hour)), dag.RunRunning},
+	}
+
+	tasks := []struct {
+		execTs string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{dagruns[1].execTs, "t1", dag.TaskSuccess},
+		{dagruns[1].execTs, "t2", dag.TaskSuccess},
+		{dagruns[1].execTs, "t3", dag.TaskRunning},
+	}
+
+	for _, dr := range dagruns {
+		insertDagRun(
+			scheduler.dbClient, ctx, dagId, dr.execTs, dr.status.String(), t,
+		)
+	}
+
+	for _, task := range tasks {
+		insertDagRunTask(
+			scheduler.dbClient, ctx, dagId, task.execTs, task.taskId,
+			task.status.String(), t,
+		)
+	}
+
+	// query stats
+	drLatest, err := schedClient.UIDagrunLatest(10)
+	if err != nil {
+		t.Errorf("Unexpected error for UIDagrunLatest: %s", err.Error())
+	}
+
+	if len(drLatest) != len(dagruns) {
+		t.Errorf("Expected %d latest dag runs, got: %d", len(dagruns),
+			len(drLatest))
+	}
+	if drLatest[0].TaskNum != 0 {
+		t.Errorf("Expected TaskNum 0 (no dagatsks were inserted), got: %+v",
+			drLatest[0])
+	}
+	if drLatest[0].Status != dag.RunRunning.String() {
+		t.Errorf("Expected DAG run to be %s, but is %s",
+			dag.RunRunning.String(), drLatest[0].Status)
+	}
+	if drLatest[1].Status != dag.RunScheduled.String() {
+		t.Errorf("Expected DAG run to be %s, but is %s",
+			dag.RunScheduled.String(), drLatest[1].Status)
 	}
 }
 
 func taskToExecEqualsDRT(
-	task models.TaskToExec, expectedDrt DagRunTask, t *testing.T,
+	task api.TaskToExec, expectedDrt DagRunTask, t *testing.T,
 ) {
 	t.Helper()
 	if task.DagId != string(expectedDrt.DagId) {
@@ -303,8 +519,8 @@ func taskToExecEqualsDRT(
 	}
 }
 
-func newTaskToExec(dagId, execTs, taskId string) models.TaskToExec {
-	return models.TaskToExec{
+func newTaskToExec(dagId, execTs, taskId string) api.TaskToExec {
+	return api.TaskToExec{
 		DagId:  dagId,
 		ExecTs: execTs,
 		TaskId: taskId,
@@ -322,6 +538,21 @@ func readDagRunTaskFromDb(
 			dagId, execTs, taskId, dbErr.Error())
 	}
 	return drt
+}
+
+func insertDagRun(
+	dbClient *db.Client, ctx context.Context, dagId, execTs, status string,
+	t *testing.T,
+) {
+	runId, iErr := dbClient.InsertDagRun(ctx, dagId, execTs)
+	if iErr != nil {
+		t.Fatalf("Cannot insert new DAG run: %s", iErr.Error())
+	}
+	uErr := dbClient.UpdateDagRunStatus(ctx, runId, status)
+	if uErr != nil {
+		t.Errorf("Cannot update DAG run (%d) status: %s", runId,
+			uErr.Error())
+	}
 }
 
 // Initialize Scheduler for tests.

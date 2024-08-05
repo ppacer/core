@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ppacer/core/dag"
@@ -78,8 +77,10 @@ type TaskScheduler struct {
 	config             TaskSchedulerConfig
 	logger             *slog.Logger
 	notifier           notify.Sender
-	goroutineCount     *int64
 	schedulerStateFunc GetStateFunc
+
+	gcMutex        sync.RWMutex
+	goroutineCount int
 
 	failedTaskManager   *failedTaskManager
 	taskRetriesExecuted *ds.AsyncMap[DRTBase, int]
@@ -94,7 +95,7 @@ func NewTaskScheduler(
 	config TaskSchedulerConfig,
 	logger *slog.Logger,
 	notifier notify.Sender,
-	goroutineCount *int64,
+	goroutineCountInit int,
 	schedulerStateFunc GetStateFunc,
 ) *TaskScheduler {
 	if logger == nil {
@@ -110,7 +111,7 @@ func NewTaskScheduler(
 		config:             config,
 		logger:             logger,
 		notifier:           notifier,
-		goroutineCount:     goroutineCount,
+		goroutineCount:     goroutineCountInit,
 		schedulerStateFunc: schedulerStateFunc,
 
 		failedTaskManager: newFailedTaskManager(
@@ -180,8 +181,12 @@ func (ts *TaskScheduler) Start(ctx context.Context, dags dag.Registry) {
 		ts.waitIfCannotSpawnNewGoroutine(
 			fmt.Sprintf("scheduling dagrun=%v", dagrun),
 		)
-		atomic.AddInt64(ts.goroutineCount, 1)
+		ts.logger.Debug("Starting new goroutine for scheduleDagTasks",
+			"dagrun", dagrun, "goroutineCount", ts.goroutines())
+		ts.gcMutex.Lock()
+		ts.goroutineCount++
 		go ts.scheduleDagTasks(ctx, d, dagrun, taskSchedulerErrors)
+		ts.gcMutex.Unlock()
 	}
 }
 
@@ -218,14 +223,20 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 	}
 
 	if shouldBeRetried {
+		ts.logger.Debug("Starting new goroutine, to scheduleRetry", "drt", drt,
+			"goroutineCount", ts.goroutines())
+		ts.gcMutex.Lock()
+		ts.goroutineCount++
 		go func() {
 			// Let's remember that when we would restart Scheduler between
 			// particular DAG run task retries we might wait somewhere in
 			// [delay, 2 * delay) interval. For now it's fine, but let's make
 			// it resilient to Scheduler restarts.
+			defer ts.decreaseGoroutine()
 			time.Sleep(delay)
 			ts.scheduleRetry(drt)
 		}()
+		ts.gcMutex.Unlock()
 	}
 
 	if status != dag.TaskFailed {
@@ -311,7 +322,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	dagrun DagRun,
 	errorsChan chan taskSchedulerError,
 ) {
-	defer atomic.AddInt64(ts.goroutineCount, -1)
+	defer ts.decreaseGoroutine()
 	dagId := string(dagrun.DagId)
 	ts.logger.Debug("Start scheduling tasks", "dagId", dagId, "execTs",
 		dagrun.AtTime)
@@ -446,7 +457,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
-	defer atomic.AddInt64(ts.goroutineCount, -1)
+	defer ts.decreaseGoroutine()
 	checkDelay := ts.config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
 	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
@@ -505,8 +516,12 @@ func (ts *TaskScheduler) walkAndSchedule(
 			ts.waitIfCannotSpawnNewGoroutine(
 				fmt.Sprintf("scheduling walkAndSchedule for drt=%v", drt),
 			)
-			atomic.AddInt64(ts.goroutineCount, 1)
+			ts.logger.Debug("Starting new goroutine for walkAndSchedule",
+				"drt", drt, "goroutineCount", ts.goroutines())
+			ts.gcMutex.Lock()
+			ts.goroutineCount++
 			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg)
+			ts.gcMutex.Unlock()
 		}
 	}
 }
@@ -802,7 +817,7 @@ func (ts *TaskScheduler) cleanTaskCache(dagrun DagRun, nodes []dag.NodeInfo) {
 func (ts *TaskScheduler) waitIfCannotSpawnNewGoroutine(msg string) {
 	prevTs := time.Now()
 	for {
-		if atomic.LoadInt64(ts.goroutineCount) < int64(ts.config.MaxGoroutineCount) {
+		if ts.goroutines() < ts.config.MaxGoroutineCount {
 			return
 		}
 		now := time.Now()
@@ -812,6 +827,18 @@ func (ts *TaskScheduler) waitIfCannotSpawnNewGoroutine(msg string) {
 			prevTs = now
 		}
 	}
+}
+
+func (ts *TaskScheduler) goroutines() int {
+	ts.gcMutex.RLock()
+	defer ts.gcMutex.RUnlock()
+	return ts.goroutineCount
+}
+
+func (ts *TaskScheduler) decreaseGoroutine() {
+	ts.gcMutex.Lock()
+	defer ts.gcMutex.Unlock()
+	ts.goroutineCount--
 }
 
 func sendTaskSchedulerErr(
