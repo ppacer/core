@@ -209,12 +209,12 @@ func (c *Client) getUpdateTaskStatusUrl() string {
 }
 
 func (c *Client) uiDagrunStatsUrl() string {
-	suffix := c.routes[api.EndpointUiDagrunStats]
+	suffix := c.routes[api.EndpointUiDagrunStats].UrlSuffix
 	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
 }
 
 func (c *Client) uiDagrunLatestUrl(n int) string {
-	suffix := c.routes[api.EndpointUiDagrunLatest]
+	suffix := c.routes[api.EndpointUiDagrunLatest].UrlSuffix
 	return fmt.Sprintf("%s%s/%d", c.schedulerUrl, suffix, n)
 }
 

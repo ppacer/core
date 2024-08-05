@@ -501,7 +501,7 @@ func (c *Client) readDagRunWithTaskInfoQuery() string {
 			COUNT(DISTINCT drt.TaskId) AS TaskCompletedNum
 		FROM
 			dagruns dr
-		INNER JOIN
+		LEFT JOIN
 			dagtasks dt ON dr.DagId = dt.DagId AND dt.IsCurrent = 1
 		LEFT JOIN
 			dagruntasks drt ON

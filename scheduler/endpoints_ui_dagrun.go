@@ -114,14 +114,21 @@ func dagrunsDbStats(
 	if rErr != nil {
 		return counts, rErr
 	}
-	if cntSuccess, successExists := cntByStatus[dag.RunSuccess.String()]; successExists {
+	cntSuccess, successExists := cntByStatus[dag.RunSuccess.String()]
+	if successExists {
 		counts.Success = cntSuccess
 	}
-	if cntRunning, runningExists := cntByStatus[dag.RunRunning.String()]; runningExists {
+	cntRunning, runningExists := cntByStatus[dag.RunRunning.String()]
+	if runningExists {
 		counts.Running = cntRunning
 	}
-	if cntFailed, failedExists := cntByStatus[dag.RunFailed.String()]; failedExists {
+	cntFailed, failedExists := cntByStatus[dag.RunFailed.String()]
+	if failedExists {
 		counts.Failed = cntFailed
+	}
+	cntScheduled, scheduledExists := cntByStatus[dag.RunScheduled.String()]
+	if scheduledExists {
+		counts.Scheduled = cntScheduled
 	}
 	return counts, nil
 }
