@@ -1,3 +1,11 @@
+# Not released changes
+
+- Introduce /ui/dagrun/* endpoints in Scheduler HTTP server, to hydrate the
+    main UI page.
+- Fix counting goroutines in TaskScheduler.
+
+
+
 # [v0.0.1] - 2024-07-24
 
 ## Backend - new features
