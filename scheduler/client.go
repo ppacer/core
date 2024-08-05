@@ -7,10 +7,12 @@ package scheduler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"syscall"
 	"time"
 
 	"github.com/ppacer/core/api"
@@ -54,8 +56,10 @@ func (c *Client) GetTask() (api.TaskToExec, error) {
 		return api.TaskToExec{}, ds.ErrQueueIsEmpty
 	}
 	if err != nil {
-		c.logger.Error("Error while getting UI DAG runs stats", "err",
-			err.Error())
+		if !errors.Is(err, syscall.ECONNREFUSED) {
+			c.logger.Error("Error while getting TaskToExec", "err",
+				err.Error())
+		}
 		return api.TaskToExec{}, err
 	}
 	if code != http.StatusOK {

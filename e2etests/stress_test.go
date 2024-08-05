@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -149,9 +148,9 @@ func testMaxGoroutineCount(
 		executor.Start(dags)
 	}()
 
-	var currentMax int64
+	var currentMax int
 	doneChan := make(chan struct{})
-	go func(currentMax *int64, doneChan <-chan struct{}) {
+	go func(currentMax *int, doneChan <-chan struct{}) {
 		for {
 			select {
 			case <-doneChan:
@@ -160,7 +159,7 @@ func testMaxGoroutineCount(
 				time.Sleep(1 * time.Millisecond)
 				gc := sched.Goroutines()
 				if gc > *currentMax {
-					atomic.StoreInt64(currentMax, gc)
+					*currentMax = gc
 				}
 			}
 		}
@@ -180,7 +179,7 @@ func testMaxGoroutineCount(
 	if currentMax <= 1 {
 		t.Errorf("Expected at least two goroutines, got %d", currentMax)
 	}
-	if currentMax > int64(expectedMaxGoroutines) {
+	if currentMax > expectedMaxGoroutines {
 		t.Errorf("Expected at most %d goroutines while running Scheduler, got: %d",
 			expectedMaxGoroutines, currentMax)
 	}

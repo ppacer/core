@@ -1135,10 +1135,9 @@ func defaultTaskScheduler(t *testing.T, taskQueueCap int) *TaskScheduler {
 	notifications := make([]string, 0)
 	notifier := notify.NewMock(&notifications)
 
-	var goroutinesCount int64
 	ts := NewTaskScheduler(
 		registry, c, queues, taskCache, DefaultTaskSchedulerConfig,
-		testLogger(), notifier, &goroutinesCount, getStateFunc,
+		testLogger(), notifier, 0, getStateFunc,
 	)
 	return ts
 }

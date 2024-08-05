@@ -20,7 +20,7 @@ type UIDagrunStats struct {
 	DagrunTasks           StatusCounts `json:"dagrunTasks"`
 	DagrunQueueLen        int          `json:"dagrunQueueLen"`
 	TaskSchedulerQueueLen int          `json:"taskSchedulerQueueLen"`
-	GoroutinesNum         int64        `json:"goroutinesNum"`
+	GoroutinesNum         int          `json:"goroutinesNum"`
 }
 
 // UIDagrunRow represents information on a single DAG run on the main UI page.

@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/db"
@@ -25,12 +24,12 @@ import (
 // single project - currently model of 1 scheduler and N executors is
 // supported.
 type Scheduler struct {
-	dbClient       *db.Client
-	config         Config
-	queues         Queues
-	logger         *slog.Logger
-	notifier       notify.Sender
-	goroutineCount int64
+	dbClient      *db.Client
+	config        Config
+	queues        Queues
+	logger        *slog.Logger
+	notifier      notify.Sender
+	taskScheduler *TaskScheduler
 
 	sync.Mutex
 	state State
@@ -48,13 +47,12 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger,
 		logger = defaultLogger()
 	}
 	return &Scheduler{
-		dbClient:       dbClient,
-		config:         config,
-		queues:         queues,
-		logger:         logger,
-		notifier:       notifier,
-		goroutineCount: 0,
-		state:          StateStarted,
+		dbClient: dbClient,
+		config:   config,
+		queues:   queues,
+		logger:   logger,
+		notifier: notifier,
+		state:    StateStarted,
 	}
 }
 
@@ -118,19 +116,17 @@ func (s *Scheduler) Start(ctx context.Context, dags dag.Registry) http.Handler {
 	)
 	taskScheduler := NewTaskScheduler(
 		dags, s.dbClient, s.queues, taskCache, s.config.TaskSchedulerConfig,
-		s.logger, s.notifier, &s.goroutineCount, s.getState,
+		s.logger, s.notifier, 0, s.getState,
 	)
+	s.taskScheduler = taskScheduler
 
 	s.setState(StateRunning)
-	atomic.AddInt64(&s.goroutineCount, 3)
 	go func() {
-		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background dag run watcher
 		dagRunWatcher.Watch(ctx, dags)
 	}()
 
 	go func() {
-		defer atomic.AddInt64(&s.goroutineCount, -1)
 		// Running in the background task scheduler
 		taskScheduler.Start(ctx, dags)
 	}()
@@ -140,7 +136,6 @@ func (s *Scheduler) Start(ctx context.Context, dags dag.Registry) http.Handler {
 		s.logger.Info("Scheduler is about to be shut down. Context is done.",
 			"ctxErr", ctx.Err().Error())
 		s.setState(StateStopping)
-		atomic.AddInt64(&s.goroutineCount, -1)
 	}()
 
 	mux := http.NewServeMux()
@@ -163,9 +158,11 @@ func (s *Scheduler) setState(newState State) {
 	s.state = newState
 }
 
-// Gets current number of goroutines spawned by Scheduler.
-func (s *Scheduler) Goroutines() int64 {
-	return atomic.LoadInt64(&s.goroutineCount)
+// Gets current number of goroutines spawned by (Task)Scheduler. It excludes
+// long-running goroutines spawned by Scheduler.Start and focuses on
+// goroutines from TaskScheduler where almost the all pressure is.
+func (s *Scheduler) Goroutines() int {
+	return s.taskScheduler.goroutines()
 }
 
 // State for representing current Scheduler state.

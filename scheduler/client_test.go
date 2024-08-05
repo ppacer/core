@@ -328,10 +328,6 @@ func TestClientUIDagrunStatsEmpty(t *testing.T) {
 		t.Errorf("Expected empty api.UIDagrunStats.DagrunTasks, got: %v",
 			stats.DagrunTasks)
 	}
-	if stats.GoroutinesNum < 2 {
-		t.Errorf("Expected at least 2 goroutines on freshly started Scheduler, got: %d",
-			stats.GoroutinesNum)
-	}
 }
 
 func TestClientUIDagrunStats(t *testing.T) {
