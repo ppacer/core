@@ -135,7 +135,7 @@ func TestWalkAndScheduleOnTwoTasks(t *testing.T) {
 	drtEnd := DagRunTask{dagrun.DagId, dagrun.AtTime, "end", 0}
 
 	// Execute
-	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg, false)
 	time.Sleep(delay)
 	// Manually mark "start" task as success, to go to another task
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess, nil)
@@ -181,7 +181,7 @@ func TestWalkAndScheduleOnAsyncTasks(t *testing.T) {
 	drtN23 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n23", 0}
 	drtN3 := DagRunTask{dagrun.DagId, dagrun.AtTime, "n3", 0}
 
-	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg, false)
 	time.Sleep(delay)
 
 	uErr := ts.UpsertTaskStatus(ctx, drtStart, dag.TaskSuccess, nil)

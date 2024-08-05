@@ -356,7 +356,7 @@ func (ts *TaskScheduler) scheduleDagTasks(
 	sharedState := newDagRunSharedState(d.TaskParents())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg)
+	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg, false)
 	wg.Wait()
 
 	// Check whenever any task has failed and if so, then mark downstream tasks
@@ -455,9 +455,12 @@ func (ts *TaskScheduler) walkAndSchedule(
 	node *dag.Node,
 	sharedState *dagRunSharedState,
 	wg *sync.WaitGroup,
+	startedInGoroutine bool,
 ) {
 	defer wg.Done()
-	defer ts.decreaseGoroutine()
+	if startedInGoroutine {
+		defer ts.decreaseGoroutine()
+	}
 	checkDelay := ts.config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
 	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
@@ -520,7 +523,7 @@ func (ts *TaskScheduler) walkAndSchedule(
 				"drt", drt, "goroutineCount", ts.goroutines())
 			ts.gcMutex.Lock()
 			ts.goroutineCount++
-			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg)
+			go ts.walkAndSchedule(ctx, dagrun, child, sharedState, wg, true)
 			ts.gcMutex.Unlock()
 		}
 	}
