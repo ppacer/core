@@ -1,8 +1,12 @@
 # Not released changes
 
-- Introduce /ui/dagrun/* endpoints in Scheduler HTTP server, to hydrate the
+
+# [v0.0.3] - 2024-08-06
+
+- Introduce `/ui/dagrun/*` endpoints in Scheduler HTTP server, to hydrate the
     main UI page.
 - Fix counting goroutines in TaskScheduler.
+- Introduce `scheduler.API`, so ppacer UI could mock it.
 
 
 # [v0.0.2] - 2024-08-01
