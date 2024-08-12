@@ -215,7 +215,7 @@ func syncDagRunTaskCache(
 	for _, drtDb := range drtNotFinished {
 		drt := DRTBase{
 			DagId:  dag.Id(drtDb.DagId),
-			AtTime: timeutils.FromStringMust(drtDb.ExecTs),
+			AtTime: drtDb.ExecTs,
 			TaskId: drtDb.TaskId,
 		}
 		status, sErr := dag.ParseTaskStatus(drtDb.Status)

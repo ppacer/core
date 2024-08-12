@@ -1,5 +1,10 @@
 # Not released changes
 
+# [v0.0.4] - 2024-08-12
+
+- Change DRTBase.AtTime from time.Time to string. Serialized time.Time can
+differ from the original value on some platform (e.g. Linux, x86).
+
 
 # [v0.0.3] - 2024-08-06
 

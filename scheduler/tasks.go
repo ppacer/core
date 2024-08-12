@@ -42,7 +42,7 @@ func (drt DagRunTask) nextRetry() DagRunTask {
 func (drt DagRunTask) base() DRTBase {
 	return DRTBase{
 		DagId:  drt.DagId,
-		AtTime: drt.AtTime,
+		AtTime: timeutils.ToString(drt.AtTime),
 		TaskId: drt.TaskId,
 	}
 }
@@ -58,7 +58,7 @@ type DagRunTaskState struct {
 // DAG run task and doesn't need to store info for all retries.
 type DRTBase struct {
 	DagId  dag.Id
-	AtTime time.Time
+	AtTime string
 	TaskId string
 }
 
@@ -647,7 +647,11 @@ func (ts *TaskScheduler) checkIfCanBeScheduled(
 	}
 
 	for _, parentTaskId := range parents {
-		base := DRTBase{dagrun.DagId, dagrun.AtTime, parentTaskId}
+		base := DRTBase{
+			DagId:  dagrun.DagId,
+			AtTime: timeutils.ToString(dagrun.AtTime),
+			TaskId: parentTaskId,
+		}
 		parentTaskRetry := 0
 		if retry, exists := ts.taskRetriesExecuted.Get(base); exists {
 			parentTaskRetry = retry
@@ -806,7 +810,7 @@ func (ts *TaskScheduler) cleanTaskCache(dagrun DagRun, nodes []dag.NodeInfo) {
 	for _, node := range nodes {
 		drtBase := DRTBase{
 			DagId:  dagrun.DagId,
-			AtTime: dagrun.AtTime,
+			AtTime: timeutils.ToString(dagrun.AtTime),
 			TaskId: node.Node.Task.Id(),
 		}
 		ts.taskCache.Remove(drtBase)
