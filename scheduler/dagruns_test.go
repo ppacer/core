@@ -23,13 +23,14 @@ func TestNextScheduleForDagRunsSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.CleanUpSqliteTmp(c, t)
 	const dagRuns = 10
 	const dagId = "mock_dag"
 	ctx := context.Background()
 
 	startTs := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
 	sched := schedule.NewFixed(startTs, 1*time.Hour)
-	attr := dag.Attr{}
+	attr := dag.Attr{CatchUp: true}
 	d := emptyDag(dagId, &sched, attr)
 	queue := ds.NewSimpleQueue[DagRun](10)
 	drw := NewDagRunWatcher(
@@ -476,7 +477,7 @@ func TestTryScheduleDagUnexpectedDelay(t *testing.T) {
 	defer db.CleanUpSqliteTmp(c, t)
 
 	ctx := context.Background()
-	attr := dag.Attr{}
+	attr := dag.Attr{CatchUp: true}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
 	sched := schedule.NewFixed(start, 1*time.Hour)
 	d := emptyDag("sample_dag", &sched, attr)
@@ -534,7 +535,7 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	defer db.CleanUpSqliteTmp(c, t)
 
 	ctx := context.Background()
-	attr := dag.Attr{}
+	attr := dag.Attr{CatchUp: true}
 	start := time.Date(2023, time.October, 5, 12, 0, 0, 0, time.UTC)
 	sched := schedule.NewFixed(start, 1*time.Hour)
 	d := emptyDag("sample_dag", &sched, attr)
@@ -591,6 +592,91 @@ func TestTryScheduleAfterSchedulerRestart(t *testing.T) {
 	if !nextSchedExp.Equal(*nextSched) {
 		t.Errorf("Expected nextSchedule after the restart to be %+v, but got: %+v",
 			nextSchedExp, *nextSched)
+	}
+}
+
+func TestNextSchedWithCatchUp(t *testing.T) {
+	c, err := db.NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+	dagId := dag.Id("sample_dag")
+	start := time.Date(2024, 8, 17, 16, 0, 0, 0, time.UTC)
+	sched := schedule.NewFixed(start, 10*time.Second)
+	latest := time.Date(2024, 8, 17, 18, 0, 0, 0, time.UTC)
+	now := time.Date(2024, 8, 17, 18, 5, 0, 0, time.UTC)
+
+	queue := ds.NewSimpleQueue[DagRun](10)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
+
+	next1 := drw.nextSchedule(dagId, sched, latest, true, now)
+	next2 := drw.nextSchedule(dagId, sched, next1, true, now)
+	nextN := drw.nextSchedule(dagId, sched, now, true, now)
+
+	exp1 := time.Date(2024, 8, 17, 18, 0, 10, 0, time.UTC)
+	exp2 := time.Date(2024, 8, 17, 18, 0, 20, 0, time.UTC)
+	expN := time.Date(2024, 8, 17, 18, 5, 10, 0, time.UTC)
+
+	if !next1.Equal(exp1) {
+		t.Errorf("Expected 1st schedule with catch up %v, got: %v",
+			exp1, next1)
+	}
+	if !next2.Equal(exp2) {
+		t.Errorf("Expected 2nd schedule with catch up %v, got: %v",
+			exp2, next2)
+	}
+	if !nextN.Equal(expN) {
+		t.Errorf("Expected schedule after now with catch up %v, got: %v",
+			expN, nextN)
+	}
+	cnt := c.Count("schedules")
+	cntCaught := c.CountWhere("schedules", "Event='CAUGHT_UP'")
+	if cnt != 3 {
+		t.Errorf("Expected 3 rows in schedules table, got: %d", cnt)
+	}
+	if cntCaught != 2 {
+		t.Errorf("Expected 2 rows in schedules table for Event='CAUGHT_UP', got: %d",
+			cntCaught)
+	}
+}
+
+func TestNextSchedWithNoCatchUp(t *testing.T) {
+	c, err := db.NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(c, t)
+	dagId := dag.Id("sample_dag")
+	start := time.Date(2024, 8, 17, 16, 0, 0, 0, time.UTC)
+	sched := schedule.NewFixed(start, 10*time.Second)
+	latest := time.Date(2024, 8, 17, 18, 0, 0, 0, time.UTC)
+	now := time.Date(2024, 8, 17, 18, 5, 0, 0, time.UTC)
+
+	queue := ds.NewSimpleQueue[DagRun](10)
+	drw := NewDagRunWatcher(
+		&queue, c, testLogger(), nil, DefaultDagRunWatcherConfig,
+	)
+	nextSched := drw.nextSchedule(dagId, sched, latest, false, now)
+	nextExpected := time.Date(2024, 8, 17, 18, 5, 10, 0, time.UTC)
+	if !nextSched.Equal(nextExpected) {
+		t.Errorf("Expected next schedule %v, got: %v", nextExpected, nextSched)
+	}
+
+	// test rows in schedules table in database
+	count := c.Count("schedules")
+	const countExpected = 31
+	if count != countExpected {
+		t.Errorf("Expected %d rows in schedules table, got: %d",
+			countExpected, count)
+	}
+	countSkipped := c.CountWhere("schedules", "Event='SKIPPED'")
+	const countSkipExpected = 30
+	if countSkipped != countSkipExpected {
+		t.Errorf("Expected %d rows with event SKIPPED in schedules table, got: %d",
+			countSkipExpected, countSkipped)
 	}
 }
 

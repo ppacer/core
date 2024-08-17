@@ -81,6 +81,7 @@ func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId str
 		c.logger.Error("Failed to insert new dag run task", "dagId", dagId,
 			"execTs", execTs, "taskId", taskId, "retry", retry,
 			"status", status, "err", iErr)
+		return iErr
 	}
 	c.logger.Debug("Finished inserting new dag run task", "dagId", dagId,
 		"execTs", execTs, "taskId", taskId, "retry", retry, "duration",

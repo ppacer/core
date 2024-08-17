@@ -14,6 +14,7 @@ var TableNames []string = []string{
 	"dagtasks",
 	"dagruns",
 	"dagruntasks",
+	"schedules",
 }
 
 // SchemaStatements returns a list of SQL statements that setups new instance
@@ -29,6 +30,7 @@ func SchemaStatements(dbDriver string) ([]string, error) {
 			sqliteCreateDagtasksTable(),
 			sqliteCreateDagrunsTable(),
 			sqliteCreateDagruntasksTable(),
+			sqliteCreateSchedulesTable(),
 		}, nil
 	}
 
@@ -113,6 +115,22 @@ CREATE TABLE IF NOT EXISTS dagruntasks (
     Version TEXT NOT NULL,          -- Scheduler version
 
     PRIMARY KEY (DagId, ExecTs, TaskId, Retry)
+);
+`
+}
+
+func sqliteCreateSchedulesTable() string {
+	return `
+-- Table schedules stores information about DAG schedules, including regular
+-- planned schedules, manual triggers, missed schedules etc.
+CREATE TABLE IF NOT EXISTS schedules (
+    DagId TEXT NOT NULL,           -- DAG ID
+    InsertTs TEXT NOT NULL,        -- Insert timestamp
+    Event TEXT NOT NULL,           -- Schedule related event (TODO)
+    ScheduleTs TEXT NULL,          -- Schedule timestamp for the DAG
+    NextScheduleTs TEXT NOT NULL,  -- Next planned Schedule timestamp
+
+    PRIMARY KEY (DagId, InsertTs, Event)
 );
 `
 }

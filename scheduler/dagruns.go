@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/schedule"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/timeutils"
@@ -146,8 +147,8 @@ func (drw *DagRunWatcher) tryScheduleDag(
 	if !shouldBe {
 		return nil
 	}
-	drw.logger.Info("About to try scheduling new dag run", "dagId", string(d.Id),
-		"execTs", schedule)
+	drw.logger.Info("About to try scheduling new dag run", "dagId",
+		string(d.Id), "execTs", schedule)
 
 	execTs := timeutils.ToString(schedule)
 	newDagRun := DagRun{DagId: d.Id, AtTime: schedule}
@@ -192,7 +193,9 @@ func (drw *DagRunWatcher) tryScheduleDag(
 		return uErr
 	}
 	// Update the next schedule for that DAG
-	newNextSched := (*d.Schedule).Next(schedule, &schedule)
+	newNextSched := drw.nextSchedule(
+		d.Id, *d.Schedule, schedule, d.Attr.CatchUp, currentTime,
+	)
 	nextSchedules[d.Id] = &newNextSched
 	return nil
 }
@@ -231,7 +234,9 @@ func (drw *DagRunWatcher) updateNextSchedules(
 ) {
 	latestDagRuns, err := drw.dbClient.ReadLatestDagRuns(ctx)
 	if err != nil {
-		drw.logger.Error("Failed to load latest dag runs to create a cache. Cache is empty")
+		drw.logger.Error(
+			"Failed to load latest dag runs to create a cache. Cache is empty",
+		)
 	}
 
 	for _, dag := range dags {
@@ -247,15 +252,87 @@ func (drw *DagRunWatcher) updateNextSchedules(
 			// The first run
 			if dag.Attr.CatchUp {
 				nextSchedules[dag.Id] = &startTime
+				drw.insertDagScheduleFirst(dag.Id, schedule.Regular, startTime)
 				continue
 			} else {
 				nextSched := sched.Next(currentTime, nil)
 				nextSchedules[dag.Id] = &nextSched
+				drw.insertDagScheduleFirst(dag.Id, schedule.Regular, nextSched)
 				continue
 			}
 		}
-		prevSchedule := timeutils.FromStringMust(latestDagRun.ExecTs)
-		nextSched := sched.Next(currentTime, &prevSchedule)
+		currentSchedule := timeutils.FromStringMust(latestDagRun.ExecTs)
+		nextSched := drw.nextSchedule(
+			dag.Id, sched, currentSchedule, dag.Attr.CatchUp, currentTime,
+		)
 		nextSchedules[dag.Id] = &nextSched
+	}
+}
+
+func (drw *DagRunWatcher) nextSchedule(
+	dagId dag.Id, dagSched schedule.Schedule, latestSchedule time.Time,
+	catchUp bool, currentTime time.Time,
+) time.Time {
+	const maxPointsToCatchUp = 1000000
+	next := dagSched.Next(latestSchedule, &latestSchedule)
+
+	// regular next schedule
+	if next.After(currentTime) {
+		drw.insertDagSchedule(dagId, schedule.Regular, latestSchedule, next)
+		return next
+	}
+
+	// schedule point already passed but shall catch up
+	if (next.Equal(currentTime) || next.Before(currentTime)) && catchUp {
+		drw.insertDagSchedule(dagId, schedule.CaughtUp, latestSchedule, next)
+		return next
+	}
+
+	// schedule point already passed and we shouldn't catch up
+	for i := 0; i < maxPointsToCatchUp; i++ {
+		drw.insertDagSchedule(dagId, schedule.Skipped, latestSchedule, next)
+		latestSchedule = next
+		next = dagSched.Next(next, &next)
+		if next.After(currentTime) {
+			drw.insertDagSchedule(
+				dagId, schedule.Regular, latestSchedule, next,
+			)
+			return next
+		}
+	}
+	// the following should never happen for proper schedules
+	drw.insertDagSchedule(dagId, schedule.OutOfBand, latestSchedule, next)
+	return next
+}
+
+func (drw *DagRunWatcher) insertDagSchedule(
+	dagId dag.Id, event schedule.Event, latestSched, nextSched time.Time,
+) {
+	latestSchedStr := timeutils.ToString(latestSched)
+	nextSchedStr := timeutils.ToString(nextSched)
+	iErr := drw.dbClient.InsertDagSchedule(
+		context.Background(),
+		string(dagId),
+		event.String(),
+		nextSchedStr,
+		&latestSchedStr,
+	)
+	if iErr != nil {
+		drw.logger.Error("Cannot insert DAG schedule into database",
+			"dagId", string(dagId), "prevSchedule", latestSchedStr,
+			"nextSchedule", timeutils.ToString(nextSched))
+	}
+}
+
+func (drw *DagRunWatcher) insertDagScheduleFirst(
+	dagId dag.Id, event schedule.Event, next time.Time,
+) {
+	nextSchedStr := timeutils.ToString(next)
+	iErr := drw.dbClient.InsertDagSchedule(
+		context.Background(), string(dagId), event.String(), nextSchedStr, nil,
+	)
+	if iErr != nil {
+		drw.logger.Error("Cannot insert DAG schedule into database",
+			"dagId", string(dagId), "nextSchedule", timeutils.ToString(next))
 	}
 }

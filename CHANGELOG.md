@@ -1,5 +1,12 @@
 # Not released changes
 
+# [v0.0.5] - 2025-08-17
+
+- Fix behavior related to dag.Attr.CatchUp.
+- Introduce `schedules` table in the database, to keep events for schedule
+points (`REGULAR`, `SKIPPED`, `CAUGHT_UP`).
+
+
 # [v0.0.4] - 2024-08-12
 
 - Change DRTBase.AtTime from time.Time to string. Serialized time.Time can
