@@ -53,6 +53,7 @@ const (
 	TaskScheduled TaskStatus = iota
 	TaskRunning
 	TaskFailed
+	TaskFailedPendingRetry
 	TaskSuccess
 	TaskUpstreamFailed
 	TaskNoStatus
@@ -65,6 +66,7 @@ func (s TaskStatus) String() string {
 		"SCHEDULED",
 		"RUNNING",
 		"FAILED",
+		"FAILED_PENDING_RETRY",
 		"SUCCESS",
 		"UPSTREAM_FAILED",
 		"NO_STATUS",
@@ -85,12 +87,13 @@ func (s TaskStatus) IsTerminal() bool {
 // case-sensitive.
 func ParseTaskStatus(s string) (TaskStatus, error) {
 	states := map[string]TaskStatus{
-		"SCHEDULED":       TaskScheduled,
-		"RUNNING":         TaskRunning,
-		"FAILED":          TaskFailed,
-		"SUCCESS":         TaskSuccess,
-		"UPSTREAM_FAILED": TaskUpstreamFailed,
-		"NO_STATUS":       TaskNoStatus,
+		"SCHEDULED":            TaskScheduled,
+		"RUNNING":              TaskRunning,
+		"FAILED":               TaskFailed,
+		"FAILED_PENDING_RETRY": TaskFailedPendingRetry,
+		"SUCCESS":              TaskSuccess,
+		"UPSTREAM_FAILED":      TaskUpstreamFailed,
+		"NO_STATUS":            TaskNoStatus,
 	}
 	if status, ok := states[s]; ok {
 		return status, nil

@@ -25,6 +25,12 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	sw := newSliceWriter(&logs)
 	logger := sliceLogger(sw)
 
+	dbClient, err := db.NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(dbClient, t)
+
 	dags := dag.Registry{}
 	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
 	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
@@ -38,9 +44,68 @@ func TestSimpleDagRunWithRetries(t *testing.T) {
 	notifications := make([]string, 0)
 
 	testSchedulerE2eSingleDagRunCustom(
-		dags, dr, 3*time.Second, true, &notifications, nil, nil, nil, nil,
+		dags, dr, 3*time.Second, true, &notifications, dbClient, nil, nil, nil,
 		logger, true, t,
 	)
+
+	drLatest, drErr := dbClient.ReadLatestDagRuns(context.Background())
+	if drErr != nil {
+		t.Errorf("Cannot read latest DAG runs from DB: %s", drErr.Error())
+	}
+	dagRun, exists := drLatest[string(d.Id)]
+	if !exists {
+		t.Errorf("Expected to have DAG run in DB for DagId=%s", string(d.Id))
+	}
+	if dagRun.Status != dag.RunSuccess.String() {
+		t.Errorf("Expected DAG run status %s, but got: %s",
+			dag.RunSuccess.String(), dagRun.Status)
+	}
+	exposeSliceLoggerOnTestFailure(logs, t)
+}
+
+func TestSingleTaskDagRunWithRetries(t *testing.T) {
+	const failedRuns = 3
+	const maxRetries = 4
+
+	logs := make([]string, 0, 100)
+	sw := newSliceWriter(&logs)
+	logger := sliceLogger(sw)
+
+	dbClient, err := db.NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.CleanUpSqliteTmp(dbClient, t)
+
+	dags := dag.Registry{}
+	startTs := time.Date(2023, 11, 2, 12, 0, 0, 0, time.UTC)
+	var schedule schedule.Schedule = schedule.NewFixed(startTs, time.Hour)
+	dagId := dag.Id("mock_failing_dag")
+	d := singleFailingTaskDAG(
+		dagId, &schedule, failedRuns, dag.WithTaskRetries(maxRetries),
+	)
+	dags.Add(d)
+	ts := time.Date(2024, 2, 4, 12, 0, 0, 0, time.UTC)
+	dr := scheduler.DagRun{DagId: dagId, AtTime: ts}
+	notifications := make([]string, 0)
+
+	testSchedulerE2eSingleDagRunCustom(
+		dags, dr, 3*time.Second, true, &notifications, dbClient, nil, nil, nil,
+		logger, true, t,
+	)
+
+	drLatest, drErr := dbClient.ReadLatestDagRuns(context.Background())
+	if drErr != nil {
+		t.Errorf("Cannot read latest DAG runs from DB: %s", drErr.Error())
+	}
+	dagRun, exists := drLatest[string(d.Id)]
+	if !exists {
+		t.Errorf("Expected to have DAG run in DB for DagId=%s", string(d.Id))
+	}
+	if dagRun.Status != dag.RunSuccess.String() {
+		t.Errorf("Expected DAG run status %s, but got: %s",
+			dag.RunSuccess.String(), dagRun.Status)
+	}
 	exposeSliceLoggerOnTestFailure(logs, t)
 }
 

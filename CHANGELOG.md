@@ -1,5 +1,11 @@
 # Not released changes
 
+# [v0.0.6] - 2025-08-21
+
+- Fix a bug on FAILED DAG run status in case when the last task in a DAG has
+been retried with a success, so DAG run should has also status SUCCESS.
+
+
 # [v0.0.5] - 2025-08-17
 
 - Fix behavior related to dag.Attr.CatchUp.

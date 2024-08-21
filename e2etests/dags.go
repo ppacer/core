@@ -154,6 +154,21 @@ func simpleDAGWithTaskConfigFuncs(
 	return d.Done()
 }
 
+func singleFailingTaskDAG(
+	dagId dag.Id, sched *schedule.Schedule, failedRuns int,
+	taskConfigFuncs ...dag.TaskConfigFunc,
+) dag.Dag {
+	root := dag.NewNode(
+		&failNTimesTask{taskId: "root", n: failedRuns},
+		taskConfigFuncs...,
+	)
+	d := dag.New(dagId).AddRoot(root)
+	if sched != nil {
+		d.AddSchedule(*sched)
+	}
+	return d.Done()
+}
+
 func simpleLoggingDAG(dagId dag.Id, sched *schedule.Schedule) dag.Dag {
 	n1 := dag.NewNode(logTask{taskId: "n1"})
 	n21 := dag.NewNode(logTask{taskId: "n21"})

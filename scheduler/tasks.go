@@ -212,7 +212,7 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 		return rErr
 	}
 	if shouldBeRetried {
-		status = dag.TaskFailed
+		status = dag.TaskFailedPendingRetry
 	}
 
 	// Insert/update task info in cache and database
@@ -239,7 +239,7 @@ func (ts *TaskScheduler) UpsertTaskStatus(
 		ts.gcMutex.Unlock()
 	}
 
-	if status != dag.TaskFailed {
+	if status != dag.TaskFailed && status != dag.TaskFailedPendingRetry {
 		// no need to do anything else
 		return nil
 	}
