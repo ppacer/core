@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// Scannable interface is mainly to define parsers both for *sql.Row and
+// *sql.Rows types.
+type Scannable interface {
+	Scan(...any) error
+}
+
 // Count returns count of rows for given table. If case of errors -1 is
 // returned and error is logged.
 func (c *Client) Count(table string) int {

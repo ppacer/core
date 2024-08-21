@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"runtime"
 	"testing"
 	"time"
@@ -700,6 +701,43 @@ func TestReadDagRunsWithTaskInfo(t *testing.T) {
 		}
 	}
 
+}
+
+func TestReadDagRun(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+	ctx := context.Background()
+	const dagId = "mock_dag"
+	now := time.Now()
+	execTss := []string{
+		timeutils.ToString(now.Add(13 * 3 * time.Second)),
+		timeutils.ToString(now.Add(13 * 3 * 2 * time.Second)),
+		timeutils.ToString(now.Add(13 * 3 * 3 * time.Second)),
+	}
+
+	for _, execTs := range execTss {
+		insertDagRun(c, ctx, dagId, execTs, t)
+	}
+
+	dr5, err5 := c.ReadDagRun(ctx, 5)
+	if err5 != sql.ErrNoRows {
+		t.Errorf("Expected zero rows, but got err=%v, dagRun=%v", err5, dr5)
+	}
+
+	for runId := 1; runId <= 3; runId++ {
+		dr, err := c.ReadDagRun(ctx, runId)
+		if err != nil {
+			t.Errorf("Unexpected error while reading RunId=%d: %s", runId,
+				err.Error())
+		}
+		if dr.ExecTs != execTss[runId-1] {
+			t.Errorf("Expected ExecTs=%s, but got: %s", execTss[runId-1],
+				dr.ExecTs)
+		}
+	}
 }
 
 func insertDagRun(c *Client, ctx context.Context, dagId, execTs string, t *testing.T) {
