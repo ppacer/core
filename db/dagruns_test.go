@@ -752,10 +752,10 @@ func insertDagTasks(c *Client, ctx context.Context, dagId string, tasks []string
 	if txErr != nil {
 		t.Fatalf("Cannot start SQL transaction: %s", txErr.Error())
 	}
-	for _, task := range tasks {
+	for idx, task := range tasks {
+		node := dag.NewNode(PrintTask{Name: task})
 		iErr := c.insertDagTask(
-			ctx, tx, dagId, dag.NewNode(PrintTask{Name: task}),
-			timeutils.ToString(time.Now()),
+			ctx, tx, dagId, node, idx+1, 1, timeutils.ToString(time.Now()),
 		)
 		if iErr != nil {
 			t.Errorf("Cannot insert DAG task: %s", iErr.Error())
