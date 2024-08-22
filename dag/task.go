@@ -252,6 +252,7 @@ func (dn *Node) isAcyclicImpl(traversed map[*Node]int, depth int) bool {
 type NodeInfo struct {
 	Node    *Node
 	Depth   int
+	Width   int
 	Parents []*Node
 }
 
@@ -261,6 +262,8 @@ type NodeInfo struct {
 func (dn *Node) Flatten() []NodeInfo {
 	flattenNodes, parentsMap := dn.flattenBFS()
 	ni := make([]NodeInfo, 0, len(flattenNodes))
+	finalWidthMap := make(map[int]int)
+
 	for idx, nodeD := range flattenNodes {
 		thereIsBetterCandidate := false
 		if idx < len(flattenNodes)-1 {
@@ -280,6 +283,8 @@ func (dn *Node) Flatten() []NodeInfo {
 			if parentsExists {
 				nodeD.Parents = parents
 			}
+			nodeD.Width = finalWidthMap[nodeD.Depth] + 1
+			finalWidthMap[nodeD.Depth]++
 			ni = append(ni, nodeD)
 		}
 	}
@@ -293,6 +298,8 @@ func (dn *Node) flattenBFS() ([]NodeInfo, map[*Node][]*Node) {
 	var queue []*Node
 	depthMarker := &Node{}
 	depth := 1
+	widthCounter := make(map[int]int)
+	widthCounter[depth] = 1
 	queue = append(queue, dn, depthMarker)
 
 	for len(queue) > 0 {
@@ -310,10 +317,18 @@ func (dn *Node) flattenBFS() ([]NodeInfo, map[*Node][]*Node) {
 			if len(queue) > 0 {
 				queue = append(queue, depthMarker)
 			}
+			widthCounter[depth] = 1
 			continue
 		}
+		width := widthCounter[depth]
+		widthCounter[depth]++
 		visited[current] = depth
-		ni = append(ni, NodeInfo{Node: current, Depth: depth, Parents: nil})
+		ni = append(ni, NodeInfo{
+			Node:    current,
+			Depth:   depth,
+			Width:   width,
+			Parents: nil,
+		})
 		for _, child := range current.Children {
 			parentsMap[child] = append(parentsMap[child], current)
 			queue = append(queue, child)

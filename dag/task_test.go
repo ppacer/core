@@ -199,6 +199,10 @@ func TestFlattenLinkedList(t *testing.T) {
 			t.Errorf("Expected Task %s to be on depth %d, got %d",
 				ni.Node.Task.Id(), idx+1, ni.Depth)
 		}
+		if ni.Width != 1 {
+			t.Errorf("Expected Task %s to be on width %d, got %d",
+				ni.Node.Task.Id(), 1, ni.Width)
+		}
 	}
 }
 
@@ -211,6 +215,7 @@ func TestFlattenBinaryTree(t *testing.T) {
 		"Node_1_1",
 	}
 	expectedLevels := []int{1, 2, 2, 3, 3, 3, 3}
+	expectedWidths := []int{1, 1, 2, 1, 2, 3, 4}
 	expectedNumOfParents := []int{0, 1, 1, 1, 1, 1, 1}
 	for idx, ni := range nodesInfo {
 		if ni.Node.Task.Id() != expectedTaskIds[idx] {
@@ -220,6 +225,10 @@ func TestFlattenBinaryTree(t *testing.T) {
 		if ni.Depth != expectedLevels[idx] {
 			t.Errorf("Expected task %s to be on depth %d, but got %d",
 				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if ni.Width != expectedWidths[idx] {
+			t.Errorf("Expected task %s to be on width %d, but got %d",
+				ni.Node.Task.Id(), expectedWidths[idx], ni.Width)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
 			t.Errorf("Expected task %s to has %d parents, got %d",
@@ -233,6 +242,7 @@ func TestFlattenBranchoutAndMerge(t *testing.T) {
 	nodesInfo := g.Flatten()
 	expectedTaskIds := []string{"n1", "n21", "n22", "n23", "n3"}
 	expectedLevels := []int{1, 2, 2, 2, 3}
+	expectedWidths := []int{1, 1, 2, 3, 1}
 	expectedNumOfParents := []int{0, 1, 1, 1, 3}
 
 	if len(nodesInfo) != len(expectedTaskIds) {
@@ -248,6 +258,10 @@ func TestFlattenBranchoutAndMerge(t *testing.T) {
 		if ni.Depth != expectedLevels[idx] {
 			t.Errorf("Expected task %s to be on depth %d, but got %d",
 				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if ni.Width != expectedWidths[idx] {
+			t.Errorf("Expected task %s to be on width %d, but got %d",
+				ni.Node.Task.Id(), expectedWidths[idx], ni.Width)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
 			t.Errorf("Expected task %s to has %d parents, got %d",
@@ -284,6 +298,14 @@ func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
 		5,
 		6,
 	}
+	expectedWidths := []int{
+		1,
+		1, 2, 3,
+		1, 2, 3, 4, 5,
+		1, 2, 3,
+		1,
+		1,
+	}
 	expectedNumOfParents := []int{
 		0,
 		1, 1, 1,
@@ -306,6 +328,10 @@ func TestFlattenFewBranchoutsAndMerge(t *testing.T) {
 		if ni.Depth != expectedLevels[idx] {
 			t.Errorf("Expected task %s to be on depth %d, but got %d",
 				ni.Node.Task.Id(), expectedLevels[idx], ni.Depth)
+		}
+		if ni.Width != expectedWidths[idx] {
+			t.Errorf("Expected task %s to be on width %d, but got %d",
+				ni.Node.Task.Id(), expectedWidths[idx], ni.Width)
 		}
 		if len(ni.Parents) != expectedNumOfParents[idx] {
 			t.Errorf("Expected task %s to has %d parents, got %d",
