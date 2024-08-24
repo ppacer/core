@@ -2,6 +2,9 @@ package scheduler
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/timeutils"
 )
@@ -19,6 +23,10 @@ const (
 	HTTPRequestContextTimeout = 30 * time.Second
 
 	defaultDagRunsListLen = 25
+)
+
+var (
+	ErrDagRunIdIncorrect = errors.New("incorrect DAG run ID")
 )
 
 // HTTP handler for current statistics on DAG runs, Scheduler queues and
@@ -106,6 +114,46 @@ func (s *Scheduler) uiDagrunListHandler(w http.ResponseWriter, r *http.Request) 
 		time.Since(start))
 }
 
+// HTTP handler for serving all details on given DAG run, including information
+// about tasks and their log records.
+func (s *Scheduler) uiDagrunDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	s.logger.Debug("Start uiDagrunDetails...")
+	ctx, cancel := context.WithTimeout(
+		context.Background(), HTTPRequestContextTimeout,
+	)
+	defer cancel()
+
+	runId, parseErr := parseDagRunId(r)
+	if parseErr != nil {
+		http.Error(w, parseErr.Error(), http.StatusBadRequest)
+	}
+
+	dagRun, drDbErr := s.dbClient.ReadDagRun(ctx, runId)
+	if drDbErr == sql.ErrNoRows {
+		http.Error(
+			w, "there is no DAG run for given runId", http.StatusBadRequest,
+		)
+		return
+	}
+	dagrunDetails, err := s.prepDagrunDetails(dagRun)
+	if err != nil {
+		http.Error(w, "cannot prepare DAG run details",
+			http.StatusInternalServerError)
+		return
+	}
+
+	encodeErr := encode(w, http.StatusOK, dagrunDetails)
+	if encodeErr != nil {
+		s.logger.Error("Cannot encode UIDagRunDetails", "runId", runId,
+			"err", encodeErr.Error())
+		http.Error(w, encodeErr.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.logger.Debug("Handler uiDagrunListHandler is finished", "duration",
+		time.Since(start))
+}
+
 func dagrunsDbStats(
 	ctx context.Context, statsReader func(context.Context) (map[string]int, error),
 ) (api.StatusCounts, error) {
@@ -148,6 +196,20 @@ func parseDagRunsListLen(r *http.Request, logger *slog.Logger) int {
 	return value
 }
 
+func parseDagRunId(r *http.Request) (int, error) {
+	runId := r.PathValue("runId")
+	if runId == "" {
+		return -1, fmt.Errorf("parameter runId is unexpectedly empty")
+	}
+	value, castErr := strconv.Atoi(runId)
+	if castErr != nil {
+		return -1, fmt.Errorf(
+			"parameter runId (%s) cannot be cast as integer: %s",
+			runId, castErr.Error())
+	}
+	return value, nil
+}
+
 func prepDagrunList(dagruns []db.DagRunWithTaskInfo) api.UIDagrunList {
 	tsTransform := func(tsStr string) api.Timestamp {
 		return api.ToTimestamp(timeutils.FromStringMust(tsStr))
@@ -169,4 +231,108 @@ func prepDagrunList(dagruns []db.DagRunWithTaskInfo) api.UIDagrunList {
 		}
 	}
 	return res
+}
+
+func (s *Scheduler) prepDagrunDetails(dr db.DagRun) (api.UIDagrunDetails, error) {
+	ctx := context.TODO()
+	details := prepDagrunDetailsBase(dr)
+
+	dagRunTasks, dbErr := s.dbClient.ReadDagRunTaskDetails(
+		ctx, dr.DagId, dr.ExecTs,
+	)
+	if dbErr != nil {
+		return details, fmt.Errorf("cannot read DAG run task details from DB: %w",
+			dbErr)
+	}
+	tasks, tErr := s.prepDagrunDetailsTasks(dagRunTasks)
+	if tErr != nil {
+		return details, fmt.Errorf("cannot properly prepare DAG run task details: %s",
+			tErr)
+	}
+	details.Tasks = tasks
+	return details, nil
+}
+
+func (s *Scheduler) prepDagrunDetailsTasks(
+	dagruntasks []db.DagRunTaskDetails,
+) ([]api.UIDagrunTask, error) {
+	result := make([]api.UIDagrunTask, 0, len(dagruntasks))
+
+	for _, drtd := range dagruntasks {
+		uiDrt, err := s.prepDagrunTaskDetails(drtd)
+		if err != nil {
+			s.logger.Error("Cannot prepare DAG run task details", "dagRunTask",
+				drtd, "err", err.Error())
+		}
+		result = append(result, uiDrt)
+	}
+	return result, nil
+}
+
+func (s *Scheduler) prepDagrunTaskDetails(drtd db.DagRunTaskDetails) (api.UIDagrunTask, error) {
+	ti := tasklog.TaskInfo{
+		DagId:  drtd.DagId,
+		ExecTs: timeutils.FromStringMust(drtd.ExecTs),
+		TaskId: drtd.TaskId,
+		Retry:  drtd.Retry,
+	}
+	logsReader := s.taskLogs.GetLogReader(ti)
+	// TODO: We want to read just a few log records at first and load more log
+	// records on demand via UI.
+	logs, logsErr := logsReader.ReadAll(context.TODO())
+	if logsErr != nil {
+		return api.UIDagrunTask{}, logsErr
+	}
+
+	uiDrt := api.UIDagrunTask{
+		TaskId:        drtd.TaskId,
+		Retry:         drtd.Retry,
+		InsertTs:      api.ToTimestamp(timeutils.FromStringMust(drtd.InsertTs)),
+		TaskNoStarted: drtd.TaskNotStarted,
+		Status:        drtd.Status,
+		Pos: api.TaskPos{
+			Depth: drtd.PosDepth,
+			Width: drtd.PosWidth,
+		},
+		Duration: timeutils.Duration(drtd.InsertTs, drtd.StatusUpdateTs).String(),
+		Config:   drtd.ConfigJson,
+		TaskLogs: api.UITaskLogs{
+			LogRecordsCount: len(logs),
+			LoadedRecords:   len(logs),
+			Records:         s.toUITaskLogRecords(logs),
+		},
+	}
+	return uiDrt, nil
+}
+
+func prepDagrunDetailsBase(dr db.DagRun) api.UIDagrunDetails {
+	var details api.UIDagrunDetails
+
+	details.RunId = dr.RunId
+	details.DagId = dr.DagId
+	details.ExecTs = api.ToTimestamp(timeutils.FromStringMust(dr.ExecTs))
+	details.Status = dr.Status
+	details.Duration = timeutils.Duration(dr.InsertTs, dr.StatusUpdateTs).String()
+
+	return details
+}
+
+func (s *Scheduler) toUITaskLogRecords(logs []tasklog.Record) []api.UITaskLogRecord {
+	result := make([]api.UITaskLogRecord, 0, len(logs))
+	for _, l := range logs {
+		attrJson, jErr := json.Marshal(l.Attributes)
+		if jErr != nil {
+			s.logger.Error("toUITaskLogRecords - cannot serialize JSON logs attr",
+				"err", jErr.Error())
+			attrJson = []byte{}
+		}
+		tlr := api.UITaskLogRecord{
+			InsertTs:       api.ToTimestamp(l.InsertTs),
+			Level:          l.Level,
+			Message:        l.Message,
+			AttributesJson: string(attrJson),
+		}
+		result = append(result, tlr)
+	}
+	return result
 }

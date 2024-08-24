@@ -29,6 +29,21 @@ type DagRunTask struct {
 	Version        string
 }
 
+type DagRunTaskDetails struct {
+	DagId          string
+	TaskId         string
+	PosDepth       int
+	PosWidth       int
+	ConfigJson     string
+	TaskNotStarted bool
+	ExecTs         string
+	Retry          int
+	InsertTs       string
+	Status         string
+	StatusUpdateTs string
+	Version        string
+}
+
 // Reads DAG run tasks information from dagruntasks table for given DAG run.
 func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]DagRunTask, error) {
 	start := time.Now()
@@ -64,6 +79,25 @@ func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]D
 	c.logger.Debug("Finished reading dag run tasks", "dagId", dagId, "execTs",
 		execTs, "duration", time.Since(start))
 	return dagruntasks, nil
+}
+
+// Reads all DAG tasks with all relevant details including node positions in
+// DAG and task configurations.
+func (c *Client) ReadDagRunTaskDetails(
+	ctx context.Context, dagId, execTs string,
+) ([]DagRunTaskDetails, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading dag run task details", "dagId", dagId,
+		"execTs", execTs)
+	drtDetails, err := readRowsContext(
+		ctx, c.dbConn, c.logger, parseDagRunTaskDetails,
+		c.readDagRunTaskDetailsQuery(), execTs, dagId,
+	)
+	if err == nil {
+		c.logger.Debug("Finished reading dag run tasks", "dagId", dagId, "execTs",
+			execTs, "duration", time.Since(start))
+	}
+	return drtDetails, err
 }
 
 // Inserts new DagRunTask with default status SCHEDULED.
@@ -275,6 +309,37 @@ func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
 	return dagRunTask, nil
 }
 
+func parseDagRunTaskDetails(rows Scannable) (DagRunTaskDetails, error) {
+	var (
+		dagId, execTs, taskId, insertTs, status, statusTs, version,
+		configJson string
+	)
+	var drtNotStarted, retry, posDepth, posWidth int
+	scanErr := rows.Scan(
+		&dagId, &taskId, &posDepth, &posWidth, &configJson,
+		&drtNotStarted, &execTs, &retry, &insertTs, &status, &statusTs,
+		&version,
+	)
+	if scanErr != nil {
+		return DagRunTaskDetails{}, scanErr
+	}
+	drtDetails := DagRunTaskDetails{
+		DagId:          dagId,
+		TaskId:         taskId,
+		PosDepth:       posDepth,
+		PosWidth:       posWidth,
+		ConfigJson:     configJson,
+		TaskNotStarted: drtNotStarted == 1,
+		ExecTs:         execTs,
+		Retry:          retry,
+		InsertTs:       insertTs,
+		Status:         status,
+		StatusUpdateTs: statusTs,
+		Version:        version,
+	}
+	return drtDetails, nil
+}
+
 func (c *Client) readDagRunTasksQuery() string {
 	return `
 	SELECT
@@ -376,6 +441,7 @@ func (c *Client) readNotFinishedDagRunTasksQuery() string {
 		InsertTs ASC
 	`
 }
+
 func (c *Client) readDagRunTasksAggByStatus() string {
 	return `
 	SELECT
@@ -385,5 +451,33 @@ func (c *Client) readDagRunTasksAggByStatus() string {
 		dagruntasks
 	GROUP BY
 		Status
+`
+}
+
+func (c *Client) readDagRunTaskDetailsQuery() string {
+	return `
+	SELECT
+		dt.DagId,
+		dt.TaskId,
+		dt.PosDepth,
+		dt.PosWidth,
+		dt.TaskConfig,
+		drt.DagId IS NULL AS DagRunTaskNoStarted,
+		IFNULL(drt.ExecTs, '') AS ExecTs,
+		IFNULL(drt.Retry, -1) AS Retry,
+		IFNULL(drt.InsertTs, '') AS InsertTs,
+		IFNULL(drt.Status, '') AS Status,
+		IFNULL(drt.StatusUpdateTs, '') AS StatusUpdateTs,
+		IFNULL(drt.Version, '') AS Version
+	FROM
+		dagtasks dt
+	LEFT JOIN
+		dagruntasks drt ON
+				dt.DagId = drt.DagId
+			AND dt.TaskId = drt.TaskId
+			AND drt.ExecTs = ?
+	WHERE
+			dt.DagId = ?
+		AND dt.IsCurrent = 1
 `
 }

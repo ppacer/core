@@ -24,6 +24,8 @@ type DagTask struct {
 	TaskId         string
 	IsCurrent      bool
 	InsertTs       string
+	PosDepth       int
+	PosWidth       int
 	Version        string
 	TaskTypeName   string
 	TaskConfig     string
@@ -51,7 +53,7 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 	}
 
 	for _, node := range d.FlattenNodes() {
-		iErr := c.insertSingleDagTask(ctx, tx, dagId, node.Node, insertTs)
+		iErr := c.insertSingleDagTask(ctx, tx, dagId, node, insertTs)
 		if iErr != nil {
 			rollErr := tx.Rollback()
 			if rollErr != nil {
@@ -79,10 +81,11 @@ func (c *Client) InsertDagTasks(ctx context.Context, d dag.Dag) error {
 // database side (DagId, TaskId, IsCurrent) defines primary key on dagtasks
 // table.
 func (c *Client) insertSingleDagTask(
-	ctx context.Context, tx *sql.Tx, dagId string, node *dag.Node,
+	ctx context.Context, tx *sql.Tx, dagId string, ni dag.NodeInfo,
 	insertTs string,
 ) error {
 	start := time.Now()
+	node := ni.Node
 	c.logger.Debug("Start inserting new dag task", "dagId", dagId, "taskId",
 		node.Task.Id(), "insertTs", insertTs)
 
@@ -92,7 +95,7 @@ func (c *Client) insertSingleDagTask(
 	}
 
 	// Insert dagtask row
-	iErr := c.insertDagTask(ctx, tx, dagId, node, insertTs)
+	iErr := c.insertDagTask(ctx, tx, dagId, node, ni.Depth, ni.Width, insertTs)
 	if iErr != nil {
 		c.logger.Error("Cannot insert new dagtask", "dagId", dagId, "taskId",
 			node.Task.Id(), "err", iErr)
@@ -106,7 +109,7 @@ func (c *Client) insertSingleDagTask(
 // Insert new row in dagtasks table.
 func (c *Client) insertDagTask(
 	ctx context.Context, tx *sql.Tx, dagId string, node *dag.Node,
-	insertTs string,
+	nodeDepth, nodeWidth int, insertTs string,
 ) error {
 	tTypeName := reflect.TypeOf(node.Task).Name()
 	taskBody := dag.TaskExecuteSource(node.Task)
@@ -121,8 +124,8 @@ func (c *Client) insertDagTask(
 	_, err := tx.ExecContext(
 		ctx,
 		c.dagTaskInsertQuery(),
-		dagId, node.Task.Id(), 1, insertTs, version.Version, tTypeName,
-		string(taskConfigJson), taskHash, taskBody,
+		dagId, node.Task.Id(), 1, insertTs, nodeDepth, nodeWidth,
+		version.Version, tTypeName, string(taskConfigJson), taskHash, taskBody,
 	)
 	if err != nil {
 		return err
@@ -200,14 +203,14 @@ func (c *Client) ReadDagTask(ctx context.Context, dagId, taskId string) (DagTask
 }
 
 // scanAndParseDagTask try to parse given SQL row as DagTask.
-func (c *Client) scanAndParseDagTask(s interface{ Scan(dest ...any) error }) (DagTask, error) {
+func (c *Client) scanAndParseDagTask(s Scannable) (DagTask, error) {
 	var (
 		dId, tId, typeName, insertTs, version, config, bodyHash,
 		bodySource string
 	)
-	var isCurrent int
-	scanErr := s.Scan(&dId, &tId, &isCurrent, &insertTs, &version, &typeName,
-		&config, &bodyHash, &bodySource)
+	var isCurrent, posDepth, posWidth int
+	scanErr := s.Scan(&dId, &tId, &isCurrent, &insertTs, &posDepth, &posWidth,
+		&version, &typeName, &config, &bodyHash, &bodySource)
 	if scanErr == sql.ErrNoRows {
 		return DagTask{}, scanErr
 	}
@@ -221,6 +224,9 @@ func (c *Client) scanAndParseDagTask(s interface{ Scan(dest ...any) error }) (Da
 		DagId:          dId,
 		TaskId:         tId,
 		IsCurrent:      isCurrent == 1,
+		InsertTs:       insertTs,
+		PosDepth:       posDepth,
+		PosWidth:       posWidth,
 		Version:        version,
 		TaskTypeName:   typeName,
 		TaskConfig:     config,
@@ -237,6 +243,8 @@ func (c *Client) readDagTaskQuery() string {
 			TaskId,
 			IsCurrent,
 			InsertTs,
+			PosDepth,
+			PosWidth,
 			Version,
 			TaskTypeName,
 			TaskConfig,
@@ -258,6 +266,8 @@ func (c *Client) readDagTasksQuery() string {
 			TaskId,
 			IsCurrent,
 			InsertTs,
+			PosDepth,
+			PosWidth,
 			Version,
 			TaskTypeName,
 			TaskConfig,
@@ -279,10 +289,10 @@ func (c *Client) readDagTasksQuery() string {
 func (c *Client) dagTaskInsertQuery() string {
 	return `
 		INSERT INTO dagtasks (
-			DagId, TaskId, IsCurrent, InsertTs, Version, TaskTypeName,
-			TaskConfig, TaskBodyHash, TaskBodySource
+			DagId, TaskId, IsCurrent, InsertTs, PosDepth, PosWidth, Version,
+			TaskTypeName, TaskConfig, TaskBodyHash, TaskBodySource
 		)
-		VALUES (?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)
 	`
 }
 

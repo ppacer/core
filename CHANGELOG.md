@@ -1,5 +1,17 @@
 # Not released changes
 
+# [v0.0.7] - 2025-08-24
+
+- Add scheduler endpoint to provide details on particular DAG run via
+/ui/dagrun/{runId}.
+- Type dag.NodeInfo now contains both DAG depth and width.
+- Table dagtasks now contains additional columns - PosDepth and PosWidth.
+- In db package introduced Scannable interface and generic readRowsContext
+function.
+- Scheduler constructor needs additional argument - tasklog.Factory, to be able
+  to read task logs.
+
+
 # [v0.0.6] - 2025-08-21
 
 - Fix a bug on FAILED DAG run status in case when the last task in a DAG has

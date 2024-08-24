@@ -140,6 +140,22 @@ func (c *Client) ReadLatestDagRuns(ctx context.Context) (map[string]DagRun, erro
 	return dagruns, nil
 }
 
+// Reads DAG run information for given run ID.
+func (c *Client) ReadDagRun(ctx context.Context, runId int) (DagRun, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading dag run with task info", "runId", runId)
+
+	row := c.dbConn.QueryRowContext(ctx, c.readDagRunWithTaskInfoQuery(), runId)
+	drti, scanErr := parseDagRun(row)
+	if scanErr != nil {
+		c.logger.Error("Failed scanning a dagrun with task info record", "err", scanErr)
+		return DagRun{}, scanErr
+	}
+	c.logger.Debug("Finished reading dag runs with task info", "runId", runId,
+		"duration", time.Since(start))
+	return drti, nil
+}
+
 // Updates dagrun status for given runId.
 func (c *Client) UpdateDagRunStatus(
 	ctx context.Context, runId int64, status string,
@@ -283,7 +299,7 @@ func (c *Client) ReadDagRunsWithTaskInfo(ctx context.Context, latest int) ([]Dag
 	c.logger.Debug("Start reading latest dag runs with task info", "latest", latest)
 	result := make([]DagRunWithTaskInfo, 0, latest)
 
-	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunWithTaskInfoQuery(),
+	rows, qErr := c.dbConn.QueryContext(ctx, c.readDagRunsWithTaskInfoQuery(),
 		statusSuccess, latest)
 	if qErr != nil {
 		c.logger.Error("Failed querying dag run to be scheduled", "err", qErr)
@@ -311,7 +327,7 @@ func (c *Client) ReadDagRunsWithTaskInfo(ctx context.Context, latest int) ([]Dag
 	return result, nil
 }
 
-func parseDagRun(rows *sql.Rows) (DagRun, error) {
+func parseDagRun(rows Scannable) (DagRun, error) {
 	var runId int64
 	var dagId, execTs, insertTs, status, statusTs, version string
 
@@ -332,7 +348,7 @@ func parseDagRun(rows *sql.Rows) (DagRun, error) {
 	return dagrun, nil
 }
 
-func parseDagRunWithTaskInfo(rows *sql.Rows) (DagRunWithTaskInfo, error) {
+func parseDagRunWithTaskInfo(rows Scannable) (DagRunWithTaskInfo, error) {
 	var runId int64
 	var taskNum, taskCompleted int
 	var dagId, execTs, insertTs, status, statusTs, version string
@@ -487,7 +503,7 @@ func (c *Client) readDagRunsAggByStatus() string {
 	`
 }
 
-func (c *Client) readDagRunWithTaskInfoQuery() string {
+func (c *Client) readDagRunsWithTaskInfoQuery() string {
 	return `
 		SELECT
 			dr.RunId,
@@ -515,5 +531,22 @@ func (c *Client) readDagRunWithTaskInfoQuery() string {
 			dr.RunId
 		ORDER BY
 			dr.RunId DESC
+	`
+}
+
+func (c *Client) readDagRunWithTaskInfoQuery() string {
+	return `
+		SELECT
+			d.RunId,
+			d.DagId,
+			d.ExecTs,
+			d.InsertTs,
+			d.Status,
+			d.StatusUpdateTs,
+			d.Version
+		FROM
+			dagruns d
+		WHERE
+			d.RunId = ?
 	`
 }

@@ -32,10 +32,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestDagTestReadFromEmptyTable(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(testLogger())
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
+	defer CleanUpSqliteTmp(c, t)
 	ctx := context.Background()
 	_, rErr := c.ReadDagTask(ctx, "hello", "say_hello")
 	if rErr == nil {
@@ -47,15 +48,17 @@ func TestDagTestReadFromEmptyTable(t *testing.T) {
 }
 
 func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
-	c, err := NewSqliteInMemoryClient(testLogger())
+	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {
 		t.Error(err)
 	}
+	defer CleanUpSqliteTmp(c, t)
 	ctx := context.Background()
 	tx, _ := c.dbConn.Begin()
 	node := dag.NewNode(PrintTask{Name: "db_test"})
+	ni := dag.NodeInfo{Node: node, Depth: 2, Width: 1}
 	insertTs := timeutils.ToString(time.Now())
-	err = c.insertSingleDagTask(ctx, tx, "db_dag", node, insertTs)
+	err = c.insertSingleDagTask(ctx, tx, "db_dag", ni, insertTs)
 	cErr := tx.Commit()
 	if cErr != nil {
 		t.Error(cErr)
@@ -79,6 +82,12 @@ func TestDagTasksSingleInsertAndReadSimple(t *testing.T) {
 	if readTask.TaskTypeName != "PrintTask" {
 		t.Errorf("Expected TaskTypeName PrintTask, got: %s",
 			readTask.TaskTypeName)
+	}
+	if readTask.PosDepth != 2 {
+		t.Errorf("Expected PosDepth=2, got: %d", readTask.PosDepth)
+	}
+	if readTask.PosWidth != 1 {
+		t.Errorf("Expected PosWidth=1, got: %d", readTask.PosWidth)
 	}
 
 	configJson, jsonErr := json.Marshal(node.Config)

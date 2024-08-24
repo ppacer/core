@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/notify"
@@ -44,10 +45,16 @@ func TestSchedulerStartCancellation(t *testing.T) {
 }
 
 func defaultScheduler(notifications *[]string, queueCap int, t *testing.T) *Scheduler {
-	c, err := db.NewSqliteTmpClient(testLogger())
+	logger := testLogger()
+	c, err := db.NewSqliteTmpClient(logger)
 	if err != nil {
 		t.Fatal(err)
 	}
+	dbLogsClient, err := db.NewSqliteTmpClientForLogs(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logsFactory := tasklog.NewSQLite(dbLogsClient, nil)
 
 	drQueue := ds.NewSimpleQueue[DagRun](queueCap)
 	taskQueue := ds.NewSimpleQueue[DagRunTask](queueCap)
@@ -58,6 +65,6 @@ func defaultScheduler(notifications *[]string, queueCap int, t *testing.T) *Sche
 	notifier := notify.NewMock(notifications)
 
 	return New(
-		c, queues, DefaultConfig, testLogger(), notifier,
+		c, logsFactory, queues, DefaultConfig, testLogger(), notifier,
 	)
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/ppacer/core/dag"
 	"github.com/ppacer/core/dag/schedule"
+	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/exec"
 	"github.com/ppacer/core/notify"
@@ -457,8 +458,11 @@ func schedulerWithSqlite(
 			t.Fatal(lErr)
 		}
 	}
+	logsFactory := tasklog.NewSQLite(logsDbClient, nil)
 	notifier := notify.NewMock(notifications)
-	sched := scheduler.New(dbClient, queues, config, logger, notifier)
+	sched := scheduler.New(
+		dbClient, logsFactory, queues, config, logger, notifier,
+	)
 	return sched, dbClient, logsDbClient
 }
 

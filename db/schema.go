@@ -74,13 +74,15 @@ CREATE TABLE IF NOT EXISTS dagtasks (
     TaskId TEXT NOT NULL,           -- Task ID
     IsCurrent INT NOT NULL,         -- Flag if pair (DagId, TaskId) represents the current version
     InsertTs TEXT NOT NULL,         -- Insert timestamp in %Y-%m-%D %H:%M:%S format
+    PosDepth INT NOT NULL,          -- Task depth in the graph
+    PosWidth INT NOT NULL,          -- Task width in the graph
     Version TEXT NOT NULL,          -- Scheduler Version
     TaskTypeName TEXT NOT NULL,     -- Go type name which implements this task
     TaskConfig TEXT NOT NULL,       -- Task configuration in form of JSON
     TaskBodyHash TEXT NOT NULL,     -- Task Execute() method body source code hash
     TaskBodySource TEXT NOT NULL,   -- Task Execute() method body source code as text
 
-    PRIMARY KEY (DagId, TaskId, IsCurrent, InsertTs)
+    PRIMARY KEY (DagId, TaskId, IsCurrent)
 );
 `
 }

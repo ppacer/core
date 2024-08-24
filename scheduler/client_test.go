@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ppacer/core/api"
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/notify"
@@ -502,6 +504,153 @@ func TestClientUIDagrunLatest(t *testing.T) {
 	}
 }
 
+func TestClientUIDagrunDetailsEmpty(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	_, err := schedClient.UIDagrunDetails(42)
+	if err == nil {
+		t.Error("Expected non-nil error for reading details on empty database, but got nil")
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("Expected status code 400 in error, but found none: %s",
+			err.Error())
+	}
+}
+
+func TestClientUIDagrunDetailsRunning(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+
+	// prep data
+	const dagId = "sample_dag"
+	now := time.Now()
+	execTs := timeutils.ToString(now)
+
+	t1Name := "t1"
+	t2Name := "t2"
+	t3Name := "t3k"
+	n1 := dag.NewNode(printTask{Name: t1Name})
+	n2 := dag.NewNode(printTask{Name: t2Name})
+	n3 := dag.NewNode(printTask{Name: t3Name})
+	n1.Next(n2)
+	n1.Next(n3)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	// Insert DAG tasks
+	iErr := scheduler.dbClient.InsertDagTasks(ctx, d)
+	if iErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", iErr.Error())
+	}
+	insertDagRun(
+		scheduler.dbClient, ctx, dagId, execTs, dag.RunRunning.String(), t,
+	)
+
+	// Insert DAG run tasks
+	for _, task := range d.Flatten() {
+		if task.Id() == t3Name {
+			continue
+		}
+		insertDagRunTask(
+			scheduler.dbClient, ctx, dagId, execTs, task.Id(),
+			dag.RunSuccess.String(), t,
+		)
+	}
+
+	// Insert task logs
+	const logMessage = "TEST LOG MESSAGE"
+	for _, task := range d.Flatten() {
+		if task.Id() == t3Name {
+			continue
+		}
+		ti := tasklog.TaskInfo{
+			DagId:  dagId,
+			ExecTs: now,
+			TaskId: task.Id(),
+			Retry:  0,
+		}
+		tLogger := scheduler.taskLogs.GetLogger(ti)
+		tLogger.Warn(logMessage)
+	}
+
+	drtDetails, err := schedClient.UIDagrunDetails(1)
+	if err != nil {
+		t.Errorf("Error while UIDagrunDetails: %s", err.Error())
+	}
+	if drtDetails.RunId != 1 {
+		t.Errorf("Expected RunId=1, got: %d", drtDetails.RunId)
+	}
+	if drtDetails.DagId != dagId {
+		t.Errorf("Expected DagId=%s, got: %s", dagId, drtDetails.DagId)
+	}
+	if drtDetails.Status != dag.RunRunning.String() {
+		t.Errorf("Expected Status=%s, got: %s", dag.RunRunning.String(),
+			drtDetails.Status)
+	}
+	if len(drtDetails.Tasks) != len(d.Flatten()) {
+		t.Errorf("Expected %d tasks, got: %d", len(d.Flatten()),
+			len(drtDetails.Tasks))
+	}
+	if !drtDetails.Tasks[2].TaskNoStarted {
+		t.Errorf("Task %s should be not started yet, but it is",
+			drtDetails.Tasks[2].TaskId)
+	}
+
+	for _, task := range drtDetails.Tasks {
+		if task.TaskId == t3Name {
+			if len(task.TaskLogs.Records) != 0 {
+				t.Errorf("Task %s shouldn't have any logs, but it does: %d",
+					t3Name, len(task.TaskLogs.Records))
+			}
+			expPos := api.TaskPos{Depth: 2, Width: 2}
+			if task.Pos != expPos {
+				t.Errorf("Expected for task=%s position=%+v, got: %+v",
+					t3Name, expPos, task.Pos)
+			}
+			continue
+		}
+		if task.Status != dag.TaskSuccess.String() {
+			t.Errorf("Expected status=%s for task=%s, got: %s",
+				dag.TaskSuccess.String(), task.TaskId, task.Status)
+		}
+		expDepth := 1
+		if task.TaskId == t2Name {
+			expDepth = 2
+		}
+		if task.Pos.Depth != expDepth {
+			t.Errorf("Expected Pos.Depth=%d for task=%s, but got: %d",
+				expDepth, task.TaskId, task.Pos.Depth)
+		}
+		if len(task.TaskLogs.Records) != 1 {
+			t.Errorf("Expected 1 task log records for task=%s, got: %d",
+				task.TaskId, len(task.TaskLogs.Records))
+		}
+		if task.TaskLogs.Records[0].Message != logMessage {
+			t.Errorf("Expected, for task=%s, log message [%s], got: [%s]",
+				task.TaskId, logMessage, task.TaskLogs.Records[0].Message)
+		}
+	}
+}
+
 func taskToExecEqualsDRT(
 	task api.TaskToExec, expectedDrt DagRunTask, t *testing.T,
 ) {
@@ -563,6 +712,11 @@ func schedulerWithSqlite(queues Queues, config Config, t *testing.T) *Scheduler 
 	if err != nil {
 		t.Fatal(err)
 	}
+	dbLogsClient, err := db.NewSqliteTmpClientForLogs(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
 	notifier := notify.NewLogsErr(logger)
-	return New(dbClient, queues, config, logger, notifier)
+	logsFactory := tasklog.NewSQLite(dbLogsClient, nil)
+	return New(dbClient, logsFactory, queues, config, logger, notifier)
 }

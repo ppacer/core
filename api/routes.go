@@ -24,6 +24,9 @@ const (
 
 	// Endpoint returns data on N latest DAG runs.
 	EndpointUiDagrunLatest
+
+	// Endpoint returns detailed data on given DAG run.
+	EndpointUiDagrunDetails
 )
 
 // Endpoint contains information about an HTTP endpoint.
@@ -43,7 +46,8 @@ func Routes() map[EndpointID]Endpoint {
 		EndpointState: {"GET /state", "/state"},
 
 		// /ui/dagrun/*
-		EndpointUiDagrunStats:  {"GET /ui/dagrun/stats", "/ui/dagrun/stats"},
-		EndpointUiDagrunLatest: {"GET /ui/dagrun/latest/{n}", "/ui/dagrun/latest"},
+		EndpointUiDagrunStats:   {"GET /ui/dagrun/stats", "/ui/dagrun/stats"},
+		EndpointUiDagrunLatest:  {"GET /ui/dagrun/latest/{n}", "/ui/dagrun/latest"},
+		EndpointUiDagrunDetails: {"GET /ui/dagrun/{runId}", "/ui/dagrun"},
 	}
 }

@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// Scannable interface is mainly to define parsers both for *sql.Row and
+// *sql.Rows types.
+type Scannable interface {
+	Scan(...any) error
+}
+
 // Count returns count of rows for given table. If case of errors -1 is
 // returned and error is logged.
 func (c *Client) Count(table string) int {
@@ -116,5 +122,39 @@ func groupBy2[K comparable, V any](
 
 	logger.Debug("Finished groupBy2 query", "query", query, "args", args,
 		"duration", time.Since(start))
+	return result, nil
+}
+
+func readRowsContext[T any](
+	ctx context.Context,
+	dbConn DB,
+	logger *slog.Logger,
+	scanner func(Scannable) (T, error),
+	query string,
+	args ...any,
+) ([]T, error) {
+	result := make([]T, 0, 100)
+	rows, qErr := dbConn.QueryContext(ctx, query, args...)
+	if qErr != nil {
+		logger.Error("SQL query failed", "query", query, "args", args)
+		return result, qErr
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			logger.Warn("Context done while rows", "query", query,
+				"args", args, "err", ctx.Err())
+			return result, ctx.Err()
+		default:
+		}
+		obj, scanErr := scanner(rows)
+		if scanErr != nil {
+			logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+			return result, scanErr
+		}
+		result = append(result, obj)
+	}
 	return result, nil
 }

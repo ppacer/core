@@ -191,6 +191,29 @@ func (c *Client) UIDagrunLatest(n int) (api.UIDagrunList, error) {
 	return *dagruns, nil
 }
 
+// UIDagrunDetails provides detailed information on given DAG run, including
+// task logs and task configuration.
+func (c *Client) UIDagrunDetails(runId int) (api.UIDagrunDetails, error) {
+	startTs := time.Now()
+	c.logger.Debug("Start UIDagrunDetails request...")
+	dagruns, code, err := httpGetJSON[api.UIDagrunDetails](
+		c.httpClient, c.uiDagrunDetailsUrl(runId),
+	)
+	if err != nil {
+		c.logger.Error("Error while getting DAG run details", "runId", runId,
+			"err", err.Error())
+		return api.UIDagrunDetails{}, err
+	}
+	if code != http.StatusOK {
+		err := fmt.Errorf("unexpected status code in UIDagRunDetails request: %d",
+			code)
+		return api.UIDagrunDetails{}, err
+	}
+	c.logger.Debug("UIDagRunDetails request finished", "duration",
+		time.Since(startTs))
+	return *dagruns, nil
+}
+
 // Stop stops the Scheduler.
 func (c *Client) Stop() error {
 	// TODO
@@ -220,6 +243,11 @@ func (c *Client) uiDagrunStatsUrl() string {
 func (c *Client) uiDagrunLatestUrl(n int) string {
 	suffix := c.routes[api.EndpointUiDagrunLatest].UrlSuffix
 	return fmt.Sprintf("%s%s/%d", c.schedulerUrl, suffix, n)
+}
+
+func (c *Client) uiDagrunDetailsUrl(runId int) string {
+	suffix := c.routes[api.EndpointUiDagrunDetails].UrlSuffix
+	return fmt.Sprintf("%s%s/%d", c.schedulerUrl, suffix, runId)
 }
 
 // Generic HTTP GET request with resp body deserialization from JSON into given
