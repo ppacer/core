@@ -124,3 +124,37 @@ func groupBy2[K comparable, V any](
 		"duration", time.Since(start))
 	return result, nil
 }
+
+func readRowsContext[T any](
+	ctx context.Context,
+	dbConn DB,
+	logger *slog.Logger,
+	scanner func(Scannable) (T, error),
+	query string,
+	args ...any,
+) ([]T, error) {
+	result := make([]T, 0, 100)
+	rows, qErr := dbConn.QueryContext(ctx, query, args...)
+	if qErr != nil {
+		logger.Error("SQL query failed", "query", query, "args", args)
+		return result, qErr
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			logger.Warn("Context done while rows", "query", query,
+				"args", args, "err", ctx.Err())
+			return result, ctx.Err()
+		default:
+		}
+		obj, scanErr := scanner(rows)
+		if scanErr != nil {
+			logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+			return result, scanErr
+		}
+		result = append(result, obj)
+	}
+	return result, nil
+}

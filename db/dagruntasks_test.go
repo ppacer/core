@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -624,6 +625,172 @@ func TestDagRunTaskAggByStatus(t *testing.T) {
 		if input.tasks != cnt {
 			t.Errorf("Expected %d DAG run tasks with status %s, got: %d",
 				input.tasks, input.status, cnt)
+		}
+	}
+}
+
+func TestReadDagRunTaskDetailsEmpty(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	drtd, err := c.ReadDagRunTaskDetails(ctx, dagId, ts)
+	if err != nil {
+		t.Errorf("Error while reading DRT details from empty DB: %s",
+			err.Error())
+	}
+	if len(drtd) != 0 {
+		t.Errorf("Expected 0 rows, got: %d", len(drtd))
+	}
+}
+
+func TestReadDagRunTaskDetailsNotAllDrt(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	t1Name := "t1"
+	t2Name := "t2"
+	n1 := dag.NewNode(PrintTask{Name: t1Name})
+	n2 := dag.NewNode(PrintTask{Name: t2Name})
+	n1.Next(n2)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	diErr := c.InsertDagTasks(ctx, d)
+	if diErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", diErr.Error())
+	}
+
+	t1Err := c.InsertDagRunTask(
+		ctx, dagId, ts, t1Name, 0, dag.TaskRunning.String(),
+	)
+	if t1Err != nil {
+		t.Errorf("Cannot insert DAG run task: %s", t1Err.Error())
+	}
+
+	drtd, err := c.ReadDagRunTaskDetails(ctx, dagId, ts)
+	if err != nil {
+		t.Errorf("Cannot read DAG run task details: %s", err.Error())
+	}
+	if len(drtd) != len(d.Flatten()) {
+		t.Errorf("Expected %d objects, but got: %d", len(d.Flatten()),
+			len(drtd))
+	}
+
+	drtd1 := drtd[0]
+	drtd2 := drtd[1]
+
+	if drtd1.TaskNotStarted {
+		t.Errorf("Task %s should be started, but is not", t1Name)
+	}
+	if !drtd2.TaskNotStarted {
+		t.Errorf("Task %s should not be started, but it is", t2Name)
+	}
+	configJson, jErr := json.Marshal(n1.Config)
+	if jErr != nil {
+		t.Errorf("Cannot marshal to JSON task config: %s", jErr.Error())
+	}
+
+	drtdExpected := DagRunTaskDetails{
+		DagId:          dagId,
+		TaskId:         t1Name,
+		PosDepth:       1,
+		PosWidth:       1,
+		ConfigJson:     string(configJson),
+		TaskNotStarted: false,
+		ExecTs:         ts,
+		Retry:          0,
+		InsertTs:       drtd1.InsertTs,
+		Status:         dag.TaskRunning.String(),
+		StatusUpdateTs: drtd1.StatusUpdateTs,
+		Version:        drtd1.Version,
+	}
+
+	if drtd1 != drtdExpected {
+		t.Errorf("Expected %+v, got: %+v", drtdExpected, drtd1)
+	}
+}
+
+func TestReadDagRunTaskDetailsPositions(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	t1Name := "t1"
+	t21Name := "t21"
+	t22Name := "t22"
+	t3Name := "t3"
+	n1 := dag.NewNode(PrintTask{Name: t1Name})
+	n21 := dag.NewNode(PrintTask{Name: t21Name})
+	n22 := dag.NewNode(PrintTask{Name: t22Name})
+	n3 := dag.NewNode(PrintTask{Name: t3Name})
+	n1.Next(n21)
+	n1.Next(n22)
+	n22.Next(n3)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	diErr := c.InsertDagTasks(ctx, d)
+	if diErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", diErr.Error())
+	}
+
+	drtd, err := c.ReadDagRunTaskDetails(ctx, dagId, ts)
+	if err != nil {
+		t.Errorf("Cannot read DAG run task details: %s", err.Error())
+	}
+	if len(drtd) != len(d.Flatten()) {
+		t.Errorf("Expected %d objects, but got: %d", len(d.Flatten()),
+			len(drtd))
+	}
+
+	type pos struct {
+		depth int
+		width int
+	}
+	taskToPos := make(map[string]pos)
+
+	for _, task := range drtd {
+		taskToPos[task.TaskId] = pos{
+			depth: task.PosDepth, width: task.PosWidth,
+		}
+	}
+	expected := []struct {
+		taskId string
+		exp    pos
+	}{
+		{t1Name, pos{1, 1}},
+		{t21Name, pos{2, 1}},
+		{t22Name, pos{2, 2}},
+		{t3Name, pos{3, 1}},
+	}
+
+	for _, exp := range expected {
+		taskPos, exists := taskToPos[exp.taskId]
+		if !exists {
+			t.Errorf("Expected data on task position for %s, but it's not there",
+				exp.taskId)
+		}
+		if taskPos != exp.exp {
+			t.Errorf("For task %s expected position=%+v, got: %+v", exp.taskId,
+				exp.exp, taskPos)
 		}
 	}
 }
