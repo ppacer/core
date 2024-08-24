@@ -12,4 +12,5 @@ type API interface {
 	GetState() (State, error)
 	UIDagrunStats() (api.UIDagrunStats, error)
 	UIDagrunLatest(int) (api.UIDagrunList, error)
+	UIDagrunDetails(int) (api.UIDagrunDetails, error)
 }

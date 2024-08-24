@@ -193,21 +193,21 @@ func (c *Client) UIDagrunLatest(n int) (api.UIDagrunList, error) {
 
 // UIDagrunDetails provides detailed information on given DAG run, including
 // task logs and task configuration.
-func (c *Client) UIDagrunDetails(runId int) (api.UIDagRunDetails, error) {
+func (c *Client) UIDagrunDetails(runId int) (api.UIDagrunDetails, error) {
 	startTs := time.Now()
 	c.logger.Debug("Start UIDagrunDetails request...")
-	dagruns, code, err := httpGetJSON[api.UIDagRunDetails](
+	dagruns, code, err := httpGetJSON[api.UIDagrunDetails](
 		c.httpClient, c.uiDagrunDetailsUrl(runId),
 	)
 	if err != nil {
 		c.logger.Error("Error while getting DAG run details", "runId", runId,
 			"err", err.Error())
-		return api.UIDagRunDetails{}, err
+		return api.UIDagrunDetails{}, err
 	}
 	if code != http.StatusOK {
 		err := fmt.Errorf("unexpected status code in UIDagRunDetails request: %d",
 			code)
-		return api.UIDagRunDetails{}, err
+		return api.UIDagrunDetails{}, err
 	}
 	c.logger.Debug("UIDagRunDetails request finished", "duration",
 		time.Since(startTs))

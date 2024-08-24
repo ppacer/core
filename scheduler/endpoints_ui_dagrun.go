@@ -233,7 +233,7 @@ func prepDagrunList(dagruns []db.DagRunWithTaskInfo) api.UIDagrunList {
 	return res
 }
 
-func (s *Scheduler) prepDagrunDetails(dr db.DagRun) (api.UIDagRunDetails, error) {
+func (s *Scheduler) prepDagrunDetails(dr db.DagRun) (api.UIDagrunDetails, error) {
 	ctx := context.TODO()
 	details := prepDagrunDetailsBase(dr)
 
@@ -255,8 +255,8 @@ func (s *Scheduler) prepDagrunDetails(dr db.DagRun) (api.UIDagRunDetails, error)
 
 func (s *Scheduler) prepDagrunDetailsTasks(
 	dagruntasks []db.DagRunTaskDetails,
-) ([]api.UIDagRunTask, error) {
-	result := make([]api.UIDagRunTask, 0, len(dagruntasks))
+) ([]api.UIDagrunTask, error) {
+	result := make([]api.UIDagrunTask, 0, len(dagruntasks))
 
 	for _, drtd := range dagruntasks {
 		uiDrt, err := s.prepDagrunTaskDetails(drtd)
@@ -269,7 +269,7 @@ func (s *Scheduler) prepDagrunDetailsTasks(
 	return result, nil
 }
 
-func (s *Scheduler) prepDagrunTaskDetails(drtd db.DagRunTaskDetails) (api.UIDagRunTask, error) {
+func (s *Scheduler) prepDagrunTaskDetails(drtd db.DagRunTaskDetails) (api.UIDagrunTask, error) {
 	ti := tasklog.TaskInfo{
 		DagId:  drtd.DagId,
 		ExecTs: timeutils.FromStringMust(drtd.ExecTs),
@@ -281,10 +281,10 @@ func (s *Scheduler) prepDagrunTaskDetails(drtd db.DagRunTaskDetails) (api.UIDagR
 	// records on demand via UI.
 	logs, logsErr := logsReader.ReadAll(context.TODO())
 	if logsErr != nil {
-		return api.UIDagRunTask{}, logsErr
+		return api.UIDagrunTask{}, logsErr
 	}
 
-	uiDrt := api.UIDagRunTask{
+	uiDrt := api.UIDagrunTask{
 		TaskId:        drtd.TaskId,
 		Retry:         drtd.Retry,
 		InsertTs:      api.ToTimestamp(timeutils.FromStringMust(drtd.InsertTs)),
@@ -305,8 +305,8 @@ func (s *Scheduler) prepDagrunTaskDetails(drtd db.DagRunTaskDetails) (api.UIDagR
 	return uiDrt, nil
 }
 
-func prepDagrunDetailsBase(dr db.DagRun) api.UIDagRunDetails {
-	var details api.UIDagRunDetails
+func prepDagrunDetailsBase(dr db.DagRun) api.UIDagrunDetails {
+	var details api.UIDagrunDetails
 
 	details.RunId = dr.RunId
 	details.DagId = dr.DagId
