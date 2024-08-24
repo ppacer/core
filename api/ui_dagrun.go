@@ -39,20 +39,20 @@ type UIDagrunRow struct {
 // UIDagrunList is a slice of UiDagrunRow.
 type UIDagrunList []UIDagrunRow
 
-// UIDagRunDetails represents details on a single DAG run, including its tasks
+// UIDagrunDetails represents details on a single DAG run, including its tasks
 // and their log records.
-type UIDagRunDetails struct {
+type UIDagrunDetails struct {
 	RunId    int64          `json:"runId"`
 	DagId    string         `json:"dagId"`
 	ExecTs   Timestamp      `json:"execTs"`
 	Status   string         `json:"status"`
 	Duration string         `json:"duration"`
-	Tasks    []UIDagRunTask `json:"tasks"`
+	Tasks    []UIDagrunTask `json:"tasks"`
 }
 
-// UIDagRunTask represents information of single DAG run task, including
+// UIDagrunTask represents information of single DAG run task, including
 // execution logs.
-type UIDagRunTask struct {
+type UIDagrunTask struct {
 	TaskId        string     `json:"taskId"`
 	Retry         int        `json:"retry"`
 	InsertTs      Timestamp  `json:"insertTs"`
