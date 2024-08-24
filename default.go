@@ -20,7 +20,7 @@ func DefaultStarted(ctx context.Context, dags dag.Registry, port int) {
 		logsDb = "logs.db"
 	)
 
-	schedulerServer := scheduler.DefaultStarted(ctx, dags, db, port)
+	schedulerServer := scheduler.DefaultStarted(ctx, dags, db, logsDb, port)
 
 	// Setup and run executor in a separate goroutine
 	go func() {

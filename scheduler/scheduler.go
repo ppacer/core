@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/ppacer/core/dag"
+	"github.com/ppacer/core/dag/tasklog"
 	"github.com/ppacer/core/db"
 	"github.com/ppacer/core/ds"
 	"github.com/ppacer/core/notify"
@@ -25,6 +26,7 @@ import (
 // supported.
 type Scheduler struct {
 	dbClient      *db.Client
+	taskLogs      tasklog.Factory
 	config        Config
 	queues        Queues
 	logger        *slog.Logger
@@ -42,12 +44,20 @@ type Scheduler struct {
 // in DefaultQueues. In case when nil is provided as logger, then slog.Logger
 // is instantiated with TextHandler and INFO severity level (unless
 // PPACER_LOG_LEVEL env viariable is set).
-func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger, notifier notify.Sender) *Scheduler {
+func New(
+	dbClient *db.Client,
+	taskLogs tasklog.Factory,
+	queues Queues,
+	config Config,
+	logger *slog.Logger,
+	notifier notify.Sender,
+) *Scheduler {
 	if logger == nil {
 		logger = defaultLogger()
 	}
 	return &Scheduler{
 		dbClient: dbClient,
+		taskLogs: taskLogs,
 		config:   config,
 		queues:   queues,
 		logger:   logger,
@@ -60,7 +70,9 @@ func New(dbClient *db.Client, queues Queues, config Config, logger *slog.Logger,
 // SQLite databases, starts that scheduler and returns HTTP server with
 // Scheduler endpoints. It's mainly to reduce boilerplate in simple examples
 // and tests.
-func DefaultStarted(ctx context.Context, dags dag.Registry, dbFile string, port int) *http.Server {
+func DefaultStarted(
+	ctx context.Context, dags dag.Registry, dbFile, dbLogsFile string, port int,
+) *http.Server {
 	logger := defaultLogger()
 	dbClient, dbErr := db.NewSqliteClient(dbFile, logger)
 	if dbErr != nil {
@@ -68,10 +80,20 @@ func DefaultStarted(ctx context.Context, dags dag.Registry, dbFile string, port 
 			dbErr.Error())
 		log.Panic(dbErr)
 	}
+	dbLogsClient, dbLogsErr := db.NewSqliteClientForLogs(dbLogsFile, logger)
+	if dbLogsErr != nil {
+		logger.Error("Cannot create task logs database client", "err",
+			dbLogsErr.Error())
+		log.Panic(dbLogsErr)
+	}
+	taskLogs := tasklog.NewSQLite(dbLogsClient, nil)
 
 	config := DefaultConfig
 	notifier := notify.NewLogsErr(logger)
-	sched := New(dbClient, DefaultQueues(config), config, logger, notifier)
+	sched := New(
+		dbClient, taskLogs, DefaultQueues(config), config, logger,
+		notifier,
+	)
 	schedulerHttpHandler := sched.Start(ctx, dags)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),

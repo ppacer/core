@@ -38,3 +38,52 @@ type UIDagrunRow struct {
 
 // UIDagrunList is a slice of UiDagrunRow.
 type UIDagrunList []UIDagrunRow
+
+// UIDagRunDetails represents details on a single DAG run, including its tasks
+// and their log records.
+type UIDagRunDetails struct {
+	RunId    int64          `json:"runId"`
+	DagId    string         `json:"dagId"`
+	ExecTs   Timestamp      `json:"execTs"`
+	Status   string         `json:"status"`
+	Duration string         `json:"duration"`
+	Tasks    []UIDagRunTask `json:"tasks"`
+}
+
+// UIDagRunTask represents information of single DAG run task, including
+// execution logs.
+type UIDagRunTask struct {
+	TaskId        string     `json:"taskId"`
+	Retry         int        `json:"retry"`
+	InsertTs      Timestamp  `json:"insertTs"`
+	TaskNoStarted bool       `json:"taskNotStarted"`
+	Status        string     `json:"status"`
+	Pos           TaskPos    `json:"taskPosition"`
+	Duration      string     `json:"duration"`
+	Config        string     `json:"configJson"`
+	TaskLogs      UITaskLogs `json:"taskLogs"`
+}
+
+// TaskPos represents a Task position in a DAG. Root starts in (D=0,W=0).
+type TaskPos struct {
+	Depth int `json:"depth"`
+	Width int `json:"width"`
+}
+
+// UITaskLogs represents information on DAG run task logs. By default read only
+// fixed number of log records, to limit the request body size and on demand
+// more log records can be loaded in a separate call.
+type UITaskLogs struct {
+	LogRecordsCount int               `json:"logRecordsCount"`
+	LoadedRecords   int               `json:"loadedRecords"`
+	Records         []UITaskLogRecord `json:"logRecords"`
+}
+
+// UITaskLogRecord represents task log records with assumed DAG run and task
+// information.
+type UITaskLogRecord struct {
+	InsertTs       Timestamp `json:"insertTs"`
+	Level          string    `json:"level"`
+	Message        string    `json:"message"`
+	AttributesJson string    `json:"attributesJson"`
+}

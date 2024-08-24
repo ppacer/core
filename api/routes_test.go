@@ -11,6 +11,7 @@ func TestRoutesContainsAllEndpoints(t *testing.T) {
 		EndpointState,
 		EndpointUiDagrunStats,
 		EndpointUiDagrunLatest,
+		EndpointUiDagrunDetails,
 	}
 
 	routes := Routes()

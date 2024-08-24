@@ -106,6 +106,13 @@ func FromStringMust(s string) time.Time {
 	return t
 }
 
+// Duration parses start and end using FromStringMust and calculate duration
+// between start and end.
+func Duration(start, end string) time.Duration {
+	endTs := FromStringMust(end)
+	return endTs.Sub(FromStringMust(start))
+}
+
 func RandomUtcTime(minYear int) time.Time {
 	year := rand.Intn(2023-minYear) + minYear
 	month := rand.Intn(12) + 1
