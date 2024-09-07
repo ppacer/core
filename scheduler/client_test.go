@@ -651,6 +651,161 @@ func TestClientUIDagrunDetailsRunning(t *testing.T) {
 	}
 }
 
+func TestClientUIDagrunTaskLogsEmpty(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	_, err := schedClient.UIDagrunTaskLogs(42, "sample_task", 0)
+	if err == nil {
+		t.Error("Expected error for loading DAG run tasks for empty DB, got nil")
+	}
+}
+
+func TestClientUIDagrunTaskLogsNoLogs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+
+	// prep data
+	const dagId = "sample_dag"
+	now := time.Now()
+
+	dagruns := []struct {
+		execTs string
+		status dag.RunStatus
+	}{
+		{timeutils.ToString(now), dag.RunScheduled},
+		{timeutils.ToString(now.Add(13 * time.Hour)), dag.RunRunning},
+	}
+
+	tasks := []struct {
+		execTs string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{dagruns[1].execTs, "t1", dag.TaskSuccess},
+		{dagruns[1].execTs, "t2", dag.TaskSuccess},
+		{dagruns[1].execTs, "t3", dag.TaskRunning},
+	}
+
+	for _, dr := range dagruns {
+		insertDagRun(
+			scheduler.dbClient, ctx, dagId, dr.execTs, dr.status.String(), t,
+		)
+	}
+
+	for _, task := range tasks {
+		insertDagRunTask(
+			scheduler.dbClient, ctx, dagId, task.execTs, task.taskId,
+			task.status.String(), t,
+		)
+	}
+
+	// query stats
+	logs, err := schedClient.UIDagrunTaskLogs(1, "t1", 0)
+	if err != nil {
+		t.Errorf("Unexpected error for UIDagrunStats: %s", err.Error())
+	}
+	if logs.LogRecordsCount != 0 {
+		t.Errorf("Expected 0 log records, got: %d", logs.LogRecordsCount)
+	}
+	if len(logs.Records) != 0 {
+		t.Errorf("Expected 0 log records, got: %d", logs.LogRecordsCount)
+	}
+}
+
+func TestClientUIDagrunTaskLogs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+
+	// prep data
+	const dagId = "sample_dag"
+	now := time.Now()
+
+	dagruns := []struct {
+		execTs string
+		status dag.RunStatus
+	}{
+		{timeutils.ToString(now), dag.RunScheduled},
+	}
+
+	tasks := []struct {
+		execTs string
+		taskId string
+		status dag.TaskStatus
+	}{
+		{dagruns[0].execTs, "t1", dag.TaskSuccess},
+	}
+
+	for _, dr := range dagruns {
+		insertDagRun(
+			scheduler.dbClient, ctx, dagId, dr.execTs, dr.status.String(), t,
+		)
+	}
+
+	for _, task := range tasks {
+		insertDagRunTask(
+			scheduler.dbClient, ctx, dagId, task.execTs, task.taskId,
+			task.status.String(), t,
+		)
+	}
+
+	ti := tasklog.TaskInfo{
+		DagId:  dagId,
+		ExecTs: timeutils.FromStringMust(dagruns[0].execTs),
+		TaskId: "t1",
+		Retry:  0,
+	}
+
+	nLogs := 20
+	taskLogger := scheduler.taskLogs.GetLogger(ti)
+	for i := 0; i < nLogs; i++ {
+		taskLogger.Warn("test message", "i", i)
+	}
+
+	// query stats
+	logs, err := schedClient.UIDagrunTaskLogs(1, "t1", 0)
+	if err != nil {
+		t.Errorf("Unexpected error for UIDagrunStats: %s", err.Error())
+	}
+	if logs.LogRecordsCount != nLogs {
+		t.Errorf("Expected %d log records, got: %d", nLogs,
+			logs.LogRecordsCount)
+	}
+	if len(logs.Records) != nLogs {
+		t.Errorf("Expected %d log records, got: %d", nLogs,
+			logs.LogRecordsCount)
+	}
+}
+
 func taskToExecEqualsDRT(
 	task api.TaskToExec, expectedDrt DagRunTask, t *testing.T,
 ) {

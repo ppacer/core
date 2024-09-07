@@ -64,7 +64,7 @@ type UIDagrunTask struct {
 	TaskLogs      UITaskLogs `json:"taskLogs"`
 }
 
-// TaskPos represents a Task position in a DAG. Root starts in (D=0,W=0).
+// TaskPos represents a Task position in a DAG. Root starts in (D=1,W=1).
 type TaskPos struct {
 	Depth int `json:"depth"`
 	Width int `json:"width"`

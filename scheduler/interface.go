@@ -13,4 +13,5 @@ type API interface {
 	UIDagrunStats() (api.UIDagrunStats, error)
 	UIDagrunLatest(int) (api.UIDagrunList, error)
 	UIDagrunDetails(int) (api.UIDagrunDetails, error)
+	UIDagrunTaskLogs(int, string, int) (api.UITaskLogs, error)
 }

@@ -1,5 +1,10 @@
 # Not released changes
 
+# [v0.0.8] - 2025-09-07
+
+- Add scheduler endpoint for sending DAG run task logs, to possibly refresh
+running DAG run task logs from the UI.
+
 # [v0.0.7] - 2025-08-24
 
 - Add scheduler endpoint to provide details on particular DAG run via

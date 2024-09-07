@@ -24,4 +24,5 @@ func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	mux.HandleFunc(rp(api.EndpointUiDagrunStats), s.uiDagrunStatsHandler)
 	mux.HandleFunc(rp(api.EndpointUiDagrunLatest), s.uiDagrunListHandler)
 	mux.HandleFunc(rp(api.EndpointUiDagrunDetails), s.uiDagrunDetailsHandler)
+	mux.HandleFunc(rp(api.EndpointUiDagrunTaskLogs), s.uiDagrunTaskLogsHandler)
 }
