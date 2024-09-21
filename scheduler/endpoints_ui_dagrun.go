@@ -114,66 +114,6 @@ func (s *Scheduler) uiDagrunListHandler(w http.ResponseWriter, r *http.Request) 
 		time.Since(start))
 }
 
-// HTTP handler for getting all logs for given DAG run task.
-func (s *Scheduler) uiDagrunTaskLogsHandler(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	s.logger.Info("Start uiDagrunTaskLogs...")
-	ctx, cancel := context.WithTimeout(
-		context.Background(), HTTPRequestContextTimeout,
-	)
-	defer cancel()
-
-	runId, taskId, retry, parseErr := parseDagRunLogsPathArgs(r)
-	if parseErr != nil {
-		s.logger.Error("Error while parsing uiDagrunTaskLogs handler args",
-			"err", parseErr.Error())
-		http.Error(w, "invalid path arguments", http.StatusBadRequest)
-		return
-	}
-
-	dagRun, dbErr := s.dbClient.ReadDagRun(ctx, runId)
-	if dbErr != nil {
-		s.logger.Error("Cannot read DAG run", "runId", runId, "err",
-			dbErr.Error())
-		http.Error(
-			w, "cannot read DAG run info from database",
-			http.StatusInternalServerError,
-		)
-	}
-
-	ti := tasklog.TaskInfo{
-		DagId:  dagRun.DagId,
-		ExecTs: timeutils.FromStringMust(dagRun.ExecTs),
-		TaskId: taskId,
-		Retry:  retry,
-	}
-	logsReader := s.taskLogs.GetLogReader(ti)
-	logs, logsErr := logsReader.ReadAll(context.TODO())
-	if logsErr != nil {
-		s.logger.Error("cannot read all logs for DAG run task",
-			"taskInfo", ti, "err", logsErr.Error())
-	}
-
-	resp := api.UITaskLogs{
-		LogRecordsCount: len(logs),
-		LoadedRecords:   len(logs),
-		Records:         s.toUITaskLogRecords(logs),
-	}
-
-	encodeErr := encode(w, http.StatusOK, resp)
-	if encodeErr != nil {
-		s.logger.Error("Cannot encode UITaskLogs", "err", encodeErr.Error())
-		http.Error(
-			w, "cannot serialize UITaskLogs", http.StatusInternalServerError,
-		)
-		return
-	}
-
-	s.logger.Info("Handler uiDagrunTaskLogs is finished", "dagId",
-		dagRun.DagId, "taskId", taskId, "retry", retry, "duration",
-		time.Since(start))
-}
-
 // HTTP handler for serving all details on given DAG run, including information
 // about tasks and their log records.
 func (s *Scheduler) uiDagrunDetailsHandler(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +152,75 @@ func (s *Scheduler) uiDagrunDetailsHandler(w http.ResponseWriter, r *http.Reques
 	}
 	s.logger.Debug("Handler uiDagrunListHandler is finished", "duration",
 		time.Since(start))
+}
+
+// HTTP handler for getting details for given single DAG run task.
+func (s *Scheduler) uiDagrunTaskDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	s.logger.Info("Start uiDagrunTask...")
+	ctx, cancel := context.WithTimeout(
+		context.Background(), HTTPRequestContextTimeout,
+	)
+	defer cancel()
+
+	runId, taskId, retry, parseErr := parseDagRunTaskPathArgs(r)
+	if parseErr != nil {
+		s.logger.Error("Error while parsing uiDagrunTask handler args",
+			"err", parseErr.Error())
+		http.Error(w, "invalid path arguments", http.StatusBadRequest)
+		return
+	}
+
+	dagRun, dbErr := s.dbClient.ReadDagRun(ctx, runId)
+	if dbErr != nil {
+		s.logger.Error("Cannot read DAG run", "runId", runId, "err",
+			dbErr.Error())
+		http.Error(
+			w, "cannot read DAG run info from database",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	dagRunTasks, dbErr := s.dbClient.ReadDagRunSingleTaskDetails(
+		ctx, dagRun.DagId, dagRun.ExecTs, taskId,
+	)
+	if dbErr != nil {
+		s.logger.Error("Cannot read DAG run task details from DB", "runId",
+			runId, "dagId", dagRun.DagId, "execTs", dagRun.ExecTs, "taskId",
+			taskId, "dbErr", dbErr.Error())
+		http.Error(
+			w, "cannot read DAG run task details from database",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	task, prepErr := s.prepDagrunTaskDetails(dagRunTasks)
+	if prepErr != nil {
+		s.logger.Error("Cannot prepare DAG run task details", "runId",
+			runId, "dagId", dagRun.DagId, "execTs", dagRun.ExecTs, "taskId",
+			taskId, "prepErr", prepErr.Error())
+		http.Error(
+			w, "cannot prepare DAG run task details",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	encodeErr := encode(w, http.StatusOK, task)
+	if encodeErr != nil {
+		s.logger.Error("Cannot encode UIDagrunTask", "err", encodeErr.Error())
+		http.Error(
+			w, "cannot serialize UIDagrunTask", http.StatusInternalServerError,
+		)
+		return
+	}
+
+	s.logger.Info("Handler uiDagrunTask is finished", "dagId",
+		dagRun.DagId, "taskId", taskId, "retry", retry, "duration",
+		time.Since(start),
+	)
 }
 
 func dagrunsDbStats(
@@ -270,7 +279,7 @@ func parseDagRunId(r *http.Request) (int, error) {
 	return value, nil
 }
 
-func parseDagRunLogsPathArgs(r *http.Request) (int, string, int, error) {
+func parseDagRunTaskPathArgs(r *http.Request) (int, string, int, error) {
 	runId, parseRunIdErr := getPathValueInt(r, "runId")
 	if parseRunIdErr != nil {
 		err := fmt.Errorf("invalid runId: %w", parseRunIdErr)

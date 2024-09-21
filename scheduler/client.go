@@ -215,25 +215,25 @@ func (c *Client) UIDagrunDetails(runId int) (api.UIDagrunDetails, error) {
 }
 
 // UIDagrunTaskLogs returns all task logs for given DAG run and given task ID.
-func (c *Client) UIDagrunTaskLogs(runId int, taskId string, retry int) (api.UITaskLogs, error) {
+func (c *Client) UIDagrunTaskDetails(runId int, taskId string, retry int) (api.UIDagrunTask, error) {
 	startTs := time.Now()
-	c.logger.Debug("Start UIDagrunDetails request...")
-	taskLogs, code, err := httpGetJSON[api.UITaskLogs](
-		c.httpClient, c.uiDagrunTaskLogsUrl(runId, taskId, retry),
+	c.logger.Debug("Start UIDagrunTaskDetails request...")
+	drtd, code, err := httpGetJSON[api.UIDagrunTask](
+		c.httpClient, c.uiDagrunTaskDetailsUrl(runId, taskId, retry),
 	)
 	if err != nil {
-		c.logger.Error("Error while getting DAG run task logs", "runId", runId,
-			"taskId", taskId, "retry", retry, "err", err.Error())
-		return api.UITaskLogs{}, err
+		c.logger.Error("Error while getting DAG run task details", "runId",
+			runId, "taskId", taskId, "retry", retry, "err", err.Error())
+		return api.UIDagrunTask{}, err
 	}
 	if code != http.StatusOK {
-		err := fmt.Errorf("unexpected status code in UIDagrunTaskLogs request: %d",
+		err := fmt.Errorf("unexpected status code in UIDagrunTaskDetails request: %d",
 			code)
-		return api.UITaskLogs{}, err
+		return api.UIDagrunTask{}, err
 	}
-	c.logger.Debug("UIDagrunTaskLogs request finished", "duration",
+	c.logger.Debug("UIDagrunTaskDetails request finished", "duration",
 		time.Since(startTs))
-	return *taskLogs, nil
+	return *drtd, nil
 }
 
 // Stop stops the Scheduler.
@@ -272,8 +272,8 @@ func (c *Client) uiDagrunDetailsUrl(runId int) string {
 	return fmt.Sprintf("%s%s/%d", c.schedulerUrl, suffix, runId)
 }
 
-func (c *Client) uiDagrunTaskLogsUrl(runId int, taskId string, retry int) string {
-	suffix := c.routes[api.EndpointUiDagrunTaskLogs].UrlSuffix
+func (c *Client) uiDagrunTaskDetailsUrl(runId int, taskId string, retry int) string {
+	suffix := c.routes[api.EndpointUiDagrunTaskDetails].UrlSuffix
 	return fmt.Sprintf("%s%s/%d/%s/%d", c.schedulerUrl, suffix, runId,
 		taskId, retry)
 }

@@ -125,6 +125,31 @@ func groupBy2[K comparable, V any](
 	return result, nil
 }
 
+// ReadRow executes given query, which is expected to produce at most one row
+// of outcome, and tries to cast it onto given type T.
+func readRow[T any](
+	ctx context.Context,
+	dbConn DB,
+	logger *slog.Logger,
+	scanner func(Scannable) (T, error),
+	query string, args ...any,
+) (T, error) {
+	start := time.Now()
+	logger.Debug("Start processing single row query...", "query", query,
+		"args", args)
+
+	row := dbConn.QueryRowContext(ctx, query, args...)
+	result, scanErr := scanner(row)
+	if scanErr != nil {
+		logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+		return result, scanErr
+	}
+
+	logger.Debug("Processing single row query finished", "query", query,
+		"args", args, "duration", time.Since(start))
+	return result, nil
+}
+
 func readRowsContext[T any](
 	ctx context.Context,
 	dbConn DB,

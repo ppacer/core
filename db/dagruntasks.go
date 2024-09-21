@@ -100,6 +100,27 @@ func (c *Client) ReadDagRunTaskDetails(
 	return drtDetails, err
 }
 
+// Read DAG run task with additional information including node positions and
+// task configuration.
+func (c *Client) ReadDagRunSingleTaskDetails(
+	ctx context.Context, dagId, execTs, taskId string,
+) (DagRunTaskDetails, error) {
+	start := time.Now()
+	c.logger.Debug("Start reading single dag run task details", "dagId", dagId,
+		"execTs", execTs, "taskId", taskId)
+	drtd, err := readRow(
+		ctx, c.dbConn, c.logger, parseDagRunTaskDetails,
+		c.readDagRunSingleTaskDetailsQuery(), execTs, dagId, taskId,
+	)
+	if err == nil {
+		c.logger.Debug("Finished reading single dag run task details", "dagId",
+			dagId, "execTs", execTs, "taskId", taskId, "duration",
+			time.Since(start),
+		)
+	}
+	return drtd, err
+}
+
 // Inserts new DagRunTask with default status SCHEDULED.
 func (c *Client) InsertDagRunTask(ctx context.Context, dagId, execTs, taskId string, retry int, status string) error {
 	start := time.Now()
@@ -479,5 +500,34 @@ func (c *Client) readDagRunTaskDetailsQuery() string {
 	WHERE
 			dt.DagId = ?
 		AND dt.IsCurrent = 1
+`
+}
+
+func (c *Client) readDagRunSingleTaskDetailsQuery() string {
+	return `
+	SELECT
+		dt.DagId,
+		dt.TaskId,
+		dt.PosDepth,
+		dt.PosWidth,
+		dt.TaskConfig,
+		drt.DagId IS NULL AS DagRunTaskNoStarted,
+		IFNULL(drt.ExecTs, '') AS ExecTs,
+		IFNULL(drt.Retry, -1) AS Retry,
+		IFNULL(drt.InsertTs, '') AS InsertTs,
+		IFNULL(drt.Status, '') AS Status,
+		IFNULL(drt.StatusUpdateTs, '') AS StatusUpdateTs,
+		IFNULL(drt.Version, '') AS Version
+	FROM
+		dagtasks dt
+	LEFT JOIN
+		dagruntasks drt ON
+				dt.DagId = drt.DagId
+			AND dt.TaskId = drt.TaskId
+			AND drt.ExecTs = ?
+	WHERE
+			dt.DagId = ?
+		AND dt.IsCurrent = 1
+		AND dt.TaskId = ?
 `
 }

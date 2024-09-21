@@ -1,11 +1,17 @@
 # Not released changes
 
-# [v0.0.8] - 2025-09-07
+# [v0.0.9] - 2024-09-21
+
+- Change an endpoint introduced in 0.0.8. Instead of serving single DAG run
+task logs, now we provide all DAG run task details for that specific task. That
+turned out to be better choice from the UI perspective.
+
+# [v0.0.8] - 2024-09-07
 
 - Add scheduler endpoint for sending DAG run task logs, to possibly refresh
 running DAG run task logs from the UI.
 
-# [v0.0.7] - 2025-08-24
+# [v0.0.7] - 2024-08-24
 
 - Add scheduler endpoint to provide details on particular DAG run via
 /ui/dagrun/{runId}.
@@ -17,13 +23,13 @@ function.
   to read task logs.
 
 
-# [v0.0.6] - 2025-08-21
+# [v0.0.6] - 2024-08-21
 
 - Fix a bug on FAILED DAG run status in case when the last task in a DAG has
 been retried with a success, so DAG run should has also status SUCCESS.
 
 
-# [v0.0.5] - 2025-08-17
+# [v0.0.5] - 2024-08-17
 
 - Fix behavior related to dag.Attr.CatchUp.
 - Introduce `schedules` table in the database, to keep events for schedule

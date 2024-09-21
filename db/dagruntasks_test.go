@@ -650,6 +650,87 @@ func TestReadDagRunTaskDetailsEmpty(t *testing.T) {
 	}
 }
 
+func TestReadDagRunSingleTaskDetailsEmpty(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	taskId := "t1"
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	_, dbErr := c.ReadDagRunSingleTaskDetails(ctx, dagId, ts, taskId)
+	if dbErr != sql.ErrNoRows {
+		t.Errorf("Expected ErrNoRows, got: %s", dbErr.Error())
+	}
+}
+
+func TestReadDagRunSingleTaskDetails(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	defer CleanUpSqliteTmp(c, t)
+
+	dagId := "mock_dag"
+	t1Name := "t1"
+	t2Name := "t2"
+	n1 := dag.NewNode(PrintTask{Name: t1Name})
+	n2 := dag.NewNode(PrintTask{Name: t2Name})
+	n1.Next(n2)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	ctx := context.Background()
+	ts := timeutils.ToString(timeutils.Now())
+
+	diErr := c.InsertDagTasks(ctx, d)
+	if diErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", diErr.Error())
+	}
+
+	t1Err := c.InsertDagRunTask(
+		ctx, dagId, ts, t1Name, 0, dag.TaskRunning.String(),
+	)
+	if t1Err != nil {
+		t.Errorf("Cannot insert DAG run task: %s", t1Err.Error())
+	}
+
+	drtd, err := c.ReadDagRunSingleTaskDetails(ctx, dagId, ts, t1Name)
+	if err != nil {
+		t.Errorf("Cannot read single DAG run task details: %s", err.Error())
+	}
+
+	if drtd.TaskNotStarted {
+		t.Errorf("Task %s should be started, but is not", t1Name)
+	}
+	configJson, jErr := json.Marshal(n1.Config)
+	if jErr != nil {
+		t.Errorf("Cannot marshal to JSON task config: %s", jErr.Error())
+	}
+
+	drtdExpected := DagRunTaskDetails{
+		DagId:          dagId,
+		TaskId:         t1Name,
+		PosDepth:       1,
+		PosWidth:       1,
+		ConfigJson:     string(configJson),
+		TaskNotStarted: false,
+		ExecTs:         ts,
+		Retry:          0,
+		InsertTs:       drtd.InsertTs,
+		Status:         dag.TaskRunning.String(),
+		StatusUpdateTs: drtd.StatusUpdateTs,
+		Version:        drtd.Version,
+	}
+
+	if drtd != drtdExpected {
+		t.Errorf("Expected %+v, got: %+v", drtdExpected, drtd)
+	}
+}
+
 func TestReadDagRunTaskDetailsNotAllDrt(t *testing.T) {
 	c, err := NewSqliteTmpClient(testLogger())
 	if err != nil {

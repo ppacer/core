@@ -651,7 +651,7 @@ func TestClientUIDagrunDetailsRunning(t *testing.T) {
 	}
 }
 
-func TestClientUIDagrunTaskLogsEmpty(t *testing.T) {
+func TestClientUIDagrunTaskDetailsEmpty(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
@@ -664,13 +664,13 @@ func TestClientUIDagrunTaskLogsEmpty(t *testing.T) {
 	schedClient := NewClient(
 		testServer.URL, nil, testLogger(), DefaultClientConfig,
 	)
-	_, err := schedClient.UIDagrunTaskLogs(42, "sample_task", 0)
+	_, err := schedClient.UIDagrunTaskDetails(42, "sample_task", 0)
 	if err == nil {
 		t.Error("Expected error for loading DAG run tasks for empty DB, got nil")
 	}
 }
 
-func TestClientUIDagrunTaskLogsNoLogs(t *testing.T) {
+func TestClientUIDagrunTaskDetailsNoLogs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
@@ -687,6 +687,22 @@ func TestClientUIDagrunTaskLogsNoLogs(t *testing.T) {
 	// prep data
 	const dagId = "sample_dag"
 	now := time.Now()
+
+	t1Name := "t1"
+	t2Name := "t2"
+	t3Name := "t3k"
+	n1 := dag.NewNode(printTask{Name: t1Name})
+	n2 := dag.NewNode(printTask{Name: t2Name})
+	n3 := dag.NewNode(printTask{Name: t3Name})
+	n1.Next(n2)
+	n1.Next(n3)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	// Insert DAG tasks
+	iErr := scheduler.dbClient.InsertDagTasks(ctx, d)
+	if iErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", iErr.Error())
+	}
 
 	dagruns := []struct {
 		execTs string
@@ -720,10 +736,11 @@ func TestClientUIDagrunTaskLogsNoLogs(t *testing.T) {
 	}
 
 	// query stats
-	logs, err := schedClient.UIDagrunTaskLogs(1, "t1", 0)
+	drtd, err := schedClient.UIDagrunTaskDetails(1, "t1", 0)
 	if err != nil {
 		t.Errorf("Unexpected error for UIDagrunStats: %s", err.Error())
 	}
+	logs := drtd.TaskLogs
 	if logs.LogRecordsCount != 0 {
 		t.Errorf("Expected 0 log records, got: %d", logs.LogRecordsCount)
 	}
@@ -732,7 +749,7 @@ func TestClientUIDagrunTaskLogsNoLogs(t *testing.T) {
 	}
 }
 
-func TestClientUIDagrunTaskLogs(t *testing.T) {
+func TestClientUIDagrunTaskDetails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	cfg := DefaultConfig
 	dags := dag.Registry{}
@@ -749,6 +766,22 @@ func TestClientUIDagrunTaskLogs(t *testing.T) {
 	// prep data
 	const dagId = "sample_dag"
 	now := time.Now()
+
+	t1Name := "t1"
+	t2Name := "t2"
+	t3Name := "t3k"
+	n1 := dag.NewNode(printTask{Name: t1Name})
+	n2 := dag.NewNode(printTask{Name: t2Name})
+	n3 := dag.NewNode(printTask{Name: t3Name})
+	n1.Next(n2)
+	n1.Next(n3)
+	d := dag.New(dag.Id(dagId)).AddRoot(n1).Done()
+
+	// Insert DAG tasks
+	iErr := scheduler.dbClient.InsertDagTasks(ctx, d)
+	if iErr != nil {
+		t.Errorf("Cannot insert DAG tasks: %s", iErr.Error())
+	}
 
 	dagruns := []struct {
 		execTs string
@@ -792,17 +825,17 @@ func TestClientUIDagrunTaskLogs(t *testing.T) {
 	}
 
 	// query stats
-	logs, err := schedClient.UIDagrunTaskLogs(1, "t1", 0)
+	drtd, err := schedClient.UIDagrunTaskDetails(1, "t1", 0)
 	if err != nil {
 		t.Errorf("Unexpected error for UIDagrunStats: %s", err.Error())
 	}
-	if logs.LogRecordsCount != nLogs {
+	if drtd.TaskLogs.LogRecordsCount != nLogs {
 		t.Errorf("Expected %d log records, got: %d", nLogs,
-			logs.LogRecordsCount)
+			drtd.TaskLogs.LogRecordsCount)
 	}
-	if len(logs.Records) != nLogs {
+	if len(drtd.TaskLogs.Records) != nLogs {
 		t.Errorf("Expected %d log records, got: %d", nLogs,
-			logs.LogRecordsCount)
+			len(drtd.TaskLogs.Records))
 	}
 }
 
