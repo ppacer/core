@@ -33,6 +33,8 @@ type Scheduler struct {
 	notifier      notify.Sender
 	taskScheduler *TaskScheduler
 
+	dags dag.Registry
+
 	sync.Mutex
 	state State
 }
@@ -109,6 +111,7 @@ func DefaultStarted(
 func (s *Scheduler) Start(ctx context.Context, dags dag.Registry) http.Handler {
 	cacheSize := s.config.DagRunTaskCacheLen
 	taskCache := ds.NewLruCache[DRTBase, DagRunTaskState](cacheSize)
+	s.dags = dags
 
 	// Setup timezone
 	if s.config.TimezoneName != timeutils.LocalTimezoneName {

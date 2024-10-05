@@ -16,6 +16,9 @@ const (
 	// Endpoint for updating status of given DAG run task.
 	EndpointDagTaskUpdate
 
+	// Endpoint for scheduling new DAG run (externally).
+	EndpointDagRunTrigger
+
 	// Endpoint return current status of Scheduler.
 	EndpointState
 
@@ -41,6 +44,9 @@ type Endpoint struct {
 // Routes for all Scheduler server endpoints.
 func Routes() map[EndpointID]Endpoint {
 	return map[EndpointID]Endpoint{
+		// /dag/run/*
+		EndpointDagRunTrigger: {"POST /dag/run/trigger", "/dag/run/trigger"},
+
 		// /dag/task/*
 		EndpointDagTaskPop:    {"GET /dag/task/pop", "/dag/task/pop"},
 		EndpointDagTaskUpdate: {"POST /dag/task/update", "/dag/task/update"},

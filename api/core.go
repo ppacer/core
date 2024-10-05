@@ -12,14 +12,3 @@ type TaskToExec struct {
 	TaskId string `json:"taskId"`
 	Retry  int    `json:"retry"`
 }
-
-// DagRunTaskStatus contains information about DAG run task status and
-// potential execution error.
-type DagRunTaskStatus struct {
-	DagId   string  `json:"dagId"`
-	ExecTs  string  `json:"execTs"`
-	TaskId  string  `json:"taskId"`
-	Retry   int     `json:"retry"`
-	Status  string  `json:"status"`
-	TaskErr *string `json:"taskError"`
-}

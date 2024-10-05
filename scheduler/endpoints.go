@@ -1,3 +1,7 @@
+// Copyright 2023 The ppacer Authors.
+// Licensed under the Apache License, Version 2.0.
+// See LICENSE file in the project root for full license information.
+
 package scheduler
 
 import (
@@ -12,6 +16,9 @@ func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 	rp := func(e api.EndpointID) string {
 		return r[e].RoutePattern
 	}
+
+	// /dag/run/*
+	mux.HandleFunc(rp(api.EndpointDagRunTrigger), s.scheduleNewDagRunHandler)
 
 	// /dag/task/*
 	mux.HandleFunc(rp(api.EndpointDagTaskPop), ts.popTask)

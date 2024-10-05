@@ -1,15 +1,24 @@
 # Not released changes
 
+# [v0.0.10] - 2024-10-05
+
+- Introduce endpoint for triggering new DAG runs. Also scheduler Interface and
+scheduler Client has been extended by TriggerDagRun methods. For now no custom
+parameters are supported, but it's planned to be added in the future.
+
+
 # [v0.0.9] - 2024-09-21
 
 - Change an endpoint introduced in 0.0.8. Instead of serving single DAG run
 task logs, now we provide all DAG run task details for that specific task. That
 turned out to be better choice from the UI perspective.
 
+
 # [v0.0.8] - 2024-09-07
 
 - Add scheduler endpoint for sending DAG run task logs, to possibly refresh
 running DAG run task logs from the UI.
+
 
 # [v0.0.7] - 2024-08-24
 

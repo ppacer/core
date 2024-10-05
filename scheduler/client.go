@@ -145,6 +145,44 @@ func (c *Client) GetState() (State, error) {
 	return ParseState(stateJson.State)
 }
 
+// TriggerDagRun schedules new DAG run.
+func (c *Client) TriggerDagRun(in api.DagRunTriggerInput) error {
+	jsonInput, jErr := json.Marshal(in)
+	if jErr != nil {
+		return fmt.Errorf("cannot serialize DagRunTriggerInput: %s",
+			jErr.Error())
+	}
+	req, rErr := http.NewRequest(
+		"POST", c.triggerDagRunUrl(), bytes.NewBuffer(jsonInput),
+	)
+	if rErr != nil {
+		return fmt.Errorf("cannot create POST request: %s", rErr.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	defer req.Body.Close()
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cannot perform POST request: %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, rErr := io.ReadAll(resp.Body)
+		if rErr != nil {
+			msg := fmt.Sprintf(
+				"unexpected status code in TriggerDagRun request: %d, "+
+					"and cannot read the response body: %s",
+				resp.StatusCode, rErr.Error(),
+			)
+			return errors.New(msg)
+		}
+		return fmt.Errorf("unexpected status code in TriggerDagRun request: %d. Body: %s",
+			resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // UIDagrunStats returns the current statistics on DAG runs, its tasks and
 // goroutines.
 func (c *Client) UIDagrunStats() (api.UIDagrunStats, error) {
@@ -249,6 +287,11 @@ func (c *Client) getTaskUrl() string {
 
 func (c *Client) getStateUrl() string {
 	suffix := c.routes[api.EndpointState].UrlSuffix
+	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
+}
+
+func (c *Client) triggerDagRunUrl() string {
+	suffix := c.routes[api.EndpointDagRunTrigger].UrlSuffix
 	return fmt.Sprintf("%s%s", c.schedulerUrl, suffix)
 }
 
