@@ -104,6 +104,71 @@ func TestReadDagRunTasks(t *testing.T) {
 	}
 }
 
+func TestReadDagRunTasksLatestFromEmpty(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, rErr := c.ReadDagRunTaskLatestRetries(ctx, "any_dag", "any_time")
+	if rErr != nil {
+		t.Errorf("Expected no rows error, got: %s", rErr.Error())
+	}
+}
+
+func TestReadDagRunTasksLatest(t *testing.T) {
+	c, err := NewSqliteTmpClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	const dagId = "sample_dag"
+	execTs := timeutils.ToString(timeutils.Now())
+
+	input := []struct {
+		taskId       string
+		latestRetry  int
+		latestStatus string
+	}{
+		{"task1", 0, statusSuccess},
+		{"task2", 1, statusSuccess},
+		{"task3", 5, statusSuccess},
+		{"task4", 0, statusSuccess},
+		{"task5", 13, statusSuccess},
+	}
+
+	for _, in := range input {
+		status := statusFailed
+		for i := 0; i <= in.latestRetry; i++ {
+			if i == in.latestRetry {
+				status = in.latestStatus
+			}
+			insertDagRunTaskStatus(c, ctx, dagId, execTs, in.taskId,
+				i, status, t)
+		}
+	}
+
+	drts, rErr := c.ReadDagRunTaskLatestRetries(ctx, dagId, execTs)
+	if rErr != nil {
+		t.Errorf("Cannot read latest DAG run task info: %s", rErr.Error())
+	}
+
+	taskToRetry := make(map[string]int)
+	for _, drt := range drts {
+		taskToRetry[drt.TaskId] = drt.Retry
+	}
+
+	for _, in := range input {
+		if r, exist := taskToRetry[in.taskId]; !exist {
+			t.Errorf("Expected task %s in the map, but it's not there: %v",
+				in.taskId, taskToRetry)
+		} else if r != in.latestRetry {
+			t.Errorf("Expected task %s to have retry %d, got: %d",
+				in.taskId, in.latestRetry, r)
+		}
+	}
+}
+
 func TestReadDagRunTaskSingleFromEmpty(t *testing.T) {
 	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {

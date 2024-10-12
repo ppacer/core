@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
@@ -141,7 +142,9 @@ func readRow[T any](
 	row := dbConn.QueryRowContext(ctx, query, args...)
 	result, scanErr := scanner(row)
 	if scanErr != nil {
-		logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+		if scanErr != sql.ErrNoRows {
+			logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+		}
 		return result, scanErr
 	}
 
@@ -158,6 +161,9 @@ func readRowsContext[T any](
 	query string,
 	args ...any,
 ) ([]T, error) {
+	start := time.Now()
+	logger.Debug("Start processing multiple rows query...", "query", query,
+		"args", args)
 	result := make([]T, 0, 100)
 	rows, qErr := dbConn.QueryContext(ctx, query, args...)
 	if qErr != nil {
@@ -176,10 +182,14 @@ func readRowsContext[T any](
 		}
 		obj, scanErr := scanner(rows)
 		if scanErr != nil {
-			logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+			if scanErr != sql.ErrNoRows {
+				logger.Error("Scanning SQL row failed", "err", scanErr.Error())
+			}
 			return result, scanErr
 		}
 		result = append(result, obj)
 	}
+	logger.Debug("Processing multiple rows query finished", "query", query,
+		"args", args, "duration", time.Since(start))
 	return result, nil
 }

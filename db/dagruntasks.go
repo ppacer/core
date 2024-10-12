@@ -81,6 +81,15 @@ func (c *Client) ReadDagRunTasks(ctx context.Context, dagId, execTs string) ([]D
 	return dagruntasks, nil
 }
 
+// ReadDagRunTaskLatestRetries reads, for a given DAG run, latest retries of
+// all tasks in that DAG run.
+func (c *Client) ReadDagRunTaskLatestRetries(ctx context.Context, dagId, execTs string) ([]DagRunTask, error) {
+	return readRowsContext(
+		ctx, c.dbConn, c.logger, parseDagRunTask,
+		c.readDagRunTaskLatestRetriesQuery(), dagId, execTs,
+	)
+}
+
 // Reads all DAG tasks with all relevant details including node positions in
 // DAG and task configurations.
 func (c *Client) ReadDagRunTaskDetails(
@@ -309,7 +318,7 @@ func (c *Client) ReadDagRunTasksAggByStatus(ctx context.Context) (map[string]int
 	return result, nil
 }
 
-func parseDagRunTask(rows *sql.Rows) (DagRunTask, error) {
+func parseDagRunTask(rows Scannable) (DagRunTask, error) {
 	var dagId, execTs, taskId, insertTs, status, statusTs, version string
 	var retry int
 	scanErr := rows.Scan(&dagId, &execTs, &taskId, &retry, &insertTs, &status,
@@ -377,6 +386,44 @@ func (c *Client) readDagRunTasksQuery() string {
 	WHERE
 			DagId = ?
 		AND ExecTs = ?
+	`
+}
+
+func (c *Client) readDagRunTaskLatestRetriesQuery() string {
+	return `
+	WITH latest AS (
+		SELECT
+			DagId,
+			ExecTs,
+			TaskId,
+			MAX(Retry) AS LatestRetry
+		FROM
+			dagruntasks
+		WHERE
+				DagId = ?
+			AND ExecTs = ?
+		GROUP BY
+			DagId,
+			ExecTs,
+			TaskId
+	)
+	SELECT
+		d.DagId,
+		d.ExecTs,
+		d.TaskId,
+		d.Retry,
+		d.InsertTs,
+		d.Status,
+		d.StatusUpdateTs,
+		d.Version
+	FROM
+		dagruntasks d
+	INNER JOIN
+		latest l ON
+			d.DagId = l.DagId
+		AND d.ExecTs = l.ExecTs
+		AND d.TaskId = l.TaskId
+		AND d.Retry = l.LatestRetry
 	`
 }
 

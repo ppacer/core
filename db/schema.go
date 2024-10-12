@@ -31,6 +31,7 @@ func SchemaStatements(dbDriver string) ([]string, error) {
 			sqliteCreateDagrunsTable(),
 			sqliteCreateDagruntasksTable(),
 			sqliteCreateSchedulesTable(),
+			sqliteCreateDagrunrestartsTable(),
 		}, nil
 	}
 
@@ -99,6 +100,20 @@ CREATE TABLE IF NOT EXISTS dagruns (
     Status TEXT NOT NULL,           -- DAG run status
     StatusUpdateTs TEXT NOT NULL,   -- Status update timestamp (on first insert it's the same as InsertTs)
     Version TEXT NOT NULL           -- Scheduler Version
+);
+`
+}
+
+func sqliteCreateDagrunrestartsTable() string {
+	return `
+-- Table dagrunrestarts stores information about DAG run restarts.
+CREATE TABLE IF NOT EXISTS dagrunrestarts (
+	DagId TEXT NOT NULL,    -- DAG ID
+	ExecTs TEXT NOT NULL,   -- Execution timestamp
+	Restart INT NOT NULL,   -- ID of the restart, starting from 1
+	InsertTs TEXT NOT NULL, -- Insert timestamp
+
+	PRIMARY KEY (DagId, ExecTs, Restart)
 );
 `
 }
