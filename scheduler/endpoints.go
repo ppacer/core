@@ -19,6 +19,7 @@ func (s *Scheduler) registerEndpoints(mux *http.ServeMux, ts *TaskScheduler) {
 
 	// /dag/run/*
 	mux.HandleFunc(rp(api.EndpointDagRunTrigger), s.scheduleNewDagRunHandler)
+	mux.HandleFunc(rp(api.EndpointDagRunRestart), s.restartDagRunHandler)
 
 	// /dag/task/*
 	mux.HandleFunc(rp(api.EndpointDagTaskPop), ts.popTask)

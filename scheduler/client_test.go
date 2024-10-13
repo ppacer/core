@@ -373,6 +373,33 @@ func TestClientTriggerDagRunNonExistent(t *testing.T) {
 	}
 }
 
+func TestClientRestartDagRunNonExistent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	cfg := DefaultConfig
+	dags := dag.Registry{}
+	scheduler := schedulerWithSqlite(DefaultQueues(cfg), cfg, t)
+	testServer := httptest.NewServer(scheduler.Start(ctx, dags))
+	defer db.CleanUpSqliteTmp(scheduler.dbClient, t)
+	defer testServer.Close()
+	defer cancel()
+
+	schedClient := NewClient(
+		testServer.URL, nil, testLogger(), DefaultClientConfig,
+	)
+	restartInput := api.DagRunRestartInput{
+		DagId:  "nonexistent_dag",
+		ExecTs: timeutils.ToString(time.Now()),
+	}
+	err := schedClient.RestartDagRun(restartInput)
+	if err == nil {
+		t.Fatalf("Expected non-nil error for triggering non-existent DAG")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Errorf("Expected status code 404 in error, but found none: %s",
+			err.Error())
+	}
+}
+
 func simpleDagNoSchedule(dagId string) dag.Dag {
 	n1 := dag.NewNode(printTask{Name: "t1"})
 	n2 := dag.NewNode(printTask{Name: "t2"})

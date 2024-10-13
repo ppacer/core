@@ -19,8 +19,9 @@ import (
 // DagRun represents single DAG run. AtTime is more of scheduling time rather
 // then time of actually pushing it onto DAG run queue.
 type DagRun struct {
-	DagId  dag.Id
-	AtTime time.Time
+	DagId       dag.Id
+	AtTime      time.Time
+	IsRestarted bool
 }
 
 // DagRunWatcher watches on given list of DAGs and sends information about new

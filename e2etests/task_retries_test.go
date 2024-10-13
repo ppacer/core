@@ -374,3 +374,21 @@ func exposeSliceLoggerOnTestFailure(logs []string, t *testing.T) {
 		}
 	}
 }
+
+func testLatestDagRunStatus(
+	dbClient *db.Client, dagId dag.Id, expectedStatus dag.RunStatus, t *testing.T,
+) {
+	t.Helper()
+	drLatest, drErr := dbClient.ReadLatestDagRuns(context.Background())
+	if drErr != nil {
+		t.Fatalf("Cannot read latest DAG runs from DB: %s", drErr.Error())
+	}
+	dagRun, exists := drLatest[string(dagId)]
+	if !exists {
+		t.Fatalf("Expected to have DAG run in DB for DagId=%s", string(dagId))
+	}
+	if dagRun.Status != expectedStatus.String() {
+		t.Fatalf("Expected DAG run status %s, but got: %s",
+			expectedStatus.String(), dagRun.Status)
+	}
+}

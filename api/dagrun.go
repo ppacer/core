@@ -21,3 +21,9 @@ type DagRunTriggerInput struct {
 	DagId string `json:"dagId"`
 	// TODO: Add input parameters for DAG run.
 }
+
+// DagRunRestartInput defines input structure for restarting DAG run.
+type DagRunRestartInput struct {
+	DagId  string `json:"dagId"`
+	ExecTs string `json:"execTs"`
+}

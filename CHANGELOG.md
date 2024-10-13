@@ -1,10 +1,15 @@
 # Not released changes
 
+# [v0.0.11] - 2024-10-13
+
+- Introduce endpoint for whole DAG run restart. Failed DAG run can be restarted
+  and all failed or not started tasks will be run again.
+
 # [v0.0.10] - 2024-10-05
 
 - Introduce endpoint for triggering new DAG runs. Also scheduler Interface and
 scheduler Client has been extended by TriggerDagRun methods. For now no custom
-parameters are supported, but it's planned to be added in the future.
+parameters are not supported, but it's planned to be added in the future.
 
 
 # [v0.0.9] - 2024-09-21

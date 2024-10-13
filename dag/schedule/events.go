@@ -10,6 +10,7 @@ const (
 	CaughtUp
 	Skipped
 	OutOfBand
+	ManuallyTriggered
 )
 
 // String serialize Event.
@@ -19,16 +20,18 @@ func (e Event) String() string {
 		"CAUGHT_UP",
 		"SKIPPED",
 		"OUT_OF_BAND",
+		"MANUALLY_TRIGGERED",
 	}[e]
 }
 
 // ParseEvent parses Event based on given string. Events are case-sensitive.
 func ParseEvent(s string) (Event, error) {
 	events := map[string]Event{
-		"REGULAR":     Regular,
-		"CAUGHT_UP":   CaughtUp,
-		"SKIPPED":     Skipped,
-		"OUT_OF_BAND": OutOfBand,
+		"REGULAR":            Regular,
+		"CAUGHT_UP":          CaughtUp,
+		"SKIPPED":            Skipped,
+		"OUT_OF_BAND":        OutOfBand,
+		"MANUALLY_TRIGGERED": ManuallyTriggered,
 	}
 	if event, ok := events[s]; ok {
 		return event, nil

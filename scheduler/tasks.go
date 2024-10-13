@@ -354,6 +354,18 @@ func (ts *TaskScheduler) scheduleDagTasks(
 
 	defer ts.cleanTaskCache(dagrun, d.FlattenNodes())
 	sharedState := newDagRunSharedState(d.TaskParents())
+	if dagrun.IsRestarted {
+		// We need to read taskId --> latest retry from the latest DAG run.
+		taskIdToLatestRetry, err := ts.loadTaskIdToLatestRetryMap(ctx, dagrun)
+		if err != nil {
+			ts.logger.Error("Cannot load taskId -> latest retry map for retried DAG run",
+				"dagrun", dagrun, "err", err)
+			sendTaskSchedulerErr(errorsChan, dagrun, err)
+			return
+		}
+		sharedState.TaskLatestRetry = taskIdToLatestRetry
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ts.walkAndSchedule(ctx, dagrun, d.Root, sharedState, &wg, false)
@@ -431,6 +443,10 @@ type dagRunSharedState struct {
 	// Map of taskId -> []{ parent task ids } for the DAG.
 	TasksParents *ds.AsyncMap[string, []string]
 
+	// Map of taskId -> latest retry for the task. It's used to determine what
+	// retry should be inserted when whole DAG run is retried.
+	TaskLatestRetry *ds.AsyncMap[string, int]
+
 	// Overall dag run status
 	sync.Mutex
 	DagRunStatus *dag.RunStatus
@@ -463,14 +479,25 @@ func (ts *TaskScheduler) walkAndSchedule(
 	}
 	checkDelay := ts.config.CheckDependenciesStatusWait
 	taskId := node.Task.Id()
-	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId)
+	retry := 0
+	if dagrun.IsRestarted {
+		latestRetry, exists := sharedState.TaskLatestRetry.Get(taskId)
+		if exists {
+			retry = latestRetry + 1
+		} else {
+			ts.logger.Warn("In restarted DAG run cannot find latest retry for the task",
+				"dagrun", dagrun, "taskId", taskId)
+		}
+	}
+	ts.logger.Info("Start walkAndSchedule", "dagrun", dagrun, "taskId", taskId,
+		"retry", retry)
 
 	// In case when scheduler has been restarted given task might been
 	// already completed from the previous unfinished DAG run.
 	alreadyFinished, status := ts.checkIfAlreadyFinished(dagrun, taskId)
 	if alreadyFinished {
 		if status != dag.TaskSuccess {
-			ts.scheduleSingleTask(dagrun, taskId)
+			ts.scheduleSingleTask(dagrun, taskId, retry)
 		}
 	}
 
@@ -481,8 +508,8 @@ func (ts *TaskScheduler) walkAndSchedule(
 			// queue for retries on DagRunTasks level.
 			ts.logger.Error("Context canceled while walkAndSchedule", "dagrun",
 				dagrun, "taskId", node.Task.Id(), "err", ctx.Err())
-			// TODO: in this case we need to stop further scheduling and set
-			// appropriate status
+		// TODO: in this case we need to stop further scheduling and set
+		// appropriate status
 		default:
 		}
 		if alreadyFinished || ts.schedulerStateFunc() == StateStopping {
@@ -494,11 +521,12 @@ func (ts *TaskScheduler) walkAndSchedule(
 		)
 		if parentsStatus == dag.TaskFailed {
 			msg := "At least one parent of the task has failed. Will not proceed."
-			ts.logger.Warn(msg, "dagrun", dagrun, "taskId", taskId)
+			ts.logger.Warn(msg, "dagrun", dagrun, "taskId", taskId, "retry",
+				retry)
 			return
 		}
 		if canSchedule {
-			ts.scheduleSingleTask(dagrun, taskId)
+			ts.scheduleSingleTask(dagrun, taskId, retry)
 			break
 		}
 		time.Sleep(checkDelay)
@@ -531,13 +559,14 @@ func (ts *TaskScheduler) walkAndSchedule(
 
 // Schedules single task. That means putting metadata on the queue, updating
 // cache, etc... TODO
-func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string) {
+func (ts *TaskScheduler) scheduleSingleTask(dagrun DagRun, taskId string, retry int) {
 	ts.logger.Info("Start scheduling new dag run task", "dagrun", dagrun,
-		"taskId", taskId)
+		"taskId", taskId, "retry", retry)
 	drt := DagRunTask{
 		DagId:  dagrun.DagId,
 		AtTime: dagrun.AtTime,
 		TaskId: taskId,
+		Retry:  retry,
 	}
 	ctx := context.TODO()
 	ctx, cancel := context.WithTimeout(ctx, ts.config.PutOnTaskQueueTimeout)
@@ -803,6 +832,22 @@ func (ts *TaskScheduler) getDagRunTaskStatusFromDb(
 		StatusUpdateTs: timeutils.FromStringMust(dagruntask.StatusUpdateTs),
 	}
 	return drts, nil
+}
+
+func (ts *TaskScheduler) loadTaskIdToLatestRetryMap(
+	ctx context.Context, dagrun DagRun,
+) (*ds.AsyncMap[string, int], error) {
+	taskIdToLatestRetry := ds.NewAsyncMap[string, int]()
+	drts, dbErr := ts.dbClient.ReadDagRunTaskLatestRetries(
+		ctx, string(dagrun.DagId), timeutils.ToString(dagrun.AtTime),
+	)
+	if dbErr != nil {
+		return nil, dbErr
+	}
+	for _, drt := range drts {
+		taskIdToLatestRetry.Add(drt.TaskId, drt.Retry)
+	}
+	return taskIdToLatestRetry, nil
 }
 
 // Removes bulk of tasks for given dag run from the TaskCache.

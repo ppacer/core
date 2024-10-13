@@ -15,6 +15,7 @@ var TableNames []string = []string{
 	"dagruns",
 	"dagruntasks",
 	"schedules",
+	"dagrunrestarts",
 }
 
 // SchemaStatements returns a list of SQL statements that setups new instance

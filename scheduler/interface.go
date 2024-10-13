@@ -11,6 +11,7 @@ type API interface {
 	UpsertTaskStatus(api.TaskToExec, dag.TaskStatus, error) error
 	GetState() (State, error)
 	TriggerDagRun(api.DagRunTriggerInput) error
+	RestartDagRun(api.DagRunRestartInput) error
 
 	UIDagrunStats() (api.UIDagrunStats, error)
 	UIDagrunLatest(int) (api.UIDagrunList, error)

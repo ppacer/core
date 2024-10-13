@@ -284,6 +284,57 @@ func TestReadLatestDagRunsSimple(t *testing.T) {
 	}
 }
 
+func TestReadDagRunByExecTs(t *testing.T) {
+	c, err := NewSqliteInMemoryClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag_1"
+	execTs := "2023-09-23T10:10:00"
+	insertDagRun(c, ctx, dagId, execTs, t)
+
+	dr, rErr := c.ReadDagRunByExecTs(ctx, dagId, execTs)
+	if rErr != nil {
+		t.Errorf("Cannot read dag run for DagId=%s and ExecTs=%s: %s", dagId,
+			execTs, rErr.Error())
+	}
+	if dr.Status != statusScheduled {
+		t.Errorf("Expected status %s for the dag run, got: %s",
+			statusScheduled, dr.Status)
+	}
+
+	uErr := c.UpdateDagRunStatus(ctx, dr.RunId, statusSuccess)
+	if uErr != nil {
+		t.Errorf("Cannot update dag run status: %s", uErr.Error())
+	}
+
+	dr2, rErr2 := c.ReadDagRunByExecTs(ctx, dagId, execTs)
+	if rErr2 != nil {
+		t.Errorf("Cannot read dag run for DagId=%s and ExecTs=%s: %s", dagId,
+			execTs, rErr2.Error())
+	}
+	if dr2.Status != statusSuccess {
+		t.Errorf("Expected status %s for the dag run, got: %s",
+			statusSuccess, dr2.Status)
+	}
+}
+
+func TestReadDagRunByExecTsNoRun(t *testing.T) {
+	c, err := NewSqliteInMemoryClient(testLogger())
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	dagId := "mock_dag_1"
+	execTs := "2023-09-23T10:10:00"
+
+	_, rErr := c.ReadDagRunByExecTs(ctx, dagId, execTs)
+	if rErr != sql.ErrNoRows {
+		t.Errorf("Expected sql.ErrNoRows, got: %s", rErr.Error())
+	}
+}
+
 func TestDagRunUpdateStatus(t *testing.T) {
 	c, err := NewSqliteInMemoryClient(testLogger())
 	if err != nil {

@@ -426,6 +426,10 @@ func scheduleNewDagRun(
 ) {
 	t.Helper()
 	ctx := context.Background()
+	if dr.IsRestarted {
+		queues.DagRuns.Put(dr)
+		return
+	}
 	_, iErr := dbClient.InsertDagRun(
 		ctx, string(dr.DagId), timeutils.ToString(dr.AtTime),
 	)

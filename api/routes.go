@@ -19,6 +19,9 @@ const (
 	// Endpoint for scheduling new DAG run (externally).
 	EndpointDagRunTrigger
 
+	// Endpoint for restarting DAG run (externally).
+	EndpointDagRunRestart
+
 	// Endpoint return current status of Scheduler.
 	EndpointState
 
@@ -46,6 +49,7 @@ func Routes() map[EndpointID]Endpoint {
 	return map[EndpointID]Endpoint{
 		// /dag/run/*
 		EndpointDagRunTrigger: {"POST /dag/run/trigger", "/dag/run/trigger"},
+		EndpointDagRunRestart: {"POST /dag/run/restart", "/dag/run/restart"},
 
 		// /dag/task/*
 		EndpointDagTaskPop:    {"GET /dag/task/pop", "/dag/task/pop"},

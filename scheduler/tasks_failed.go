@@ -6,6 +6,7 @@ package scheduler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
@@ -16,6 +17,8 @@ import (
 	"github.com/ppacer/core/notify"
 	"github.com/ppacer/core/timeutils"
 )
+
+const defaultDbReadTimeout = 5 * time.Second
 
 // FailedTaskManager covers complexity of the logic behind handling failed
 // tasks. That includes a decision whenever a task should be retried and
@@ -71,7 +74,26 @@ func (ftm *failedTaskManager) ShouldBeRetried(
 	delay := time.Duration(
 		drtNode.Config.RetriesDelaySeconds * float64(time.Second),
 	)
-	return drt.Retry < drtNode.Config.Retries, delay, nil
+
+	// Check if the whole DAG run has been restarted - in that case we should
+	// allow N * drt.Config.Retries retries.
+	var N int = 0
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDbReadTimeout)
+	defer cancel()
+	dagRunLatestRestart, dbErr := ftm.dbClient.ReadDagRunRestartLatest(
+		ctx, string(drt.DagId), timeutils.ToString(drt.AtTime),
+	)
+	if dbErr != nil && dbErr != sql.ErrNoRows {
+		err := fmt.Errorf("cannot read latest DAG run restart for DagId=%s ExecTs=%s: %w",
+			drt.DagId, timeutils.ToString(drt.AtTime), dbErr)
+		return false, delay, err
+	}
+	if dbErr == nil {
+		N = dagRunLatestRestart.Restart
+	}
+
+	// Check if we should retry the task.
+	return drt.Retry < (N+1)*drtNode.Config.Retries, delay, nil
 }
 
 // CheckAndSendAlerts checks if in given situation external notification should

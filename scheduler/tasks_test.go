@@ -72,7 +72,7 @@ func TestScheduleSingleTaskSimple(t *testing.T) {
 	dagrun := DagRun{DagId: d.Id, AtTime: schedule.Next(startTs, nil)}
 	taskId := "start"
 
-	ts.scheduleSingleTask(dagrun, taskId)
+	ts.scheduleSingleTask(dagrun, taskId, 0)
 
 	// Task should be on the TaskQeueu
 	expectedDrt := DagRunTask{
@@ -821,7 +821,7 @@ func TestAllTasksAreDoneDbFallback(t *testing.T) {
 func TestCheckIfAlreadyFinishedNoTask(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
 	defer db.CleanUpSqliteTmp(ts.dbClient, t)
-	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now(), false}
 	taskId := "mock_task_id"
 	expectedStatus := dag.TaskNoStatus
 
@@ -835,7 +835,7 @@ func TestCheckIfAlreadyFinishedInCache(t *testing.T) {
 	ts := defaultTaskScheduler(t, 10)
 	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	dagId := "mock_dag"
-	dagrun := DagRun{dag.Id(dagId), time.Now()}
+	dagrun := DagRun{dag.Id(dagId), time.Now(), false}
 
 	// test cases
 	data := []struct {
@@ -867,7 +867,7 @@ func TestCheckIfAlreadyFinishedInDb(t *testing.T) {
 	defer db.CleanUpSqliteTmp(ts.dbClient, t)
 	ctx := context.Background()
 	dagId := "mock_dag"
-	dagrun := DagRun{dag.Id(dagId), time.Now()}
+	dagrun := DagRun{dag.Id(dagId), time.Now(), false}
 	execTs := timeutils.ToString(dagrun.AtTime)
 
 	// test cases
@@ -919,7 +919,7 @@ func TestGetDagRunTaskStatusFromCache(t *testing.T) {
 
 	// Add entry to the cache
 	taskId := "task_1"
-	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now(), false}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 	ts.taskCache.Put(drt.base(), status)
@@ -944,7 +944,7 @@ func TestGetDagRunTaskStatusFromDatabase(t *testing.T) {
 	taskId := "task_1"
 	execTs := time.Now()
 	execTsStr := timeutils.ToString(execTs)
-	dagrun := DagRun{dag.Id("mock_dag"), execTs}
+	dagrun := DagRun{dag.Id("mock_dag"), execTs, false}
 	drt := DagRunTask{dagrun.DagId, dagrun.AtTime, taskId, 0}
 	status := DagRunTaskState{dag.TaskSuccess, dagrun.AtTime}
 
@@ -987,7 +987,7 @@ func TestGetDagRunTaskStatusNoCacheNoDatabase(t *testing.T) {
 
 	// In this case we don't add entry either to the cache nor to database
 	taskId := "task_1"
-	dagrun := DagRun{dag.Id("mock_dag"), time.Now()}
+	dagrun := DagRun{dag.Id("mock_dag"), time.Now(), false}
 
 	// Get dag run task status
 	statusNew, getErr := ts.getDagRunTaskStatus(dagrun, taskId)

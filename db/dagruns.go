@@ -156,6 +156,14 @@ func (c *Client) ReadDagRun(ctx context.Context, runId int) (DagRun, error) {
 	return drti, nil
 }
 
+// ReadDagRunByExecTs reads DAG run information for given DAG ID and execTs.
+func (c *Client) ReadDagRunByExecTs(ctx context.Context, dagId, execTs string) (DagRun, error) {
+	return readRow(
+		ctx, c.dbConn, c.logger, parseDagRun, c.readDagRunByExecTsQuery(),
+		dagId, execTs,
+	)
+}
+
 // Updates dagrun status for given runId.
 func (c *Client) UpdateDagRunStatus(
 	ctx context.Context, runId int64, status string,
@@ -444,6 +452,23 @@ func (c *Client) latestDagRunsQuery() string {
 			dagruns d
 		INNER JOIN
 			latestDagRuns ldr ON d.RunId = ldr.LatestRunId
+	`
+}
+
+func (c *Client) readDagRunByExecTsQuery() string {
+	return `
+		SELECT
+			RunId,
+			DagId,
+			ExecTs,
+			InsertTs,
+			Status,
+			StatusUpdateTs,
+			Version
+		FROM
+			dagruns
+		WHERE
+			DagId = ? AND ExecTs = ?
 	`
 }
 
