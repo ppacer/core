@@ -399,6 +399,7 @@ func prepDagrunDetailsBase(dr db.DagRun) api.UIDagrunDetails {
 	details.RunId = dr.RunId
 	details.DagId = dr.DagId
 	details.ExecTs = api.ToTimestamp(timeutils.FromStringMust(dr.ExecTs))
+	details.ExecTsRaw = dr.ExecTs
 	details.Status = dr.Status
 	details.Duration = timeutils.Duration(dr.InsertTs, dr.StatusUpdateTs).String()
 

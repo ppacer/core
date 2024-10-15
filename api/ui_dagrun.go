@@ -42,12 +42,13 @@ type UIDagrunList []UIDagrunRow
 // UIDagrunDetails represents details on a single DAG run, including its tasks
 // and their log records.
 type UIDagrunDetails struct {
-	RunId    int64          `json:"runId"`
-	DagId    string         `json:"dagId"`
-	ExecTs   Timestamp      `json:"execTs"`
-	Status   string         `json:"status"`
-	Duration string         `json:"duration"`
-	Tasks    []UIDagrunTask `json:"tasks"`
+	RunId     int64          `json:"runId"`
+	DagId     string         `json:"dagId"`
+	ExecTs    Timestamp      `json:"execTs"`
+	ExecTsRaw string         `json:"execTsRaw"`
+	Status    string         `json:"status"`
+	Duration  string         `json:"duration"`
+	Tasks     []UIDagrunTask `json:"tasks"`
 }
 
 // UIDagrunTask represents information of single DAG run task, including

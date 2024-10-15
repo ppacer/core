@@ -714,6 +714,10 @@ func TestClientUIDagrunDetailsRunning(t *testing.T) {
 		t.Errorf("Expected %d tasks, got: %d", len(d.Flatten()),
 			len(drtDetails.Tasks))
 	}
+	if drtDetails.ExecTsRaw != execTs {
+		t.Errorf("Expected ExecTsRaw=%s, got: %s", execTs,
+			drtDetails.ExecTsRaw)
+	}
 	if !drtDetails.Tasks[2].TaskNoStarted {
 		t.Errorf("Task %s should be not started yet, but it is",
 			drtDetails.Tasks[2].TaskId)
